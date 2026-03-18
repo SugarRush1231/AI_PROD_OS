@@ -65,10 +65,11 @@ app.use(session({
     secret: process.env.SESSION_SECRET || 'ai-prod-suite-secure-key',
     resave: false,
     saveUninitialized: false,
+    proxy: true, // ✅ Railway 리버스 프록시 허용
     cookie: {
-        secure: false, // 배포 시 true로 변경 권장 (HTTPS 필수)
-        httpOnly: true, // XSS 방지
-        sameSite: 'Strict', // 🛡️ 보안 핵심: 타 사이트에서의 위조 요청(CSRF) 원천 차단
+        secure: process.env.NODE_ENV === 'production', // ✅ 배포(HTTPS)에서는 true, 로컬은 false
+        httpOnly: true,
+        sameSite: 'Lax', // ✅ 'Strict' → 'Lax' (구글 로그인 콜백 시 세션 쿠키 유지)
         maxAge: 24 * 60 * 60 * 1000
     }
 }));

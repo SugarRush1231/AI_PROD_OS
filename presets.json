@@ -1,0 +1,37 @@
+[
+  {
+    "id": 1773818297648,
+    "name": "기본",
+    "params": {
+      "paramType": "human",
+      "paramStyle": "cinematic",
+      "paramAngle": "0",
+      "paramBgHuman": "none",
+      "paramBgAnimal": "none",
+      "paramBgScene": "none",
+      "paramPose": "dynamic",
+      "paramPov": "standard",
+      "paramFace": "natural",
+      "paramOutfit": "reference",
+      "paramHumanRef": "strict",
+      "paramDogBreed": "none",
+      "paramCatBreed": "none",
+      "paramAnimalPose": "sitting",
+      "paramAnimalPov": "eye-level",
+      "paramSceneEffect": "none",
+      "paramSceneLight": "commercial",
+      "paramSceneRef": "strict",
+      "paramHumanShot": "none",
+      "paramHumanComp": "none",
+      "paramAnimalShot": "none",
+      "paramAnimalComp": "none",
+      "paramSceneShot": "none",
+      "paramSceneComp": "none",
+      "angleInput": "0",
+      "intentInput": "",
+      "activeChips": [
+        null
+      ]
+    }
+  }
+]

@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Skill Studio — AI Pipeline Orchestration</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script>
+    // [PRE-RENDER] 테마 즉시 감지 및 적용 (깜빡임 방지)
+    (function () {
+      const saved = localStorage.getItem('theme-choice') || "1"; // 기본값 1 (AUTO)
+      const root = document.documentElement;
+      if (saved === "2" || (saved === "1" && window.matchMedia('(prefers-color-scheme: light)').matches)) {
+        root.classList.add('light-mode');
+      } else {
+        root.classList.remove('light-mode');
+      }
+    })();
+  </script>
+</head>
+
+<body class="dark">
+  <div class="mesh-bg"></div>
+
+  <nav>
+    <div class="container nav-inner">
+      <div class="nav-left">
+        <a href="#" class="logo">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round" style="color: var(--skills-cyan);">
+            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path>
+          </svg>
+          <span>AI_PROD_OS</span>
+        </a>
+      </div>
+      <div class="nav-center"></div>
+      <div class="nav-right" style="display: flex; align-items: center; gap: 15px;">
+        <div id="server-status"
+          style="font-family: var(--font-mono); font-size: 0.65rem; color: var(--fg-dim); text-align: right; border-right: 1px solid var(--border-strong); padding-right: 12px;">
+          SERVER: <span class="server-node" style="color: var(--skills-cyan);">LOCAL_ACTIVE</span><br>
+          PORT: <span class="server-port" style="color: var(--skills-purple);">3000</span>
+        </div>
+        <!-- Theme (Middle) -->
+        <div class="theme-control-box"
+          style="border-right: 1px solid var(--border-strong); padding-right: 12px; margin-right: 12px;">
+          <div class="theme-slider-container">
+            <span class="theme-icon mode-dark">🌙</span>
+            <input type="range" id="theme-slider" min="0" max="2" step="1" value="1">
+            <span class="theme-icon mode-light">☀️</span>
+          </div>
+          <div id="theme-current-label" class="theme-label-mono">AUTO</div>
+        </div>
+        <!-- Auth (Far-Right) -->
+        <div id="user-auth-area">
+          <button id="login-btn" class="btn-skills" style="padding: 6px 14px; font-size: 0.75rem; font-weight: 700;"
+            onclick="location.href='/auth/google'">로그인</button>
+          <div id="user-profile" style="display: none; align-items: center; gap: 10px;">
+            <div style="text-align: right; line-height: 1.1;">
+              <div id="user-name-display" class="label-mono"
+                style="font-size: 0.65rem; color: var(--fg); font-weight: 700;">USER</div>
+              <a href="/logout" class="label-mono"
+                style="font-size: 0.55rem; color: var(--fg-dim); text-decoration: none;">로그아웃</a>
+            </div>
+            <img id="user-avatar" src="" alt="U"
+              style="width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--skills-purple); background: var(--bg-card);">
+          </div>
+        </div>
+        <script>
+          window.addEventListener('DOMContentLoaded', () => {
+            const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+            const node = document.querySelector('.server-node');
+            const port = document.querySelector('.server-port');
+            if (!isLocal) {
+              node.innerText = 'EDGE: DEPLOYED_V3';
+              node.style.color = '#ff6bdf'; // 배포 시엔 더 핑크한 색상으로 강조
+              port.innerText = 'SSL: ENCRYPTED';
+              port.style.color = 'var(--skills-cyan)';
+            }
+          });
+        </script>
+      </div>
+    </div>
+  </nav>
+
+  <main class="container">
+    <!-- HERO -->
+    <section class="hero">
+      <span class="badge">prod_v3.0 --stable</span>
+      <h1>Precision <br><span class="grad-text">Prompt Lab</span></h1>
+      <p class="hero-desc">
+        인물부터 배경까지, 정교한 파라미터<br>설계로 완벽한 비주얼을 구현하세요. <br>
+        당신의 창의성을 기술로 치환하는<br> 차세대 프롬프트 엔지니어링 워크플레이스
+      </p>
+      <div class="hero-actions">
+        <button class="btn-big"
+          onclick="document.getElementById('prompt-lab').scrollIntoView({behavior: 'smooth'})">시작하기</button>
+      </div>
+    </section>
+
+    <!-- MODEL REGISTRY CARDS -->
+    <div class="registry-section">
+      <div class="registry-grid">
+        <!-- Nano Banana -->
+        <div class="model-card">
+          <div class="model-icon-box">
+            <svg role="img" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <title>Google</title>
+              <path
+                d="M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-7.667 0-.76-.053-1.467-.173-2.053H12.48z" />
+            </svg>
+          </div>
+          <div class="model-info">
+            <div class="model-title-row">
+              <span class="model-name">Nano Banana</span>
+            </div>
+            <span class="model-desc">Google's standard generation model</span>
+          </div>
+        </div>
+
+        <!-- FLUX.2 Pro -->
+        <div class="model-card">
+          <div class="model-icon-box">
+            <img src="Ico/Flux.ico" class="model-svg-icon" alt="FLUX.2 Pro">
+          </div>
+          <div class="model-info">
+            <div class="model-title-row">
+              <span class="model-name">FLUX.2 Pro</span>
+            </div>
+            <span class="model-desc">Speed-optimized detail generation</span>
+          </div>
+        </div>
+
+        <!-- Z-Image -->
+        <div class="model-card">
+          <div class="model-icon-box">
+            <img src="Ico/Z.png" class="model-svg-icon" alt="Z-Image">
+          </div>
+          <div class="model-info">
+            <div class="model-title-row">
+              <span class="model-name">Z-Image</span>
+            </div>
+            <span class="model-desc">Instant lifelike portraits</span>
+          </div>
+        </div>
+
+        <!-- GPT Image 1.5 -->
+        <div class="model-card">
+          <div class="model-icon-box">
+            <img src="Ico/GPT.ico" class="model-svg-icon" alt="GPT Image 1.5">
+          </div>
+          <div class="model-info">
+            <div class="model-title-row">
+              <span class="model-name">GPT Image 1.5</span>
+            </div>
+            <span class="model-desc">True-color precision rendering</span>
+          </div>
+        </div>
+
+        <!-- Grok -->
+        <div class="model-card">
+          <div class="model-icon-box">
+            <img src="Ico/Grok.ico" class="model-svg-icon" alt="Grok">
+          </div>
+          <div class="model-info">
+            <div class="model-title-row">
+              <span class="model-name">Grok</span>
+            </div>
+            <span class="model-desc">Powerful Al image generation by xAl</span>
+          </div>
+        </div>
+
+        <!-- DUPLICATE SET FOR INFINITE LOOP -->
+        <div class="model-card">
+          <div class="model-icon-box">
+            <svg role="img" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <title>Google</title>
+              <path
+                d="M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-7.667 0-.76-.053-1.467-.173-2.053H12.48z" />
+            </svg>
+          </div>
+          <div class="model-info">
+            <div class="model-title-row">
+              <span class="model-name">Nano Banana</span>
+            </div>
+            <span class="model-desc">Google's standard generation model</span>
+          </div>
+        </div>
+        <div class="model-card">
+          <div class="model-icon-box">
+            <img src="Ico/Flux.ico" class="model-svg-icon" alt="FLUX.2 Pro">
+          </div>
+          <div class="model-info">
+            <div class="model-title-row">
+              <span class="model-name">FLUX.2 Pro</span>
+            </div>
+            <span class="model-desc">Speed-optimized detail generation</span>
+          </div>
+        </div>
+        <div class="model-card">
+          <div class="model-icon-box">
+            <img src="Ico/Z.png" class="model-svg-icon" alt="Z-Image">
+          </div>
+          <div class="model-info">
+            <div class="model-title-row">
+              <span class="model-name">Z-Image</span>
+            </div>
+            <span class="model-desc">Instant lifelike portraits</span>
+          </div>
+        </div>
+        <div class="model-card">
+          <div class="model-icon-box">
+            <img src="Ico/GPT.ico" class="model-svg-icon" alt="GPT Image 1.5">
+          </div>
+          <div class="model-info">
+            <div class="model-title-row">
+              <span class="model-name">GPT Image 1.5</span>
+            </div>
+            <span class="model-desc">True-color precision rendering</span>
+          </div>
+        </div>
+        <div class="model-card">
+          <div class="model-icon-box">
+            <img src="Ico/Grok.ico" class="model-svg-icon" alt="Grok">
+          </div>
+          <div class="model-info">
+            <div class="model-title-row">
+              <span class="model-name">Grok</span>
+            </div>
+            <span class="model-desc">Real-time intelligence and reasoning</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- PROMPT ARCHITECTURE LAB -->
+    <section class="section" id="prompt-lab">
+      <div class="section-header">
+        <h2>Prompt Architecture Lab</h2>
+        <div class="status-indicator">
+          <span class="dot"></span>
+          <span>Ready for Engineering</span>
+        </div>
+      </div>
+
+      <div class="lab-grid">
+        <!-- HEADER: CORE INTENT -->
+        <div class="lab-header-area">
+          <div class="lab-header-top">
+            <div class="label-mono">01 간단한 프롬프트</div>
+            <div class="preset-group">
+              <span class="preset-label">MY PRESETS:</span>
+              <div class="preset-chips" id="preset-list">
+                <!-- 유저가 저장한 프리셋이 이곳에 동적으로 생성됨 -->
+              </div>
+            </div>
+          </div>
+          <textarea id="intent-input" class="lab-textarea"
+            placeholder="아이디어를 입력하세요… (e.g. : 한국인 여자, 고양이, 향수, ... )"></textarea>
+        </div>
+
+        <!-- LEFT: PARAMETERS -->
+        <div class="lab-params-area">
+          <div class="label-mono">02 엔지니어링 파라미터</div>
+
+          <div class="param-group full-width" style="margin-bottom: 16px;">
+            <label>피사체 유형 (Category)</label>
+            <select id="param-type" class="lab-select">
+              <option value="human">👤 인물 (Human)</option>
+              <option value="animal">🐾 동물 (Animal)</option>
+              <option value="scene">🏙️ 배경/사물 (Scene/Object)</option>
+            </select>
+          </div>
+
+          <div class="params-grid">
+            <div class="param-group">
+              <label>비주얼 스타일</label>
+              <select id="param-style" class="lab-select">
+                <option value="cinematic">시네마틱 마스터피스</option>
+                <option value="studio">프로페셔널 스튜디오</option>
+                <option value="anime">고퀄리티 애니메이션</option>
+                <option value="cyberpunk">사이버펑크 / 테크누아르</option>
+                <option value="oil-painting">고전 유화 스타일</option>
+                <option value="unreal-engine">3D 렌더링 (UE5 스타일)</option>
+                <option value="minimalist">미니멀리즘 디자인</option>
+                <option value="polaroid">레트로 폴라로이드</option>
+                <option value="gothic">다크 판타지 / 고딕</option>
+                <option value="pencil-sketch">정밀 연필 스케치</option>
+              </select>
+            </div>
+
+            <!-- Backgrounds -->
+            <div class="param-group" id="bg-human-container">
+              <label>인물 배경 (Background)</label>
+              <select id="param-bg-human" class="lab-select">
+                <option value="none">기본 (None)</option>
+                <option value="life4cut">한국 포토부스 (Life4Cut)</option>
+                <option value="neon-street">네온 사인 밤거리 (Neon Street)</option>
+                <option value="cozy-cafe">감성적인 카페 (Cozy Cafe)</option>
+                <option value="minimal-studio">미니멀 스튜디오 (Studio)</option>
+                <option value="cyber-penthouse">사이버펑크 펜트하우스</option>
+                <option value="rainy-window">비 내리는 창가 (Rainy Window)</option>
+              </select>
+            </div>
+
+            <div class="param-group" id="bg-animal-container" style="display: none;">
+              <label>동물 배경 (Background)</label>
+              <select id="param-bg-animal" class="lab-select">
+                <option value="none">기본 (None)</option>
+                <option value="sunny-park">햇살 가득한 공원 (Sunny Park)</option>
+                <option value="cozy-livingroom">안락한 거실 (Living Room)</option>
+                <option value="forest-trail">울창한 숲길 (Forest)</option>
+                <option value="pet-hotel">럭셔리 펫 호텔 (Pet Hotel)</option>
+                <option value="green-meadow">푸른 들판 (Meadow)</option>
+                <option value="rainy-yard">비 내리는 마당 (Rainy Yard)</option>
+              </select>
+            </div>
+
+            <div class="param-group" id="bg-scene-container" style="display: none;">
+              <label>장소/사물 배경 (Background)</label>
+              <select id="param-bg-scene" class="lab-select">
+                <option value="none">기본 (None)</option>
+                <option value="living-room">모던한 거실/방 안 (Living Room)</option>
+                <option value="mountain-stars">별이 빛나는 밤 산맥 (Starry Mountains)</option>
+                <option value="empty-beach">사람이 없는 고요한 해변 (Empty Beach)</option>
+                <option value="vast-nature">광활한 대자연 (Vast Nature)</option>
+                <option value="cyber-city">초고층 미래 도시 (Cyber City)</option>
+                <option value="deep-space">광활한 심우주 (Deep Space)</option>
+                <option value="surreal-desert">초현실적 사막 (Desert)</option>
+                <option value="floating-island">구름 위 부유섬 (Island)</option>
+              </select>
+            </div>
+
+            <div class="param-group">
+              <label>카메라 각도 (0-360°)</label>
+              <div class="slider-container">
+                <input type="range" id="param-angle" min="0" max="360" value="0" class="lab-slider">
+                <div class="angle-input-container">
+                  <input type="number" id="angle-input" class="mono-val-input" value="0" min="0" max="360">
+                  <span class="angle-unit">°</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Human Specifics -->
+          <div id="human-params-group">
+            <div class="params-grid" style="margin-top: 12px;">
+              <div class="param-group">
+                <label>피사체 포즈</label>
+                <select id="param-pose" class="lab-select">
+                  <option value="dynamic">역동적인 액션</option>
+                  <option value="relaxed">자연스러운 휴식</option>
+                  <option value="portrait">정면 포트레이트</option>
+                  <option value="heroic">웅장한 히어로 포즈</option>
+                  <option value="meditation">명상 / 정적인 자세</option>
+                  <option value="flying">공중 부양 / 도약</option>
+                  <option value="combat-stance">컴뱃 스탠스 (전투)</option>
+                  <option value="profile-view">측면 응시 (프로필)</option>
+                  <option value="low-angle-power">위엄있는 로우 앵글</option>
+                  <option value="stealth">웅크린 잠입 포즈</option>
+                  <option value="t-pose">T-포즈 (Character Sheet)</option>
+                  <option value="a-pose">A-포즈 (Character Sheet)</option>
+                </select>
+              </div>
+              <div class="param-group">
+                <label>촬영 관점 (POV)</label>
+                <select id="param-pov" class="lab-select">
+                  <option value="standard">기본 촬영 (Standard)</option>
+                  <option value="selfie">셀카 느낌 (Handheld Selfie)</option>
+                  <option value="arm-extended">셀카 (한쪽 팔 뻗음)</option>
+                  <option value="candid">타인이 찍어준 느낌 (Candid)</option>
+                  <option value="pov">1인칭 시점 (First Person POV)</option>
+                  <option value="paparazzi">파파라치 뷰 (Long Lens)</option>
+                  <option value="security-cam">보안 카메라 (CCTV Style)</option>
+                </select>
+              </div>
+              <div class="param-group">
+                <label>일관성 유지 (Reference)</label>
+                <select id="param-human-ref" class="lab-select">
+                  <option value="strict">레퍼런스 엄격 유지 (Strict)</option>
+                  <option value="selective">주요 특징 및 분위기 유지 (Selective)</option>
+                  <option value="creative">완전히 새로운 인물 (Creative)</option>
+                </select>
+              </div>
+              <div class="param-group">
+                <label>얼굴 디테일 (Aesthetic)</label>
+                <select id="param-face" class="lab-select">
+                  <option value="natural">자연스러운 미인 (Natural)</option>
+                  <option value="ulzzang">얼짱 마스터 (Ulzzang Master)</option>
+                  <option value="puppy">강아지상 귀요미 (Puppy-eye)</option>
+                  <option value="cat">고양이상 세련미 (Cat-eye)</option>
+                  <option value="dreamy">신비로운 분위기 (Dreamy)</option>
+                  <option value="high-fashion">하이패션 샤프 (Sharp)</option>
+                </select>
+              </div>
+              <div class="param-group">
+                <label>의상 스타일 (Outfit)</label>
+                <select id="param-outfit" class="lab-select">
+                  <option value="reference">레퍼런스 의상 유지 (Reference)</option>
+                  <option value="none">랜덤 의상 (Random)</option>
+                  <option value="streetwear">트렌디 스트릿웨어 (Streetwear)</option>
+                  <option value="techwear">고전적/현대적 테크웨어 (Techwear)</option>
+                  <option value="luxury">럭셔리 디자이너 룩 (Luxury)</option>
+                  <option value="academic">단정한 프레피 룩 (Academic)</option>
+                  <option value="cyberpunk">네온 사이버펑크 (Cyberpunk)</option>
+                  <option value="vintage">레트로 빈티지 (Vintage)</option>
+                  <option value="casual-chic">편안한 캐주얼 시크 (Casual)</option>
+                </select>
+              </div>
+              <div class="param-group">
+                <label>촬영 샷 (Shot)</label>
+                <select id="param-human-shot" class="lab-select">
+                  <option value="none">기본 (None)</option>
+                  <option value="close-up">클로즈업 (Close-up)</option>
+                  <option value="bust-shot">바스트 샷 (Bust Shot)</option>
+                  <option value="waist-shot">웨이스트 샷 (Waist Shot)</option>
+                  <option value="knee-shot">니 샷 (Knee Shot)</option>
+                  <option value="full-shot">전신 샷 (Full Shot)</option>
+                  <option value="long-shot">멀리서 찍은 샷 (Long Shot)</option>
+                </select>
+              </div>
+              <div class="param-group">
+                <label>화면 구도 (Composition)</label>
+                <select id="param-human-comp" class="lab-select">
+                  <option value="none">기본 (None)</option>
+                  <option value="center">중앙 구도 (Center)</option>
+                  <option value="rule-of-thirds">3분할 구도 (Rule of Thirds)</option>
+                  <option value="symmetry">대칭 구도 (Symmetry)</option>
+                  <option value="diagonal">대각선 구도 (Diagonal)</option>
+                  <option value="golden-ratio">황금비 구도 (Golden Ratio)</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- Animal Specifics -->
+          <div id="animal-params-group" style="display: none;">
+            <div class="params-grid" style="margin-top: 12px;">
+              <div class="param-group">
+                <label>강아지 종류</label>
+                <select id="param-dog-breed" class="lab-select">
+                  <option value="none">기본 (None)</option>
+                  <option value="golden-retriever">골든 리트리버</option>
+                  <option value="shiba-inu">시바견 (Shiba Inu)</option>
+                  <option value="samoyed">사모예드</option>
+                  <option value="poodle">푸들 (Poodle)</option>
+                  <option value="corgi">웰시 코기 (Corgi)</option>
+                  <option value="maltese">말티즈 (Maltese)</option>
+                  <option value="pomeranian">포메라니안</option>
+                  <option value="bichon-frise">비숑 프리제</option>
+                  <option value="husky">시베리안 허스키</option>
+                  <option value="border-collie">보더 콜리</option>
+                  <option value="french-bulldog">프렌치 불독</option>
+                  <option value="german-shepherd">저먼 셰퍼드</option>
+                  <option value="beagle">비글</option>
+                  <option value="chihuahua">치와와</option>
+                  <option value="dachshund">닥스훈트</option>
+                  <option value="dalmatian">달마시안</option>
+                </select>
+              </div>
+              <div class="param-group">
+                <label>고양이 종류</label>
+                <select id="param-cat-breed" class="lab-select">
+                  <option value="none">기본 (None)</option>
+                  <option value="ragdoll">렉돌 (Ragdoll)</option>
+                  <option value="british-shorthair">브리티쉬 쇼트헤어</option>
+                  <option value="persian">페르시안</option>
+                  <option value="maine-coon">메인쿤</option>
+                  <option value="siamese">샴 (Siamese)</option>
+                  <option value="munchkin">먼치킨</option>
+                  <option value="russian-blue">러시안 블루</option>
+                  <option value="scottish-fold">스코티쉬 폴드</option>
+                  <option value="bengal">뱅갈 (Bengal)</option>
+                  <option value="abyssinian">아비시니안</option>
+                  <option value="sphynx">스핑크스</option>
+                  <option value="american-shorthair">아메리칸 쇼트헤어</option>
+                  <option value="norwegian-forest">노르웨이 숲 고양이</option>
+                  <option value="turkish-angora">터키시 앙고라</option>
+                </select>
+              </div>
+              <div class="param-group">
+                <label>동물 포즈</label>
+                <select id="param-animal-pose" class="lab-select">
+                  <option value="sitting">얌전히 앉아있는</option>
+                  <option value="running">신나게 달리는</option>
+                  <option value="sleeping">잠자는 중</option>
+                  <option value="pouncing">달려드는 (Pouncing)</option>
+                  <option value="playing">공놀이 중</option>
+                  <option value="alert">경계/서있는 자세</option>
+                  <option value="yawning">하품하는</option>
+                  <option value="stretching">기지개 켜는</option>
+                </select>
+              </div>
+              <div class="param-group">
+                <label>촬영 시점</label>
+                <select id="param-animal-pov" class="lab-select">
+                  <option value="eye-level">정면 응시 (Eye-level)</option>
+                  <option value="macro">초근접 매크로 (Macro)</option>
+                  <option value="wide">광각 전체샷 (Wide)</option>
+                  <option value="top-down">위에서 아래로 (Bird's eye)</option>
+                  <option value="low-angle">아래에서 위로 (Worm's eye)</option>
+                  <option value="closeup">클로즈업 (Close-up)</option>
+                </select>
+              </div>
+              <div class="param-group">
+                <label>동물 촬영 샷 (Shot)</label>
+                <select id="param-animal-shot" class="lab-select">
+                  <option value="none">기본 (None)</option>
+                  <option value="macro">초근접 샷 (Macro)</option>
+                  <option value="face-shot">얼굴 중심 (Face Shot)</option>
+                  <option value="upper-body">상반신 (Upper Body)</option>
+                  <option value="full-body">전신 (Full Body)</option>
+                  <option value="wide-view">풍경 포함 (Wide View)</option>
+                </select>
+              </div>
+              <div class="param-group">
+                <label>동물 구도 (Composition)</label>
+                <select id="param-animal-comp" class="lab-select">
+                  <option value="none">기본 (None)</option>
+                  <option value="eye-level">아이 레벨 (Eye Level)</option>
+                  <option value="top-down">위에서 아래로 (Top-down)</option>
+                  <option value="low-angle">아래에서 위로 (Low-angle)</option>
+                  <option value="side-view">측면 구도 (Side View)</option>
+                  <option value="dynamic">역동적 구도 (Dynamic)</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- Scene/Object Specifics -->
+          <div id="scene-params-group" style="display: none;">
+            <div class="params-grid" style="margin-top: 12px;">
+              <div class="param-group">
+                <label>사물/광고 효과 (Effect)</label>
+                <select id="param-scene-effect" class="lab-select">
+                  <option value="none">효과 없음 (None)</option>
+                  <option value="cinematic-smoke">시네마틱 연기 (Smoke)</option>
+                  <option value="water-splashes">청량한 물방울 튀김 (Splash)</option>
+                  <option value="electric-sparks">강렬한 스파크 (Sparks)</option>
+                  <option value="soft-mist">부드러운 안개 (Mist)</option>
+                  <option value="floating-particles">떠다니는 입자 (Particles)</option>
+                  <option value="product-glow">제품 아우라 광채 (Glow)</option>
+                  <option value="luxury-silk">고급스러운 테두리 실크 (Silk)</option>
+                </select>
+              </div>
+              <div class="param-group">
+                <label>조명 컨셉 (Lighting)</label>
+                <select id="param-scene-light" class="lab-select">
+                  <option value="commercial">상업용 스튜디오 조명</option>
+                  <option value="dramatic-shadow">강렬한 대비/그림자</option>
+                  <option value="soft-luxury">은은한 럭셔리 무드</option>
+                  <option value="neon-accent">네온 포인트 라이팅</option>
+                  <option value="natural-sunlight">자연 채광 (창가)</option>
+                </select>
+              </div>
+              <div class="param-group">
+                <label>사물 형태 유지 (Integrity)</label>
+                <select id="param-scene-ref" class="lab-select">
+                  <option value="strict">레퍼런스 형태 유지 (Strict)</option>
+                  <option value="creative">창의적 변형 허용 (Creative)</option>
+                </select>
+              </div>
+              <div class="param-group">
+                <label>배경/사물 샷 (Shot)</label>
+                <select id="param-scene-shot" class="lab-select">
+                  <option value="none">기본 (None)</option>
+                  <option value="macro">접사 (Macro)</option>
+                  <option value="standard">표준 (Standard)</option>
+                  <option value="wide">광각 (Wide)</option>
+                  <option value="ultra-wide">초광각 (Ultra Wide)</option>
+                  <option value="panoramic">파노라마 (Panoramic)</option>
+                </select>
+              </div>
+              <div class="param-group">
+                <label>배경/사물 구도 (Composition)</label>
+                <select id="param-scene-comp" class="lab-select">
+                  <option value="none">기본 (None)</option>
+                  <option value="rule-of-thirds">3분할 구도 (Rule of Thirds)</option>
+                  <option value="symmetrical">정대칭 구도 (Symmetrical)</option>
+                  <option value="vanishing-point">소실점 구도 (Vanishing Point)</option>
+                  <option value="flat-lay">수직 부감 (Flat Lay)</option>
+                  <option value="golden-spiral">황금 나선 구도 (Golden Spiral)</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div class="lab-actions" style="margin-top: 24px;">
+            <button class="btn-skills" id="engineer-btn">적용 후 프롬프트 생성</button>
+            <button id="save-preset-btn" class="save-icon-btn" title="현재 설정을 프리셋으로 저장">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+                <polyline points="17 21 17 13 7 13 7 21" />
+                <polyline points="7 3 7 8 15 8" />
+              </svg>
+              <span>SAVE</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- CENTER: VISUALIZER -->
+        <div class="lab-visualizer">
+          <div class="label-mono">04 엔지니어링 레이어 (공정)</div>
+          <div class="layer-stack">
+            <div class="layer" id="layer-1">
+              <span class="layer-num">L1</span>
+              <span class="layer-name">문맥 및 상황 정렬</span>
+              <span class="layer-status">대기 중</span>
+            </div>
+            <div class="layer" id="layer-2">
+              <span class="layer-num">L2</span>
+              <span class="layer-name">스타일 일관성 유지</span>
+              <span class="layer-status">대기 중</span>
+            </div>
+            <div class="layer" id="layer-3">
+              <span class="layer-num">L3</span>
+              <span class="layer-name">의미적 세부 확장</span>
+              <span class="layer-status">대기 중</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- RIGHT: OUTPUT -->
+        <div class="lab-output">
+          <div class="visualizer-output">
+            <div class="output-header">
+              <div class="label-mono">프롬프트 (최적화)</div>
+              <button class="btn-copy" id="copy-btn">복사</button>
+            </div>
+            <div id="optimized-output" class="output-block"
+              style="min-height: 200px; font-size: 0.85rem; line-height: 1.6; padding: 20px;">
+              대기 중...
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- NEW INDEPENDENT SECTION: VIDEO PRODUCTION SUITE -->
+    <section class="section" id="video-production-suite" style="margin-top: 60px;">
+      <div class="section-header">
+        <h2>Video Production Suite</h2>
+        <div class="status-indicator">
+          <span class="dot pulse" style="background: var(--skills-purple);"></span>
+          <span>AI 스크립트 & STT 엔진 활성</span>
+        </div>
+      </div>
+
+      <div class="video-suite-grid"
+        style="display: grid; grid-template-columns: 1fr 1.5fr; gap: 32px; margin-top: 24px;">
+        <!-- Left: Configuration -->
+        <div class="lab-card" style="height: fit-content;">
+          <div class="label-mono">AUDIO & TIMELINE SETTINGS</div>
+
+          <div class="input-source-toggle" style="margin-top: 16px; display: flex; gap: 8px;">
+            <button class="chip active" id="btn-source-text" data-source="text">AI GENERATION (대본)</button>
+            <button class="chip" id="btn-source-audio" data-source="audio">STT (오디오 자막파일 변환)</button>
+          </div>
+
+          <div id="audio-upload-container" style="display: none; margin-top: 20px; margin-bottom: 24px;">
+            <div class="audio-upload-zone" id="audio-dropzone">
+              <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2"
+                style="margin-bottom: 8px; opacity: 0.5;">
+                <path d="M12 1v22M17 5H7M12 1L8 5M12 1l4 4" />
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              </svg>
+              <div style="font-size: 0.75rem; color: var(--fg-dim);">Drag & Drop MP3 file or Click to Upload</div>
+              <input type="file" id="audio-file-input" accept="audio/*" style="display: none;">
+            </div>
+            <div id="selected-file-info"
+              style="margin-top: 10px; font-size: 0.7rem; color: var(--skills-purple); font-family: var(--font-mono); display: none;">
+              FILE: <span id="file-name-display">None</span>
+            </div>
+          </div>
+
+          <!-- 3열 레이아웃으로 변경하여 Duration 추가 -->
+          <div id="subtitle-params-container" class="params-grid"
+            style="margin-top: 20px; grid-template-columns: repeat(3, 1fr);">
+            <div class="param-group">
+              <label>자막 출력 형식 (Format)</label>
+              <select id="param-sub-format" class="lab-select">
+                <option value="srt">표준 자막 파일 (SRT/VTT)</option>
+                <option value="script">타임라인 대본 (Timed Script)</option>
+                <option value="raw">순수 텍스트 (Pure Text)</option>
+              </select>
+            </div>
+            <div class="param-group">
+              <label>발화 속도/템포 (Tempo)</label>
+              <select id="param-sub-tempo" class="lab-select">
+                <option value="standard">표준 (Normal)</option>
+                <option value="slow">차분하고 느린 (Epic/Deep)</option>
+                <option value="fast">빠르고 경쾌한 (Social Media)</option>
+              </select>
+            </div>
+            <div class="param-group">
+              <label>영상 길이 (Duration)</label>
+              <select id="param-sub-duration" class="lab-select">
+                <option value="15">15초</option>
+                <option value="30">30초</option>
+                <option value="60">1분</option>
+              </select>
+            </div>
+          </div>
+          <div id="subtitle-intent-container" class="param-group" style="width: 100%; margin-top: 20px;">
+            <label>영상 주제 및 핵심 내용 (필수)</label>
+            <input type="text" id="param-sub-intent" class="lab-input-small" placeholder="예) 야구 결승전 역전 홈런 상황, 강아지 브이로그">
+          </div>
+          <div id="subtitle-context-container" class="param-group" style="width: 100%; margin: 12px 0 20px 0;">
+            <label>말투 및 분위기 (Context)</label>
+            <input type="text" id="param-sub-context" class="lab-input-small" placeholder="예) 영화 예고편 감성, 코믹한 나레이션">
+          </div>
+          <button class="btn-skills secondary" id="sub-gen-btn" style="width: 100%; height: 50px; font-weight: 700;">
+            GENERATE VIDEO TIMELINE
+          </button>
+        </div>
+
+        <!-- Right: Professional Output -->
+        <div class="lab-output">
+          <div class="visualizer-output"
+            style="height: 100%; min-height: 280px; border: 1px solid var(--border-strong);">
+            <div class="output-header" style="padding: 12px 20px; border-bottom: 1px solid var(--border-strong);">
+              <div class="label-mono">TIMELINE DATA (SCRIPTS / TIME CODES)</div>
+              <div style="display: flex; gap: 10px;">
+                <button class="btn-copy" id="copy-sub-btn">복사</button>
+                <button class="btn-copy" id="download-srt-btn"
+                  style="border-color: var(--skills-purple); color: var(--skills-purple);">저장 (.srt)</button>
+              </div>
+            </div>
+            <div class="output-block" id="subtitle-output"
+              style="height: 240px; font-size: 0.85rem; line-height: 1.6; padding: 20px;">
+              대기 중... (핵심 의도를 입력한 후 생성 버튼을 누르세요)
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SYSTEM INFRASTRUCTURE DASHBOARD -->
+    <section class="section" id="system-status">
+      <div class="section-header">
+        <h2>System Infrastructure</h2>
+        <div class="status-indicator">
+          <span class="dot pulse"></span>
+          <span>Global Network Operational</span>
+        </div>
+      </div>
+
+      <div class="status-grid">
+        <div class="status-card">
+          <span class="status-label">API LATENCY</span>
+          <div class="status-value-row">
+            <span class="status-value" id="stat-latency">--ms</span>
+            <span class="status-trend up">Stable</span>
+          </div>
+          <div class="status-bar-bg">
+            <div class="status-bar-fill" style="width: 85%;"></div>
+          </div>
+        </div>
+
+        <div class="status-card">
+          <span class="status-label">SERVER UPTIME</span>
+          <div class="status-value-row">
+            <span class="status-value" id="stat-uptime">00:00:00</span>
+            <span class="status-trend" id="stat-boot-time">Booting...</span>
+          </div>
+          <div class="status-bar-bg">
+            <div class="status-bar-fill" style="width: 100%; height: 100%; background: var(--skills-purple);"></div>
+          </div>
+        </div>
+
+        <div class="status-card">
+          <span class="status-label">AI ENGINE STATUS</span>
+          <div class="status-value-row">
+            <span class="status-value" id="stat-cluster-status">CONNECTING...</span>
+            <span class="status-trend">Active Node</span>
+          </div>
+          <div class="status-bar-bg">
+            <div class="status-bar-fill" id="stat-engine-bar" style="width: 0%; background: var(--skills-cyan);"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="container footer-inner">
+      <div class="footer-bottom">
+        <p>© 2026 AI_PROD_OS. Built for Enterprise Production Efficiency.</p>
+        <div class="footer-links">
+          <a href="#system-status">Status</a>
+          <a href="https://sprightly-peony-cd78eb.netlify.app/" target="_blank">Portfolio</a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <!-- PREMIUM SYSTEM MODAL -->
+  <div id="custom-modal" class="modal-backdrop">
+    <div class="modal-content">
+      <div class="modal-header">
+        <span class="modal-icon">⚠️</span>
+        <h3 id="modal-title">알림</h3>
+      </div>
+      <div class="modal-body">
+        <p id="modal-message">정말 수행하시겠습니까?</p>
+        <div id="modal-input-container">
+          <input type="text" id="modal-input" placeholder="이름을 입력하세요...">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="modal-cancel-btn" class="modal-btn secondary">취소</button>
+        <button id="modal-confirm-btn" class="modal-btn primary">확인</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+
+</html>

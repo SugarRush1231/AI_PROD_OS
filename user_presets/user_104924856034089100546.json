@@ -1,0 +1,37 @@
+[
+  {
+    "id": 1773825644995,
+    "name": "프로필 사진 느낌",
+    "params": {
+      "paramType": "human",
+      "paramStyle": "cinematic",
+      "paramAngle": "0",
+      "paramBgHuman": "minimal-studio",
+      "paramBgAnimal": "none",
+      "paramBgScene": "none",
+      "paramPose": "portrait",
+      "paramPov": "pov",
+      "paramFace": "puppy",
+      "paramOutfit": "reference",
+      "paramHumanRef": "strict",
+      "paramDogBreed": "none",
+      "paramCatBreed": "none",
+      "paramAnimalPose": "sitting",
+      "paramAnimalPov": "eye-level",
+      "paramSceneEffect": "none",
+      "paramSceneLight": "commercial",
+      "paramSceneRef": "strict",
+      "paramHumanShot": "bust-shot",
+      "paramHumanComp": "golden-ratio",
+      "paramAnimalShot": "none",
+      "paramAnimalComp": "none",
+      "paramSceneShot": "none",
+      "paramSceneComp": "none",
+      "angleInput": "0",
+      "intentInput": "여성",
+      "activeChips": [
+        null
+      ]
+    }
+  }
+]

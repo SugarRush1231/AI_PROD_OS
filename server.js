@@ -25,6 +25,7 @@ const ensureAuthenticated = (req, res, next) => {
 };
 
 const app = express();
+app.set('trust proxy', 1); // ✅ Railway 리버스 프록시 뒤에서 https를 올바르게 인식하도록 설정
 const PORT = process.env.PORT || 3000;
 const SERVER_START_TIME = Date.now();
 
@@ -32,12 +33,15 @@ const SERVER_START_TIME = Date.now();
 passport.serializeUser((user, done) => done(null, user));
 passport.deserializeUser((obj, done) => done(null, obj));
 
+// ✅ 배포 환경에서는 CALLBACK_URL 환경변수 사용, 로컬에서는 상대경로 사용
+const callbackURL = process.env.CALLBACK_URL || '/auth/google/callback';
+
 passport.use(new GoogleStrategy({
-    clientID: process.env.GOOGLE_CLIENT_ID,
-    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    callbackURL: "/auth/google/callback"
+    clientID: process.env.GOOGLE_CLIENT_ID || 'NOT_SET',
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET || 'NOT_SET',
+    callbackURL: callbackURL,
+    scope: ['profile', 'email']
 }, (accessToken, refreshToken, profile, done) => {
-    // 여기서 DB 연동 가능. 현재는 프로필 직접 반환
     return done(null, profile);
 }));
 

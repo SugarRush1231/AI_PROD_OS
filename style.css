@@ -89,9 +89,10 @@ h1 {
   font-size: clamp(2.5rem, 8vw, 4.5rem); 
   font-weight: 850; 
   letter-spacing: -0.04em; 
-  line-height: normal;
+  line-height: 1.15; /* normal → 1.15: 'b', 'g', 'y' 등 하단 글자 잘림 방지 */
   text-wrap: balance;
   margin-bottom: 24px;
+  padding-bottom: 4px; /* descender 여유 공간 */
 }
 
 h2 { 
@@ -1275,4 +1276,155 @@ footer { padding: 80px 0 40px; border-top: 1px solid var(--border); margin-top: 
 .audio-upload-zone.dragover {
   background: rgba(16, 185, 129, 0.05);
   border-color: var(--skills-cyan);
+}
+
+/* ── Workflow Pipeline Visualization ── */
+.pipeline-container {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 40px;
+}
+
+.pipeline-row {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.pipeline-label {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  font-weight: 800;
+  color: var(--skills-purple);
+  letter-spacing: 1.5px;
+  min-width: 120px;
+  text-align: right;
+  opacity: 0.8;
+}
+
+.pipeline-nodes {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  gap: 0;
+}
+
+.p-node {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 20px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  min-width: 120px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: default;
+  position: relative;
+}
+
+.p-node:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--skills-cyan);
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(59, 130, 246, 0.15);
+}
+
+.p-node.active {
+  border-color: var(--skills-cyan);
+  background: rgba(59, 130, 246, 0.06);
+  box-shadow: 0 0 20px rgba(59, 130, 246, 0.1);
+}
+
+.p-node-icon {
+  font-size: 1.4rem;
+  line-height: 1;
+}
+
+.p-node-text {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--fg-dim);
+  white-space: nowrap;
+  text-align: center;
+}
+
+.p-node:hover .p-node-text {
+  color: var(--fg);
+}
+
+/* Connector Line */
+.p-connector {
+  flex: 1;
+  height: 2px;
+  background: linear-gradient(90deg, var(--border-strong), var(--skills-cyan), var(--skills-purple), var(--border-strong));
+  background-size: 200% 100%;
+  min-width: 40px;
+  position: relative;
+  border-radius: 1px;
+  opacity: 0.5;
+}
+
+/* Flowing Dot Animation */
+.p-dot-flow {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 6px;
+  height: 6px;
+  background: var(--skills-cyan);
+  border-radius: 50%;
+  transform: translateY(-50%);
+  box-shadow: 0 0 8px rgba(59, 130, 246, 0.8), 0 0 16px rgba(59, 130, 246, 0.4);
+  animation: dotFlow 2.5s ease-in-out infinite;
+}
+
+.p-dot-flow.delay {
+  animation-delay: 1.25s;
+}
+
+@keyframes dotFlow {
+  0% { left: -6px; opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { left: calc(100% + 6px); opacity: 0; }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .pipeline-row {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .pipeline-label {
+    text-align: center;
+    min-width: auto;
+  }
+  .pipeline-nodes {
+    flex-direction: column;
+  }
+  .p-connector {
+    width: 2px;
+    height: 24px;
+    min-width: 2px;
+    background: linear-gradient(180deg, var(--border-strong), var(--skills-cyan), var(--skills-purple), var(--border-strong));
+    background-size: 100% 200%;
+  }
+  .p-dot-flow {
+    animation: dotFlowVertical 2.5s ease-in-out infinite;
+    left: 50%;
+    top: 0;
+    transform: translateX(-50%);
+  }
+  @keyframes dotFlowVertical {
+    0% { top: -6px; opacity: 0; }
+    10% { opacity: 1; }
+    90% { opacity: 1; }
+    100% { top: calc(100% + 6px); opacity: 0; }
+  }
 }

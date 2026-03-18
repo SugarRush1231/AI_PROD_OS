@@ -33,19 +33,15 @@
     <div class="container nav-inner">
       <div class="nav-left">
         <a href="#" class="logo">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-            stroke-linecap="round" stroke-linejoin="round" style="color: var(--skills-cyan);">
-            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path>
-          </svg>
+          <img src="ico/AI_productivity.png" alt="AI_PROD_OS" style="width: 26px; height: 26px; object-fit: contain;">
           <span>AI_PROD_OS</span>
         </a>
       </div>
       <div class="nav-center"></div>
       <div class="nav-right" style="display: flex; align-items: center; gap: 15px;">
-        <div id="server-status"
-          style="font-family: var(--font-mono); font-size: 0.65rem; color: var(--fg-dim); text-align: right; border-right: 1px solid var(--border-strong); padding-right: 12px;">
-          SERVER: <span class="server-node" style="color: var(--skills-cyan);">LOCAL_ACTIVE</span><br>
-          PORT: <span class="server-port" style="color: var(--skills-purple);">3000</span>
+        <div id="server-status" style="display: flex; align-items: center; gap: 8px; border-right: 1px solid var(--border-strong); padding-right: 12px;">
+          <span id="server-dot" style="width: 6px; height: 6px; border-radius: 50%; background: var(--fg-dim); box-shadow: none; animation: pulse 2s infinite;"></span>
+          <span id="server-label" style="font-family: var(--font-mono); font-size: 0.65rem; color: var(--fg-dim); letter-spacing: 0.5px;">DEV</span>
         </div>
         <!-- Theme (Middle) -->
         <div class="theme-control-box"
@@ -59,7 +55,7 @@
         </div>
         <!-- Auth (Far-Right) -->
         <div id="user-auth-area">
-          <button id="login-btn" class="btn-skills" style="padding: 6px 14px; font-size: 0.75rem; font-weight: 700;"
+          <button id="login-btn" class="btn-skills" style="display: none; padding: 6px 14px; font-size: 0.75rem; font-weight: 700;"
             onclick="location.href='/auth/google'">로그인</button>
           <div id="user-profile" style="display: none; align-items: center; gap: 10px;">
             <div style="text-align: right; line-height: 1.1;">
@@ -75,13 +71,12 @@
         <script>
           window.addEventListener('DOMContentLoaded', () => {
             const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-            const node = document.querySelector('.server-node');
-            const port = document.querySelector('.server-port');
+            const dot = document.getElementById('server-dot');
+            const label = document.getElementById('server-label');
             if (!isLocal) {
-              node.innerText = 'EDGE: DEPLOYED_V3';
-              node.style.color = '#ff6bdf'; // 배포 시엔 더 핑크한 색상으로 강조
-              port.innerText = 'SSL: ENCRYPTED';
-              port.style.color = 'var(--skills-cyan)';
+              label.innerText = 'LIVE';
+              dot.style.background = '#10b981';
+              dot.style.boxShadow = '0 0 8px rgba(16, 185, 129, 0.6)';
             }
           });
         </script>
@@ -92,15 +87,14 @@
   <main class="container">
     <!-- HERO -->
     <section class="hero">
-      <span class="badge">prod_v3.0 --stable</span>
+      <span class="badge">v1.0 --stable</span>
       <h1>Precision <br><span class="grad-text">Prompt Lab</span></h1>
       <p class="hero-desc">
-        인물부터 배경까지, 정교한 파라미터<br>설계로 완벽한 비주얼을 구현하세요. <br>
-        당신의 창의성을 기술로 치환하는<br> 차세대 프롬프트 엔지니어링 워크플레이스
+        프롬프트 설계부터 음성 자막 추출까지,<br>
+        AI 크리에이티브 워크플로우를 하나의 파이프라인으로.
       </p>
       <div class="hero-actions">
-        <button class="btn-big"
-          onclick="document.getElementById('prompt-lab').scrollIntoView({behavior: 'smooth'})">시작하기</button>
+        <button class="btn-big" id="hero-start-btn">시작하기</button>
       </div>
     </section>
 
@@ -239,6 +233,71 @@
       </div>
     </div>
 
+
+    <!-- WORKFLOW PIPELINE VISUALIZATION -->
+    <section class="section" id="workflow-pipeline">
+      <div class="section-header">
+        <h2>Workflow Pipeline</h2>
+        <div class="status-indicator">
+          <span class="dot pulse" style="background: #10b981;"></span>
+          <span>All Systems Operational</span>
+        </div>
+      </div>
+
+      <div class="pipeline-container">
+        <!-- Pipeline 1: Prompt Engineering -->
+        <div class="pipeline-row">
+          <div class="pipeline-label">PROMPT ENGINE</div>
+          <div class="pipeline-nodes">
+            <div class="p-node" data-step="1">
+              <div class="p-node-icon">✏️</div>
+              <div class="p-node-text">아이디어 입력</div>
+            </div>
+            <div class="p-connector"><div class="p-dot-flow"></div></div>
+            <div class="p-node" data-step="2">
+              <div class="p-node-icon">⚙️</div>
+              <div class="p-node-text">파라미터 설계</div>
+            </div>
+            <div class="p-connector"><div class="p-dot-flow"></div></div>
+            <div class="p-node" data-step="3">
+              <div class="p-node-icon">🧠</div>
+              <div class="p-node-text">AI 프롬프트 생성</div>
+            </div>
+            <div class="p-connector"><div class="p-dot-flow"></div></div>
+            <div class="p-node active" data-step="4">
+              <div class="p-node-icon">🎯</div>
+              <div class="p-node-text">최적화 결과</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Pipeline 2: Audio STT -->
+        <div class="pipeline-row">
+          <div class="pipeline-label">AUDIO STT</div>
+          <div class="pipeline-nodes">
+            <div class="p-node" data-step="1">
+              <div class="p-node-icon">🎙️</div>
+              <div class="p-node-text">오디오 업로드</div>
+            </div>
+            <div class="p-connector"><div class="p-dot-flow delay"></div></div>
+            <div class="p-node" data-step="2">
+              <div class="p-node-icon">🔊</div>
+              <div class="p-node-text">Whisper AI 분석</div>
+            </div>
+            <div class="p-connector"><div class="p-dot-flow delay"></div></div>
+            <div class="p-node" data-step="3">
+              <div class="p-node-icon">📝</div>
+              <div class="p-node-text">SRT 자막 생성</div>
+            </div>
+            <div class="p-connector"><div class="p-dot-flow delay"></div></div>
+            <div class="p-node active" data-step="4">
+              <div class="p-node-icon">💾</div>
+              <div class="p-node-text">다운로드</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
 
     <!-- PROMPT ARCHITECTURE LAB -->
     <section class="section" id="prompt-lab">
@@ -649,7 +708,7 @@
       <div class="section-header">
         <h2>Video Production Suite</h2>
         <div class="status-indicator">
-          <span class="dot pulse" style="background: var(--skills-purple);"></span>
+          <span class="dot pulse" style="background: #10b981;"></span>
           <span>AI 스크립트 & STT 엔진 활성</span>
         </div>
       </div>

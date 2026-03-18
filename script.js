@@ -1321,3 +1321,11 @@ document.querySelectorAll('a[href="#system-status"]').forEach(anchor => {
 
 // 초기 실행
 checkAuthStatus();
+
+// ✅ 히어로 "시작하기" 버튼 → Prompt Lab으로 스크롤
+const heroStartBtn = document.getElementById('hero-start-btn');
+if (heroStartBtn) {
+  heroStartBtn.addEventListener('click', () => {
+    document.getElementById('prompt-lab').scrollIntoView({ behavior: 'smooth' });
+  });
+}

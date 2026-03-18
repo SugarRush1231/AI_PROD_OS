@@ -21,12 +21,12 @@ const upload = multer({ dest: 'uploads/' });
 // --- [MIDDLEWARE: AUTH CHECK] ---
 const ensureAuthenticated = (req, res, next) => {
     if (req.isAuthenticated()) return next();
-    res.status(401).json({ error: 'Authentication required. Please login with Google.' });
+    res.status(401).json({ error: '로그인 후 진행해 주세요.' });
 };
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const SERVER_START_TIME = Date.now(); 
+const SERVER_START_TIME = Date.now();
 
 // --- [PASSPORT AUTH CONFIG] ---
 passport.serializeUser((user, done) => done(null, user));
@@ -47,10 +47,10 @@ app.use(helmet({
     contentSecurityPolicy: {
         directives: {
             defaultSrc: ["'self'"],
-            scriptSrc: ["'self'", "'unsafe-inline'"], 
+            scriptSrc: ["'self'", "'unsafe-inline'"],
             styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
             fontSrc: ["'self'", "https://fonts.gstatic.com"],
-            imgSrc: ["'self'", "data:", "https://*", "https://lh3.googleusercontent.com"], 
+            imgSrc: ["'self'", "data:", "https://*", "https://lh3.googleusercontent.com"],
             connectSrc: ["'self'", "https://text.pollinations.ai", "https://api.groq.com"],
         },
     },
@@ -61,11 +61,11 @@ app.use(session({
     secret: process.env.SESSION_SECRET || 'ai-prod-suite-secure-key',
     resave: false,
     saveUninitialized: false,
-    cookie: { 
+    cookie: {
         secure: false, // 배포 시 true로 변경 권장 (HTTPS 필수)
         httpOnly: true, // XSS 방지
         sameSite: 'Strict', // 🛡️ 보안 핵심: 타 사이트에서의 위조 요청(CSRF) 원천 차단
-        maxAge: 24 * 60 * 60 * 1000 
+        maxAge: 24 * 60 * 60 * 1000
     }
 }));
 app.use(passport.initialize());
@@ -77,7 +77,7 @@ app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 // --- [AUTH ROUTES] ---
 app.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
 
-app.get('/auth/google/callback', 
+app.get('/auth/google/callback',
     passport.authenticate('google', { failureRedirect: '/' }),
     (req, res) => res.redirect('/')
 );
@@ -95,7 +95,7 @@ app.get('/api/me', (req, res) => {
 
 // 4. 속도 제한 및 교차 출처
 const apiLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, 
+    windowMs: 15 * 60 * 1000,
     max: 100,
     standardHeaders: 'draft-7',
     legacyHeaders: false,
@@ -110,7 +110,7 @@ const corsOptions = {
     optionsSuccessStatus: 200
 };
 app.use(cors(corsOptions));
-app.use(express.json({ limit: '10kb' })); 
+app.use(express.json({ limit: '10kb' }));
 app.use(express.static(path.join(__dirname)));
 
 // --- ROUTES ---
@@ -131,7 +131,7 @@ app.post('/api/whisper', ensureAuthenticated, apiLimiter, upload.single('audio')
         // 🛡️ Groq API 사용 (OpenAI 대신)
         const groqKey = process.env.GROQ_API_KEY;
         if (!groqKey || groqKey === 'your-groq-key-here') {
-            await fs.unlink(req.file.path).catch(() => {});
+            await fs.unlink(req.file.path).catch(() => { });
             return res.status(500).json({ error: 'GROQ_API_KEY is missing in .env' });
         }
 
@@ -147,8 +147,8 @@ app.post('/api/whisper', ensureAuthenticated, apiLimiter, upload.single('audio')
             filename: `audio${fileExt}`, // 'audio.mp3' 식으로 API에 전달
             contentType: req.file.mimetype
         });
-        formData.append('model', 'whisper-large-v3'); 
-        formData.append('response_format', 'verbose_json'); 
+        formData.append('model', 'whisper-large-v3');
+        formData.append('response_format', 'verbose_json');
 
         const response = await axios.post('https://api.groq.com/openai/v1/audio/transcriptions', formData, {
             headers: {
@@ -158,13 +158,13 @@ app.post('/api/whisper', ensureAuthenticated, apiLimiter, upload.single('audio')
         });
 
         // 사용 후 임시 파일 삭제
-        await fs.unlink(req.file.path).catch(() => {});
+        await fs.unlink(req.file.path).catch(() => { });
 
         // JSON 데이터를 SRT 형식으로 정밀 변환
         const srtData = convertJsonToSrt(response.data.segments);
         res.json({ result: srtData });
     } catch (err) {
-        if (req.file) await fs.unlink(req.file.path).catch(() => {});
+        if (req.file) await fs.unlink(req.file.path).catch(() => { });
         console.error('[GROQ_ERROR]', err.response ? err.response.data : err.message);
         res.status(500).json({ error: 'STT 분석 중 오류가 발생했습니다.' });
     }
@@ -203,7 +203,7 @@ app.post('/api/engineer', ensureAuthenticated, apiLimiter, async (req, res, next
         if (!intent || typeof intent !== 'string' || intent.length < 2) {
             return res.status(400).json({ error: 'Valid intent is required (min 2 chars)' });
         }
-        
+
         if (intent.length > 5000) {
             return res.status(400).json({ error: 'Payload too large' });
         }
@@ -214,9 +214,9 @@ app.post('/api/engineer', ensureAuthenticated, apiLimiter, async (req, res, next
         // AI 노드 요청 (pollinations - 더 안정적인 검색 모델 사용)
         let aiResponse;
         try {
-            const url = `https://text.pollinations.ai/prompt/${encodeURIComponent(cleanIntent)}?system=${encodeURIComponent(systemPrompt)}&model=openai&seed=${Math.floor(Math.random()*100000)}`;
+            const url = `https://text.pollinations.ai/prompt/${encodeURIComponent(cleanIntent)}?system=${encodeURIComponent(systemPrompt)}&model=openai&seed=${Math.floor(Math.random() * 100000)}`;
             aiResponse = await fetch(url);
-            
+
             if (!aiResponse.ok) {
                 const fallbackUrl = `https://text.pollinations.ai/prompt/${encodeURIComponent(cleanIntent)}?system=${encodeURIComponent(systemPrompt)}`;
                 aiResponse = await fetch(fallbackUrl);
@@ -225,7 +225,7 @@ app.post('/api/engineer', ensureAuthenticated, apiLimiter, async (req, res, next
             console.error(`[FETCH_ERROR] Node unreachable: ${fetchError.message}`);
             throw new Error('AI 서비스 연결 불가');
         }
-        
+
         if (!aiResponse.ok) {
             throw new Error(`AI Node Error (Status: ${aiResponse.status})`);
         }
@@ -241,7 +241,7 @@ app.post('/api/engineer', ensureAuthenticated, apiLimiter, async (req, res, next
 
         // 1. 비표준 인덱스 캡션 제거 (Index 1:, Line 2. 등을 순수 숫자로)
         extractionTarget = extractionTarget.replace(/^(Index|Line|번호|순번|Subtitle|Step)\s*(\d+)[:.]?\s*/gim, '$2');
-        
+
         // 2. 시간코드 앞의 불필요한 텍스트 줄들 제거 (첫 자막 시작점 탐색)
         const timecodeRegex = /\d{2}:\d{2}:\d{2}[.,]\d{3}/;
         const firstTimecodeMatch = extractionTarget.match(timecodeRegex);
@@ -265,6 +265,13 @@ app.post('/api/engineer', ensureAuthenticated, apiLimiter, async (req, res, next
         // 3. 중간중간 섞인 비표준 인덱스들도 한 번 더 청소
         finalResult = finalResult.replace(/\n(Index|Line|번호|순번|Subtitle|Step)\s*(\d+)[:.]?\s*/gi, '\n$2');
 
+        // 4. Pollinations.AI 광고성 하단 텍스트 전역 제거
+        finalResult = finalResult
+            .replace(/Support Pollinations\.AI:[\s\S]*/gi, '')
+            .replace(/🌸\s*Ad\s*🌸[\s\S]*/gi, '')
+            .replace(/Powered by Pollinations\.AI[\s\S]*/gi, '')
+            .trim();
+
         res.json({ result: finalResult || "자막 데이터를 추출하지 못했습니다.", model: 'orchestrated' });
 
     } catch (error) {
@@ -285,7 +292,7 @@ app.get('/api/status', async (req, res) => {
         aiNodeStatus = 'OFFLINE';
     }
 
-    res.json({ 
+    res.json({
         startTime: SERVER_START_TIME,
         aiNodeStatus: aiNodeStatus,
         host: os.hostname(),
@@ -305,7 +312,7 @@ app.get('/api/presets', ensureAuthenticated, async (req, res) => {
     try {
         await fs.mkdir(USER_PRESETS_DIR, { recursive: true }); // 폴더 자동 생성 (최초 1회)
         const userFilePath = getUserFilePath(req.user.id);
-        
+
         // 내 파일이 없으면 새 리스트[] 반환, 있으면 파싱
         const data = await fs.readFile(userFilePath, 'utf8').catch(() => '[]');
         res.json(JSON.parse(data));
@@ -320,12 +327,12 @@ app.post('/api/presets', ensureAuthenticated, async (req, res) => {
         await fs.mkdir(USER_PRESETS_DIR, { recursive: true });
         const userFilePath = getUserFilePath(req.user.id);
         const newPreset = req.body;
-        
+
         // 🛡️ 내 파일만 읽어와서 저장 (다른 사람 데이터와 물리적으로 분리)
         const data = await fs.readFile(userFilePath, 'utf8').catch(() => '[]');
         const presets = JSON.parse(data);
         presets.push(newPreset);
-        
+
         await fs.writeFile(userFilePath, JSON.stringify(presets, null, 2));
         res.json({ success: true });
     } catch (e) {
@@ -338,10 +345,10 @@ app.delete('/api/presets/:id', ensureAuthenticated, async (req, res) => {
     try {
         const id = parseInt(req.params.id);
         const userFilePath = getUserFilePath(req.user.id);
-        
+
         const data = await fs.readFile(userFilePath, 'utf8').catch(() => '[]');
         const presets = JSON.parse(data).filter(p => p.id !== id);
-        
+
         await fs.writeFile(userFilePath, JSON.stringify(presets, null, 2));
         res.json({ success: true });
     } catch (e) {
@@ -357,12 +364,12 @@ app.use((req, res) => {
 // 6. 중앙 집중식 에러 핸들링 미들웨어 (모든 서버 에러의 종착역)
 app.use((err, req, res, next) => {
     console.error(`[SERVER_EXCEPTION] ${err.stack || err.message}`);
-    
+
     // 외부에 민감한 에러 스택을 감추고 정제된 응답만 전송
     const statusCode = err.status || 500;
     res.status(statusCode).json({
-        error: process.env.NODE_ENV === 'production' 
-            ? 'Internal System Fault' 
+        error: process.env.NODE_ENV === 'production'
+            ? 'Internal System Fault'
             : err.message || 'Unknown Server Error'
     });
 });

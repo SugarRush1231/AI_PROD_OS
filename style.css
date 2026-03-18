@@ -1,8 +1,9 @@
 :root {
-  --bg: #0f111a;
-  --fg: #f1f5f9;
-  --fg-dim: #94a3b8;
-  --border: rgba(148, 163, 184, 0.1);
+  --bg: #0b0d12; /* 더 깊은 블랙으로 대비 강화 */
+  --fg: #f8fafc; /* 더 순수한 화이트에 가까운 텍스트 */
+  --fg-dim: #94a3b8; /* 슬레이트 텍스트 */
+  --fg-muted: #64748b; /* 보조 설명용 */
+  --border: rgba(148, 163, 184, 0.12);
   --border-strong: rgba(148, 163, 184, 0.2);
   --skills-cyan: #3b82f6; /* 정제된 블루 */
   --skills-purple: #818cf8; /* 인디고 */
@@ -15,10 +16,12 @@
 }
 
 .light-mode {
-  --bg: #e2e8f0;      /* 더 차분한 베이스 그레이 */
-  --fg: #1e293b;      /* 깊은 슬레이트 텍스트 */
-  --fg-dim: #475569;
-  --border: rgba(30, 41, 59, 0.1);
+  --bg: #f8fafc;      /* 깨끗한 화이트 사이트 */
+  --fg: #0f172a;      /* 깊은 네이비 텍스트 */
+  --fg-dim: #334155;    /* 세컨더리 텍스트 */
+  --fg-muted: #64748b;
+  --panel: #ffffff;
+  --border: rgba(15, 23, 42, 0.08);
   --border-strong: rgba(30, 41, 59, 0.18);
   --panel: #f8fafc;     /* 눈부심 없는 소프트 화이트 */
   --hover: rgba(30, 41, 59, 0.04);
@@ -34,14 +37,17 @@
 html { 
   background-color: var(--bg);
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale; /* 맥OS 폰트 렌더링 최적화 */
+  text-size-adjust: 100%;
 }
 
 body {
   font-family: var(--font-sans);
   color: var(--fg);
-  line-height: 1.5;
+  line-height: 1.6; /* 가독성을 위한 최적의 행간 */
   overflow-x: hidden;
   background: var(--bg);
+  text-rendering: optimizeLegibility; /* 텍스트 렌더링 최적화 */
 }
 
 .mesh-bg {
@@ -59,9 +65,23 @@ body {
 }
 
 .container { 
-  max-width: 1200px; 
+  width: 100%;
+  max-width: 1360px; /* 프리미엄 워크스페이스를 위해 가로폭 확장 (기존 1200px) */
   margin: 0 auto; 
-  padding: 0 1.5rem; 
+  padding: 0 2.5rem; 
+  transition: max-width 0.4s ease;
+}
+
+@media (min-width: 2000px) {
+  .container {
+    max-width: 1600px; /* 4K 및 울트라와이드 모니터 대응 */
+  }
+}
+
+@media (max-width: 1400px) {
+  .container {
+    padding: 0 2rem;
+  }
 }
 
 /* ── Typography ── */
@@ -513,12 +533,12 @@ button:focus-visible { outline: 2px solid var(--skills-cyan); outline-offset: 2p
 /* ── Prompt Lab ── */
 .lab-grid {
   display: grid;
-  grid-template-columns: 1fr 280px 1fr;
-  gap: 32px;
+  grid-template-columns: 1fr 300px 1fr; /* 중앙 레이어 가시성 확보 및 밸런스 조정 */
+  gap: 40px; /* 더 넓은 간격으로 시각적 피로도 감소 */
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 12px;
-  padding: 32px;
+  padding: 40px;
   align-items: start;
 }
 
@@ -655,13 +675,13 @@ button:focus-visible { outline: 2px solid var(--skills-cyan); outline-offset: 2p
 
 .label-mono {
   font-family: var(--font-mono);
-  font-size: 0.8rem;
+  font-size: 0.75rem; /* 살짝 줄여서 레이블 느낌 강조 */
   font-weight: 700;
   color: var(--skills-purple);
   margin: 16px 0 10px;
-  letter-spacing: 1.5px;
+  letter-spacing: 0.12em; /* 트래킹 조절로 고급스러운 테크니컬 무드 */
   text-transform: uppercase;
-  opacity: 0.9;
+  opacity: 0.85;
 }
 .label-mono:first-child { margin-top: 0; }
 
@@ -793,11 +813,11 @@ button:focus-visible { outline: 2px solid var(--skills-cyan); outline-offset: 2p
 
 .output-block {
   font-family: var(--font-mono);
-  font-size: 0.85rem;
-  line-height: 1.6;
+  font-size: 0.9rem; /* 가독성을 위해 폰트 사이즈 상향 */
+  line-height: 1.7; /* 코딩용 행간 최적화 */
   color: var(--skills-cyan);
   min-height: 240px;
-  word-break: break-all;
+  word-break: break-word; /* 불필요한 단어 끊김 방지 */
   white-space: pre-wrap;
   overflow-y: auto;
 }
@@ -1079,6 +1099,14 @@ footer { padding: 80px 0 40px; border-top: 1px solid var(--border); margin-top: 
   .cmd-snippet { width: 100%; text-align: center; }
   .studio-container { grid-template-columns: 1fr; }
   .console-sidebar { display: none; }
+  .container { padding: 0 1.5rem; } /* 모바일 가시성 */
+}
+
+/* ── 모니터 해상도/배율 대응 (DPI Scaling) ── */
+@media (min-width: 2560px) {
+  html {
+    font-size: 18px; /* 초고해상도에서 UI가 너무 작게 보이지 않도록 기본 폰트 사이즈 조정 */
+  }
 }
 
 /* ── Premium System Modal ── */

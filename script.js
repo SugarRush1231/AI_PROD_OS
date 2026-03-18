@@ -672,6 +672,7 @@ async function applyEngineering() {
     addLog(`> Initiating Engineering Pipeline...`, 'dim');
 
     if (!UI.intentInput || !UI.intentInput.value.trim()) {
+      showSystemConfirm('알림', '프롬프트 작성 후 진행해 주세요.', 'info');
       addLog('!! ERR: EMPTY_CORE_INTENT_DETECTED', 'error');
       return;
     }

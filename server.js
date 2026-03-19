@@ -200,7 +200,7 @@ function addLogServer(msg) {
 /**
  * AI 엔지니어링 API
  */
-app.post('/api/engineer', ensureAuthenticated, apiLimiter, async (req, res, next) => {
+app.post('/api/engineer', apiLimiter, async (req, res, next) => {
     try {
         const { intent, systemPrompt } = req.body;
 
@@ -216,23 +216,45 @@ app.post('/api/engineer', ensureAuthenticated, apiLimiter, async (req, res, next
         const cleanIntent = intent.trim();
         console.log(`[AI_REQUEST] Input: ${cleanIntent.substring(0, 50)}...`);
 
-        // AI 노드 요청 (pollinations - 더 안정적인 검색 모델 사용)
         let aiResponse;
-        try {
-            const url = `https://text.pollinations.ai/prompt/${encodeURIComponent(cleanIntent)}?system=${encodeURIComponent(systemPrompt)}&model=openai&seed=${Math.floor(Math.random() * 100000)}`;
-            aiResponse = await fetch(url);
+        let fetchSuccess = false;
+        let lastStatus = 0;
 
-            if (!aiResponse.ok) {
-                const fallbackUrl = `https://text.pollinations.ai/prompt/${encodeURIComponent(cleanIntent)}?system=${encodeURIComponent(systemPrompt)}`;
-                aiResponse = await fetch(fallbackUrl);
+        // 무료 AI 노드(pollinations)의 간헐적 502/429 통신 실패를 방어하기 위한 3회 자동 재시도 로직
+        for (let attempt = 1; attempt <= 3; attempt++) {
+            try {
+                const seed = Math.floor(Math.random() * 1000000);
+                
+                aiResponse = await fetch('https://text.pollinations.ai/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        messages: [
+                            { role: 'system', content: systemPrompt },
+                            { role: 'user', content: cleanIntent }
+                        ],
+                        seed: seed
+                    })
+                });
+                
+                lastStatus = aiResponse.status;
+
+                if (aiResponse.ok) {
+                    fetchSuccess = true;
+                    break;
+                }
+                
+                // 에러 발생 시 잠시 대기 후 재시도
+                console.warn(`[AI_RETRY] Attempt ${attempt} failed with status ${lastStatus}. Retrying in 1.5s...`);
+                await new Promise(r => setTimeout(r, 1500));
+            } catch (err) {
+                console.error(`[AI_FETCH_ERROR] Attempt ${attempt}: ${err.message}`);
+                await new Promise(r => setTimeout(r, 1500));
             }
-        } catch (fetchError) {
-            console.error(`[FETCH_ERROR] Node unreachable: ${fetchError.message}`);
-            throw new Error('AI 서비스 연결 불가');
         }
 
-        if (!aiResponse.ok) {
-            throw new Error(`AI Node Error (Status: ${aiResponse.status})`);
+        if (!fetchSuccess) {
+            throw new Error(`AI Node Error (Status: ${lastStatus})`);
         }
 
         const rawText = await aiResponse.text();

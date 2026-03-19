@@ -264,23 +264,36 @@ button:active { transform: scale(0.98); }
 button:focus-visible { outline: 2px solid var(--skills-cyan); outline-offset: 2px; }
 
 .btn-primary {
-  background: #fff;
-  color: #000;
+  background: var(--fg);
+  color: var(--bg);
   border: none;
   padding: 8px 16px;
   border-radius: 6px;
   font-weight: 600;
   font-size: 0.875rem;
+  transition: all 0.2s ease;
+}
+
+.btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
 .btn-big {
-  background: #fff;
-  color: #000;
+  background: var(--fg);
+  color: var(--bg);
   border: none;
   padding: 14px 28px;
   border-radius: 8px;
   font-weight: 700;
   font-size: 1rem;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+
+.btn-big:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
 }
 
 .btn-install {
@@ -731,6 +744,27 @@ button:focus-visible { outline: 2px solid var(--skills-cyan); outline-offset: 2p
 }
 .lab-textarea:focus { outline: none; border-color: var(--skills-cyan); }
 
+.auth-alert-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--skills-purple);
+  margin-bottom: 12px;
+  background: rgba(139, 92, 246, 0.1);
+  padding: 10px 14px;
+  border-radius: 6px;
+  border: 1px solid rgba(139, 92, 246, 0.2);
+  line-height: 1.4;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 .layer-stack { display: flex; flex-direction: column; gap: 4px; }
 .layer {
   background: rgba(255, 255, 255, 0.03);
@@ -756,7 +790,21 @@ button:focus-visible { outline: 2px solid var(--skills-cyan); outline-offset: 2p
 }
 .layer-num { font-family: var(--font-mono); font-size: 0.7rem; color: var(--skills-cyan); font-weight: 700; }
 .layer-name { font-size: 0.85rem; font-weight: 600; flex: 1; color: var(--fg); }
-.layer-status { font-family: var(--font-mono); font-size: 0.65rem; color: var(--fg-dim); letter-spacing: 0.5px; }
+.layer-status { font-family: var(--font-mono); font-size: 0.65rem; color: var(--fg-dim); letter-spacing: 0.5px; display: flex; align-items: center; gap: 4px; }
+
+.spinner-icon {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border: 2px solid rgba(0, 229, 255, 0.2);
+  border-top-color: var(--skills-cyan);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
 
 .visualizer-output {
   background: var(--input-bg, #000);

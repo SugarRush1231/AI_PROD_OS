@@ -728,19 +728,35 @@ async function applyEngineering() {
     addLog(`  - Background: ${config.bg}`, 'secondary');
 
     // 3단계: 시각적 레이어 처리 (Process Layers)
-    UI.layers.forEach(l => { if (l) l.classList.remove('active'); });
+    UI.layers.forEach(l => { 
+      if (l) {
+        l.classList.remove('active'); 
+        l.style.borderColor = '';
+        const status = l.querySelector('.layer-status');
+        if (status) {
+          status.innerHTML = '대기 중';
+          status.style.color = '';
+        }
+      }
+    });
 
-    UI.layers[0].classList.add('active');
-    addLog(`> [L1] Context & Alignment Processing...`, 'success');
-    await new Promise(r => setTimeout(r, 500));
-
-    UI.layers[1].classList.add('active');
-    addLog(`> [L2] Style Consistency Refinement...`, 'success');
-    await new Promise(r => setTimeout(r, 500));
-
-    UI.layers[2].classList.add('active');
-    addLog(`> [L3] Semantic Expansion & Details...`, 'success');
-    await new Promise(r => setTimeout(r, 500));
+    for (let i = 0; i < UI.layers.length; i++) {
+      const layer = UI.layers[i];
+      if (layer) {
+        layer.classList.add('active');
+        layer.style.borderColor = ''; // reset border from previous run
+        const status = layer.querySelector('.layer-status');
+        if (status) status.innerHTML = '<span class="spinner-icon"></span> 최적화 중...';
+        
+        const logs = [
+          '> [L1] Context & Alignment Processing...',
+          '> [L2] Style Consistency Refinement...',
+          '> [L3] Semantic Expansion & Details...'
+        ];
+        addLog(logs[i] || `> [L${i+1}] Processing...`, 'success');
+        await new Promise(r => setTimeout(r, 300));
+      }
+    }
 
     if (UI.engineerBtn) {
       UI.engineerBtn.disabled = true;
@@ -751,23 +767,8 @@ async function applyEngineering() {
       startLoadingAnimation(UI.optimizedOutput, '엔진 설계 중');
     }
 
-    UI.layers.forEach(l => { if (l) l.classList.remove('active'); });
-
     addLog(`$ prod --engineer --type=${config.type} --style=${config.style}`, true);
-
     const startTime = Date.now();
-    const animationPromise = (async () => {
-      for (let i = 0; i < UI.layers.length; i++) {
-        const layer = UI.layers[i];
-        if (layer) {
-          layer.classList.add('active');
-          const status = layer.querySelector('.layer-status');
-          if (status) status.innerText = '연산 중';
-          await new Promise(r => setTimeout(r, 400));
-          if (status) status.innerText = '완료';
-        }
-      }
-    })();
 
     // Construct Context-Aware Intent
     const povDescription = (config.pov === 'arm-extended' || config.pov === 'selfie')
@@ -931,9 +932,18 @@ async function applyEngineering() {
       return result;
     });
 
-    const [data] = await Promise.all([apiPromise, animationPromise]);
+    const data = await apiPromise; // Wait purely for the true API response
     const endTime = Date.now();
     const duration = endTime - startTime;
+
+    // API 도착 후 즉시 모든 레이어를 성공("완료") 상태로 변경 (시간차 없이 자연스럽게)
+    UI.layers.forEach(layer => {
+      if (layer) {
+        const status = layer.querySelector('.layer-status');
+        if (status) status.innerHTML = '<svg viewBox="0 0 24 24" width="12" height="12" stroke="#10b981" stroke-width="3" fill="none" style="flex-shrink:0"><polyline points="20 6 9 17 4 12"></polyline></svg> 완료';
+        layer.style.borderColor = 'var(--skills-cyan)';
+      }
+    });
 
     stopLoadingAnimation(UI.optimizedOutput);
     if (UI.optimizedOutput) {
@@ -964,6 +974,18 @@ async function applyEngineering() {
     stopLoadingAnimation(UI.optimizedOutput);
     addLog(`!! CRITICAL_FAULT: ${error.message}`, 'error');
     if (UI.optimizedOutput) UI.optimizedOutput.innerText = "오류 발생: " + error.message;
+
+    // 🚨 에러 시 스피너가 무한정 도는 현상 방지: 실패 상태 시각화
+    UI.layers.forEach(layer => {
+      if (layer) {
+        const status = layer.querySelector('.layer-status');
+        if (status) {
+          status.innerHTML = '<svg viewBox="0 0 24 24" width="12" height="12" stroke="#ff5555" stroke-width="3" fill="none" style="flex-shrink:0"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg> 실패';
+          status.style.color = '#ff5555';
+        }
+        layer.style.borderColor = '#ff5555';
+      }
+    });
   } finally {
     if (UI.engineerBtn) {
       UI.engineerBtn.disabled = false;
@@ -1174,14 +1196,24 @@ if (UI.subtitleOutput) {
 // --- [WHISPER STT & AUDIO INTERFACE LOGIC] ---
 if (UI.btnSourceText && UI.btnSourceAudio) {
   const switchSource = (source) => {
-    if (source === 'text') {
+    const isAudioMode = (source !== 'text');
+    if (!isAudioMode) {
       UI.btnSourceText.classList.add('active');
       UI.btnSourceAudio.classList.remove('active');
       UI.audioUploadContainer.style.display = 'none';
       UI.subtitleParamsContainer.style.display = 'grid';
       UI.subtitleIntentContainer.style.display = 'block';
       UI.subtitleContextContainer.style.display = 'block';
+      
+      // 텍스트 모드는 항상 활성화
+      UI.subGenBtn.disabled = false;
       UI.subGenBtn.innerText = 'AI 영상 자막 생성 (Timeline)';
+      if (UI.paramSubIntent) {
+        UI.paramSubIntent.disabled = false;
+        UI.paramSubIntent.placeholder = "예) 야구 결승전 역전 홈런 상황, 강아지 브이로그";
+      }
+      const alertVideo = document.getElementById('auth-alert-video');
+      if (alertVideo) alertVideo.style.display = 'none';
     } else {
       UI.btnSourceAudio.classList.add('active');
       UI.btnSourceText.classList.remove('active');
@@ -1189,7 +1221,13 @@ if (UI.btnSourceText && UI.btnSourceAudio) {
       UI.subtitleParamsContainer.style.display = 'none';
       UI.subtitleIntentContainer.style.display = 'none';
       UI.subtitleContextContainer.style.display = 'none';
-      UI.subGenBtn.innerText = 'STT 자막 추출 시작';
+      
+      // 오디오 모드는 로그인이 필요함
+      UI.subGenBtn.disabled = !USER_LOGGED_IN;
+      UI.subGenBtn.innerText = !USER_LOGGED_IN ? '🔒 로그인 필요' : 'STT 자막 추출 시작';
+      
+      const alertVideo = document.getElementById('auth-alert-video');
+      if (alertVideo) alertVideo.style.display = USER_LOGGED_IN ? 'none' : 'flex';
     }
   };
 
@@ -1255,6 +1293,34 @@ async function checkAuthStatus() {
   const profileArea = document.getElementById('user-profile');
   const avatarImg = document.getElementById('user-avatar');
 
+  const updateAuthUIInputs = (isLoggedIn) => {
+    if (UI.intentInput) {
+      UI.intentInput.disabled = !isLoggedIn;
+      UI.intentInput.placeholder = isLoggedIn ? "아이디어를 입력하세요... (e.g. : 한국인 여자, 고양이, 향수, ... )" : "🔒 기능을 사용하려면 먼저 로그인이 필요합니다.";
+    }
+    if (UI.paramSubIntent) {
+      const isAudioMode = UI.btnSourceAudio && UI.btnSourceAudio.classList.contains('active');
+      UI.paramSubIntent.disabled = isAudioMode && !isLoggedIn;
+      UI.paramSubIntent.placeholder = (isAudioMode && !isLoggedIn) ? "🔒 로그인이 필요합니다." : "예) 야구 결승전 역전 홈런 상황, 강아지 브이로그";
+    }
+    if (UI.engineerBtn) {
+      UI.engineerBtn.disabled = !isLoggedIn;
+      UI.engineerBtn.innerText = isLoggedIn ? "적용 후 프롬프트 생성" : "🔒 로그인 필요";
+    }
+      if (UI.subGenBtn) {
+        const isAudioMode = UI.btnSourceAudio && UI.btnSourceAudio.classList.contains('active');
+        UI.subGenBtn.disabled = isAudioMode && !isLoggedIn;
+        UI.subGenBtn.innerText = (isAudioMode && !isLoggedIn) ? '🔒 로그인 필요' : (isAudioMode ? 'STT 자막 추출 시작' : 'AI 영상 자막 생성 (Timeline)');
+      }
+      
+      const alertPrompt = document.getElementById('auth-alert-prompt');
+      const alertVideo = document.getElementById('auth-alert-video');
+      if (alertPrompt) alertPrompt.style.display = isLoggedIn ? 'none' : 'flex';
+      
+      const isAudioMode = UI.btnSourceAudio && UI.btnSourceAudio.classList.contains('active');
+      if (alertVideo) alertVideo.style.display = (isLoggedIn || !isAudioMode) ? 'none' : 'flex';
+    };
+
   // 1. 로그인 버튼 이벤트 바인딩 (인라인 onclick 대신)
   if (loginBtn) {
     loginBtn.onclick = () => {
@@ -1283,6 +1349,7 @@ async function checkAuthStatus() {
       addLog(`✓ 로그인 확인: ${data.user.displayName}`, 'success');
       // 로그인 성공 시 프리셋 새로고침
       MyPresets.fetchFromServer();
+      updateAuthUIInputs(true);
     } else {
       USER_LOGGED_IN = false;
       if (loginBtn) loginBtn.style.display = 'block';
@@ -1293,11 +1360,13 @@ async function checkAuthStatus() {
       MyPresets.render();
       if (UI.log) UI.log.innerHTML = ''; // 터미널 로그 삭제
       addLog('>> [AUTH] Logout detected. System state secured.', 'dim');
+      updateAuthUIInputs(false);
     }
   } catch (err) {
     USER_LOGGED_IN = false;
     console.warn('Auth system offline or guest mode:', err.message);
     if (loginBtn) loginBtn.style.display = 'block';
+    updateAuthUIInputs(false);
   }
 }
 

@@ -277,16 +277,22 @@ app.post('/api/engineer', apiLimiter, async (req, res, next) => {
             const preText = extractionTarget.substring(0, firstTimecodeMatch.index);
             const indexMatch = preText.match(/(\d+)\s*$/);
             if (indexMatch) {
-                extractionTarget = extractionTarget.substring(indexMatch.index);
+                // Ensure there is a newline between index and timecode if AI put them on the same line
+                const potentialIndex = indexMatch[1];
+                extractionTarget = potentialIndex + "\n" + extractionTarget.substring(firstTimecodeMatch.index);
             } else {
                 extractionTarget = "1\n" + extractionTarget.substring(firstTimecodeMatch.index);
             }
         }
 
+        // 3. 비표준 인덱스+시간 한 줄 붙어있는 형태 전역 보정 (e.g. "1 00:00:00,000" -> "1\n00:00:00,000")
+        extractionTarget = extractionTarget.replace(/^(\d+)\s+(\d{2}:\d{2}:\d{2})/gm, '$1\n$2');
+
         let finalResult = extractionTarget
             .replace(/```(srt|vtt|script|text|json)?\n?/gi, '')
             .replace(/```/g, '')
             .replace(/<reasoning>[\s\S]*?<\/reasoning>/gi, '') // 추론 태그 제거
+            .replace(/<think>[\s\S]*?<\/think>/gi, '') // 추가적인 think 태그 제거
             .trim();
 
         // 3. 중간중간 섞인 비표준 인덱스들도 한 번 더 청소

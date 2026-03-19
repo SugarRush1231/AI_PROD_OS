@@ -1058,20 +1058,32 @@ async function generateSubtitles() {
     const tempoMap = { 'slow': 'Slow & Epic (5-7s per line)', 'fast': 'Fast & Energetic (2-3s per line)', 'standard': 'Standard Narration (4-5s per line)' };
     const duration = UI.paramSubDuration ? UI.paramSubDuration.value : '15';
     
-    const systemPrompt = `You are a Top-Tier Professional Vlogger & Scriptwriter.
-    TASK: Generate a 1-minute (60s) vivid, cute, and emotional Korean vlog script in SRT format.
-    
-    STYLE REFERENCE (Follow this vibes):
-    - "안녕하세요! 오늘도 즐거운 브이로그에 오신 걸 환영해요!"
-    - "아침 햇살이 부드럽게 카메라를 스치는 순간, 마음까지 따뜻해져요."
-    - "마지막으로 감정까지 공유하며 마무리할게요. 내일 또 만나요!"
+    const tempoStyle = tempoMap[tempo] || tempoMap['standard'];
+    const durationNum = parseInt(duration) || 15;
+    const blockCount = Math.floor(durationNum / 5);
 
-    STRICT RULES:
-    1. OUTPUT: Exactly 12 blocks (5 seconds each, Total 60s).
-    2. START IMMEDIATELY with '1'. No preamble. No markdown.
-    3. LANGUAGE: Pure, natural, and trendy Korean. NO REPETITION.
-    4. TIME: 00:00:00,000 --> 00:00:05,000 and subsequent 5s intervals.
-    5. FORMAT: Standard SRT only. No 'Index' or 'Line' text.`;
+    const systemPrompt = `You are a Top-Tier Professional Content Creator & Scriptwriter.
+    TASK: Generate a ${durationNum}-second high-quality Korean video script in SRT format.
+    
+    [STRICT OUTPUT FORMAT]
+    (Index)
+    (Start Time) --> (End Time)
+    (Subtitle Text)
+    [Blank Line]
+
+    Example:
+    1
+    00:00:00,000 --> 00:00:05,000
+    안녕! 오늘 하루는 어땠어?
+
+    [EXECUTION RULES - ABSOLUTE]
+    1. NO PREAMBLE: Start immediately with the number '1'. No "Sure", "Okay", or "Here is your script".
+    2. NO DRAFTING: Do not write your reasoning, thinking process, or draft lines.
+    3. NO ENGLISH: All subtitle text must be pure Korean. 
+    4. NO SINGLE-LINE: Index, Time, and Text MUST be on separate lines as shown in the example.
+    5. BLOCK COUNT: Exactly ${blockCount} blocks.
+    6. TONE: Adapt to topic "${intent}" with vibe "${context || 'Natural'}".
+    7. ONLY output the final SRT string. I will lose my job if you include any other text.`;
 
     const res = await fetch('/api/engineer', {
       method: 'POST',

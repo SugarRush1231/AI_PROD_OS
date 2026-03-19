@@ -854,9 +854,6 @@ button:focus-visible { outline: 2px solid var(--skills-cyan); outline-offset: 2p
   color: #000;
 }
 
-@media (max-width: 1024px) {
-  .lab-grid { grid-template-columns: 1fr; }
-}
 
 /* ── System Status Dashboard ── */
 #system-status {
@@ -1101,12 +1098,322 @@ footer { padding: 80px 0 40px; border-top: 1px solid var(--border); margin-top: 
 .footer-links a { color: inherit; text-decoration: none; }
 .footer-links a:hover { color: #fff; }
 
+/* ══════════════════════════════════════════════════
+   RESPONSIVE DESIGN — Tablet (≤1024px)
+   ══════════════════════════════════════════════════ */
+@media (max-width: 1024px) {
+  .container { padding: 0 1.5rem; }
+
+  /* Nav */
+  .nav-inner { gap: 8px; }
+  #server-status { display: none !important; }
+
+  /* Prompt Lab — 3-col → 1-col */
+  .lab-grid {
+    grid-template-columns: 1fr !important;
+    gap: 24px;
+    padding: 24px;
+  }
+  .lab-header-area { grid-column: 1; }
+
+  /* Params — 2-col stays but tighter */
+  .params-grid { gap: 12px; }
+
+  /* Video Suite — 2-col → 1-col */
+  .video-suite-grid {
+    grid-template-columns: 1fr !important;
+    gap: 24px !important;
+  }
+
+  /* Pipeline nodes tighter */
+  .p-node { min-width: 100px; padding: 12px 14px; }
+  .pipeline-container { padding: 24px; }
+}
+
+/* ══════════════════════════════════════════════════
+   RESPONSIVE DESIGN — Mobile (≤768px)
+   ══════════════════════════════════════════════════ */
 @media (max-width: 768px) {
+  .container { padding: 0 1rem; }
+
+  /* ── Nav ── */
+  nav { height: 56px; }
+  .nav-inner { gap: 6px; }
+  .logo span { font-size: 0.85rem; }
+  .logo img { width: 22px !important; height: 22px !important; }
+
+  #server-status { display: none !important; }
+
+  .theme-control-box {
+    padding-left: 0 !important;
+    border-left: none !important;
+    padding-right: 8px !important;
+    margin-right: 4px !important;
+  }
+  .theme-slider-container { padding: 3px 8px; gap: 4px; }
+  #theme-slider { width: 40px; }
+  .theme-icon { font-size: 0.7rem; }
+  .theme-label-mono { font-size: 0.5rem; }
+
+  /* Auth area */
+  #login-btn { padding: 4px 10px !important; font-size: 0.65rem !important; }
+  #user-profile { gap: 6px !important; }
+  #user-name-display { font-size: 0.55rem !important; }
+  #user-avatar { width: 24px !important; height: 24px !important; }
+
+  .nav-center { display: none; }
+
+  /* ── Hero ── */
+  .hero { padding: 48px 0 40px; }
+  h1 { font-size: clamp(1.8rem, 8vw, 2.8rem); margin-bottom: 16px; }
+  .hero-desc { font-size: 1rem; margin-bottom: 28px; }
   .hero-actions { flex-direction: column; width: 100%; }
+  .btn-big { width: 100%; text-align: center; }
   .cmd-snippet { width: 100%; text-align: center; }
+
+  /* ── Registry Cards ── */
+  .registry-section { padding: 32px 0; }
+  .model-card { min-width: 220px; padding: 12px; gap: 12px; }
+  .model-icon-box { width: 40px; height: 40px; }
+  .model-name { font-size: 0.85rem; }
+  .model-desc { font-size: 0.65rem; }
+
+  /* ── Section Headers ── */
+  .section { padding: 40px 0; }
+  .section-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    margin-bottom: 20px;
+  }
+  .section-header h2 { font-size: 1.1rem; }
+  .status-indicator { font-size: 0.65rem; }
+
+  /* ── Pipeline ── */
+  .pipeline-container { padding: 24px 16px; gap: 32px; }
+  .pipeline-row {
+    flex-direction: column !important;
+    gap: 12px;
+    align-items: center;
+  }
+  .pipeline-label {
+    text-align: center;
+    min-width: auto;
+    font-size: 0.7rem;
+    letter-spacing: 2px;
+    background: rgba(129, 140, 248, 0.08);
+    padding: 6px 16px;
+    border-radius: 100px;
+    border: 1px solid rgba(129, 140, 248, 0.15);
+    align-self: center;
+    width: fit-content;
+    margin: 0 auto;
+  }
+  .pipeline-nodes {
+    flex-direction: column !important;
+    align-items: center !important;
+    gap: 0 !important;
+    width: 100%;
+  }
+  .p-node {
+    min-width: auto !important;
+    width: 85% !important;
+    max-width: 260px;
+    flex-direction: row !important;
+    align-items: center !important;
+    padding: 14px 20px !important;
+    gap: 14px !important;
+    justify-content: flex-start !important;
+  }
+  .p-node-icon {
+    font-size: 1.2rem;
+    flex-shrink: 0;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+  }
+  .p-node-icon img { width: 26px !important; height: 26px !important; }
+  .p-node-text {
+    font-size: 0.8rem !important;
+    white-space: nowrap;
+    text-align: left !important;
+  }
+  .p-connector {
+    width: 2px !important;
+    height: 28px !important;
+    min-width: 2px !important;
+    flex: none !important;
+    background: linear-gradient(180deg, transparent, var(--skills-cyan), var(--skills-purple), transparent) !important;
+    background-size: 100% 100% !important;
+    opacity: 0.6;
+  }
+  .p-dot-flow {
+    animation: dotFlowVertical 2.5s ease-in-out infinite !important;
+    left: 50% !important;
+    top: 0 !important;
+    transform: translateX(-50%) !important;
+    width: 6px !important;
+    height: 6px !important;
+  }
+
+  /* ── Prompt Lab ── */
+  .lab-grid {
+    grid-template-columns: 1fr !important;
+    gap: 20px;
+    padding: 20px 16px;
+  }
+  .lab-header-area { grid-column: 1; padding-bottom: 16px; margin-bottom: 12px; }
+  .lab-header-area .lab-textarea { height: 80px; }
+  .lab-header-top { flex-direction: column; align-items: flex-start; gap: 10px; }
+
+  .preset-group {
+    width: 100%;
+    flex-wrap: wrap;
+    padding: 6px 8px;
+  }
+  .preset-chips { max-width: 100%; }
+
+  /* Params — 2-col → 1-col */
+  .params-grid {
+    grid-template-columns: 1fr !important;
+    gap: 12px;
+  }
+
+  .lab-select, .lab-input-small { font-size: 0.75rem; padding: 10px 12px; }
+  .param-group label { font-size: 0.7rem; min-height: 24px; }
+
+  /* Lab actions stacking */
+  .lab-actions {
+    flex-direction: column;
+    gap: 10px;
+  }
+  .save-icon-btn { justify-content: center; padding: 12px 20px; }
+
+  .label-mono { font-size: 0.65rem; letter-spacing: 0.08em; }
+
+  /* ── Layer Stack (Visualizer) ── */
+  .layer { padding: 10px 12px; gap: 8px; }
+  .layer-name { font-size: 0.75rem; }
+  .layer-status { font-size: 0.6rem; }
+
+  /* ── Output ── */
+  .visualizer-output { padding: 16px; }
+  .output-header { 
+    flex-direction: column; 
+    align-items: flex-start; 
+    gap: 10px; 
+    padding-bottom: 10px; 
+  }
+  .output-block { font-size: 0.75rem; min-height: 160px; }
+  .btn-copy { font-size: 0.65rem; padding: 5px 10px; min-width: 50px; }
+
+  /* ── Video Production Suite ── */
+  .video-suite-grid {
+    grid-template-columns: 1fr !important;
+    gap: 20px !important;
+    margin-top: 16px !important;
+  }
+
+  /* Subtitle params — 3-col → 1-col */
+  #subtitle-params-container {
+    grid-template-columns: 1fr !important;
+  }
+
+  .input-source-toggle {
+    flex-wrap: wrap !important;
+  }
+  .input-source-toggle .chip { flex: 1; text-align: center; justify-content: center; font-size: 0.6rem; }
+
+  .audio-upload-zone { padding: 20px 12px; }
+
+  /* ── Status Grid ── */
+  .status-grid {
+    grid-template-columns: 1fr !important;
+    gap: 12px;
+  }
+  .status-card { padding: 16px; }
+  .status-value { font-size: 1.2rem; }
+
+  /* ── Footer ── */
+  footer { padding: 40px 0 24px; margin-top: 40px; }
+  .footer-bottom {
+    flex-direction: column;
+    gap: 12px;
+    text-align: center;
+  }
+  .footer-links { justify-content: center; }
+
+  /* ── Modal ── */
+  .modal-content { padding: 24px 20px; }
+  .modal-header h3 { font-size: 1.05rem; }
+  .modal-body p { font-size: 0.85rem; margin-bottom: 24px; }
+  .modal-btn { padding: 12px 16px; font-size: 0.8rem; }
+
+  /* Studio/Console legacy */
   .studio-container { grid-template-columns: 1fr; }
   .console-sidebar { display: none; }
-  .container { padding: 0 1.5rem; } /* 모바일 가시성 */
+}
+
+/* ══════════════════════════════════════════════════
+   RESPONSIVE DESIGN — Small Mobile (≤480px)
+   ══════════════════════════════════════════════════ */
+@media (max-width: 480px) {
+  .container { padding: 0 0.75rem; }
+
+  /* Nav ultra-compact */
+  nav { height: 50px; }
+  .logo span { font-size: 0.75rem; }
+  .logo img { width: 20px !important; height: 20px !important; }
+
+  .theme-control-box { 
+    border-right: none !important;
+    padding-right: 4px !important;
+    margin-right: 0 !important;
+  }
+  #theme-slider { width: 32px; }
+  .theme-label-mono { display: none; }
+  #user-profile > div:first-child { display: none; } /* hide name, show only avatar */
+
+  /* Hero */
+  .hero { padding: 32px 0 28px; }
+  h1 { font-size: 1.6rem; }
+  .hero-desc { font-size: 0.9rem; }
+  .badge { font-size: 0.65rem; padding: 3px 8px; }
+
+  /* Cards */
+  .model-card { min-width: 180px; }
+
+  /* Lab */
+  .lab-grid { padding: 14px 12px; gap: 16px; }
+  .lab-textarea { font-size: 0.85rem; padding: 12px; }
+  .lab-select, .lab-input-small { font-size: 0.7rem; padding: 8px 10px; }
+
+  /* Layer stack */
+  .layer-num { font-size: 0.6rem; }
+  .layer-name { font-size: 0.7rem; }
+
+  /* Pipeline */
+  .pipeline-container { padding: 16px 12px; gap: 20px; }
+  .pipeline-label { font-size: 0.6rem; padding: 5px 12px; }
+  .p-node { padding: 12px 16px; max-width: 240px; gap: 10px; }
+  .p-node-text { font-size: 0.7rem; }
+  .p-node-icon img { width: 22px !important; height: 22px !important; }
+  .p-connector { height: 24px; }
+
+  /* Video suite buttons */
+  #sub-gen-btn { height: 44px !important; font-size: 0.8rem !important; }
+
+  /* Section */
+  .section { padding: 28px 0; }
+  .section-header h2 { font-size: 1rem; }
+
+  /* Output */
+  .output-block { font-size: 0.7rem; min-height: 120px; padding: 12px !important; }
+  #subtitle-output { height: 200px !important; }
+
+  /* Footer */
+  footer { padding: 28px 0 16px; margin-top: 24px; }
+  .footer-bottom p { font-size: 0.75rem; }
 }
 
 /* ── 모니터 해상도/배율 대응 (DPI Scaling) ── */
@@ -1401,36 +1708,10 @@ footer { padding: 80px 0 40px; border-top: 1px solid var(--border); margin-top: 
   100% { left: calc(100% + 6px); opacity: 0; }
 }
 
-/* Responsive */
-@media (max-width: 768px) {
-  .pipeline-row {
-    flex-direction: column;
-    gap: 8px;
-  }
-  .pipeline-label {
-    text-align: center;
-    min-width: auto;
-  }
-  .pipeline-nodes {
-    flex-direction: column;
-  }
-  .p-connector {
-    width: 2px;
-    height: 24px;
-    min-width: 2px;
-    background: linear-gradient(180deg, var(--border-strong), var(--skills-cyan), var(--skills-purple), var(--border-strong));
-    background-size: 100% 200%;
-  }
-  .p-dot-flow {
-    animation: dotFlowVertical 2.5s ease-in-out infinite;
-    left: 50%;
-    top: 0;
-    transform: translateX(-50%);
-  }
-  @keyframes dotFlowVertical {
-    0% { top: -6px; opacity: 0; }
-    10% { opacity: 1; }
-    90% { opacity: 1; }
-    100% { top: calc(100% + 6px); opacity: 0; }
-  }
+/* dotFlowVertical keyframes (used in responsive mode) */
+@keyframes dotFlowVertical {
+  0% { top: -6px; opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { top: calc(100% + 6px); opacity: 0; }
 }

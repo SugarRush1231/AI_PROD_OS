@@ -39,9 +39,12 @@
       </div>
       <div class="nav-center"></div>
       <div class="nav-right" style="display: flex; align-items: center; gap: 15px;">
-        <div id="server-status" style="display: flex; align-items: center; gap: 8px; border-right: 1px solid var(--border-strong); padding-right: 12px;">
-          <span id="server-dot" style="width: 6px; height: 6px; border-radius: 50%; background: var(--fg-dim); box-shadow: none; animation: pulse 2s infinite;"></span>
-          <span id="server-label" style="font-family: var(--font-mono); font-size: 0.65rem; color: var(--fg-dim); letter-spacing: 0.5px;">DEV</span>
+        <div id="server-status"
+          style="display: flex; align-items: center; gap: 8px; border-right: 1px solid var(--border-strong); padding-right: 12px;">
+          <span id="server-dot"
+            style="width: 6px; height: 6px; border-radius: 50%; background: var(--fg-dim); box-shadow: none; animation: pulse 2s infinite;"></span>
+          <span id="server-label"
+            style="font-family: var(--font-mono); font-size: 0.65rem; color: var(--fg-dim); letter-spacing: 0.5px;">DEV</span>
         </div>
         <!-- Theme (Middle) -->
         <div class="theme-control-box"
@@ -55,7 +58,8 @@
         </div>
         <!-- Auth (Far-Right) -->
         <div id="user-auth-area">
-          <button id="login-btn" class="btn-skills" style="display: none; padding: 6px 14px; font-size: 0.75rem; font-weight: 700;"
+          <button id="login-btn" class="btn-skills"
+            style="display: none; padding: 6px 14px; font-size: 0.75rem; font-weight: 700;"
             onclick="location.href='/auth/google'">로그인</button>
           <div id="user-profile" style="display: none; align-items: center; gap: 10px;">
             <div style="text-align: right; line-height: 1.1;">
@@ -250,22 +254,42 @@
           <div class="pipeline-label">PROMPT ENGINE</div>
           <div class="pipeline-nodes">
             <div class="p-node" data-step="1">
-              <div class="p-node-icon">✏️</div>
+              <div class="p-node-icon">
+                <img src="ico/text-input-left-white.png" alt="입력" class="theme-icon-dark"
+                  style="width: 24px; height: 24px;">
+                <img src="ico/text-input-left.png" alt="입력" class="theme-icon-light" style="width: 24px; height: 24px;">
+              </div>
               <div class="p-node-text">아이디어 입력</div>
             </div>
-            <div class="p-connector"><div class="p-dot-flow"></div></div>
+            <div class="p-connector">
+              <div class="p-dot-flow"></div>
+            </div>
             <div class="p-node" data-step="2">
-              <div class="p-node-icon">⚙️</div>
+              <div class="p-node-icon">
+                <img src="ico/settings-white.png" alt="입력" class="theme-icon-dark" style="width: 24px; height: 24px;">
+                <img src="ico/settings.png" alt="입력" class="theme-icon-light" style="width: 24px; height: 24px;">
+              </div>
               <div class="p-node-text">파라미터 설계</div>
             </div>
-            <div class="p-connector"><div class="p-dot-flow"></div></div>
+            <div class="p-connector">
+              <div class="p-dot-flow"></div>
+            </div>
             <div class="p-node" data-step="3">
-              <div class="p-node-icon">🧠</div>
+              <div class="p-node-icon">
+                <img src="ico/brain-circuit-white.png" alt="입력" class="theme-icon-dark"
+                  style="width: 24px; height: 24px;">
+                <img src="ico/brain-circuit.png" alt="입력" class="theme-icon-light" style="width: 24px; height: 24px;">
+              </div>
               <div class="p-node-text">AI 프롬프트 생성</div>
             </div>
-            <div class="p-connector"><div class="p-dot-flow"></div></div>
+            <div class="p-connector">
+              <div class="p-dot-flow"></div>
+            </div>
             <div class="p-node active" data-step="4">
-              <div class="p-node-icon">🎯</div>
+              <div class="p-node-icon">
+                <img src="ico/blog-text-white.png" alt="입력" class="theme-icon-dark" style="width: 24px; height: 24px;">
+                <img src="ico/blog-text.png" alt="입력" class="theme-icon-light" style="width: 24px; height: 24px;">
+              </div>
               <div class="p-node-text">최적화 결과</div>
             </div>
           </div>
@@ -276,22 +300,40 @@
           <div class="pipeline-label">AUDIO STT</div>
           <div class="pipeline-nodes">
             <div class="p-node" data-step="1">
-              <div class="p-node-icon">🎙️</div>
+              <div class="p-node-icon">
+                <img src="ico/music-white.png" alt="입력" class="theme-icon-dark" style="width: 24px; height: 24px;">
+                <img src="ico/music.png" alt="입력" class="theme-icon-light" style="width: 24px; height: 24px;">
+              </div>
               <div class="p-node-text">오디오 업로드</div>
             </div>
-            <div class="p-connector"><div class="p-dot-flow delay"></div></div>
-            <div class="p-node" data-step="2">
-              <div class="p-node-icon">🔊</div>
-              <div class="p-node-text">Whisper AI 분석</div>
+            <div class="p-connector">
+              <div class="p-dot-flow delay"></div>
             </div>
-            <div class="p-connector"><div class="p-dot-flow delay"></div></div>
+            <div class="p-node" data-step="2">
+              <div class="p-node-icon"><img src="ico/volume-white.png" alt="입력" class="theme-icon-dark"
+                  style="width: 24px; height: 24px;">
+                <img src="ico/volume.png" alt="입력" class="theme-icon-light" style="width: 24px; height: 24px;">
+              </div>
+              <div class="p-node-text">음성 AI 분석</div>
+            </div>
+            <div class="p-connector">
+              <div class="p-dot-flow delay"></div>
+            </div>
             <div class="p-node" data-step="3">
-              <div class="p-node-icon">📝</div>
+              <div class="p-node-icon"><img src="ico/subtitles-white.png" alt="입력" class="theme-icon-dark"
+                  style="width: 24px; height: 24px;">
+                <img src="ico/subtitles.png" alt="입력" class="theme-icon-light" style="width: 24px; height: 24px;">
+              </div>
               <div class="p-node-text">SRT 자막 생성</div>
             </div>
-            <div class="p-connector"><div class="p-dot-flow delay"></div></div>
+            <div class="p-connector">
+              <div class="p-dot-flow delay"></div>
+            </div>
             <div class="p-node active" data-step="4">
-              <div class="p-node-icon">💾</div>
+              <div class="p-node-icon"><img src="ico/download-white.png" alt="입력" class="theme-icon-dark"
+                  style="width: 24px; height: 24px;">
+                <img src="ico/download.png" alt="입력" class="theme-icon-light" style="width: 24px; height: 24px;">
+              </div>
               <div class="p-node-text">다운로드</div>
             </div>
           </div>

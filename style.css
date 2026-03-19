@@ -64,6 +64,12 @@ body {
     radial-gradient(at 100% 100%, rgba(0, 172, 193, 0.04) 0%, transparent 50%);
 }
 
+/* ── Theme-aware icon toggle ── */
+.theme-icon-light { display: none; }
+.theme-icon-dark { display: inline-block; }
+.light-mode .theme-icon-light { display: inline-block; }
+.light-mode .theme-icon-dark { display: none; }
+
 .container { 
   width: 100%;
   max-width: 1360px; /* 프리미엄 워크스페이스를 위해 가로폭 확장 (기존 1200px) */

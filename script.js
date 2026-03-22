@@ -33,6 +33,7 @@ const UI = {
   paramSubTempo: document.getElementById('param-sub-tempo'),
   paramSubContext: document.getElementById('param-sub-context'),
   paramSubDuration: document.getElementById('param-sub-duration'),
+  paramSubDurationSlider: document.getElementById('param-sub-duration-slider'),
   subGenBtn: document.getElementById('sub-gen-btn'),
   subtitleOutput: document.getElementById('subtitle-output'),
   copySubBtn: document.getElementById('copy-sub-btn'),
@@ -453,9 +454,22 @@ async function fetchServerStatus() {
       }
     }
 
+    // 4. 상단 섹션별 서버 상태 실시간 반영
+    const isLabProcessing = document.getElementById('status-text-lab')?.innerText.includes('중');
+    const isVpsProcessing = document.getElementById('status-text-vps')?.innerText.includes('중');
+
+    const statusMap = { 'ONLINE': 'idle', 'DEGRADED': 'warning', 'OFFLINE': 'error' };
+    const statusType = statusMap[data.aiNodeStatus] || 'error';
+    const statusMsg = `Server Status: ${data.aiNodeStatus === 'ONLINE' ? 'Online' : data.aiNodeStatus}`;
+
+    if (!isLabProcessing) updateStatusUI('lab', statusType, statusMsg);
+    if (!isVpsProcessing) updateStatusUI('vps', statusType, statusMsg);
+
     console.log(`[SYSTEM] Heartbeat received. AI_ENGINE: ${data.aiNodeStatus}`);
   } catch (err) {
     console.warn('[SYSTEM] Check failed. AI Server Offline.');
+    updateStatusUI('lab', 'error', 'Server Status: Offline');
+    updateStatusUI('vps', 'error', 'Server Status: Offline');
     if (UI.statClusterStatus) UI.statClusterStatus.innerText = 'OFFLINE';
     if (UI.statEngineBar) UI.statEngineBar.style.width = '0%';
   }
@@ -508,9 +522,41 @@ function addLog(msg, type = 'default') {
 }
 
 // Global Error Catching
-window.addEventListener('error', (e) => {
-  addLog(`> [SYSTEM_CRITICAL] ${e.message}`, true);
-});
+// --- STATUS UI ENGINE ---
+function updateStatusUI(section, status, message) {
+  const dot = document.getElementById(`status-dot-${section}`);
+  const text = document.getElementById(`status-text-${section}`);
+  if (!dot || !text) return;
+
+  // Reset classes
+  dot.classList.remove('idle', 'processing', 'warning', 'error');
+  dot.style.background = ''; // inline style remove to use CSS classes
+
+  if (status === 'processing') {
+    dot.classList.add('idle'); // Change processing to use green (idle) dot
+    text.innerText = message || 'Processing...';
+    text.style.color = '#10b981';
+  } else if (status === 'error') {
+    dot.classList.add('error');
+    text.innerText = message || 'System Error';
+    text.style.color = '#ff5555';
+  } else if (status === 'warning') {
+    dot.classList.add('warning');
+    text.innerText = message || 'Warning';
+    text.style.color = '#f59e0b';
+  } else {
+    dot.classList.add('idle');
+    text.innerText = message || 'System Ready';
+    text.style.color = '#10b981';
+  }
+}
+
+// 초기 에러 핸들러
+window.onerror = (msg, url, line) => {
+  addLog(`> [SYSTEM_CRITICAL] ${msg}`, 'error');
+  updateStatusUI('lab', 'error', 'Runtime Error');
+  updateStatusUI('vps', 'error', 'Runtime Error');
+};
 
 // --- INTEGRITY CHECK ---
 console.log('UI_PROD_OS: Verifying Registry Integration...');
@@ -576,6 +622,213 @@ if (UI.paramAngle && UI.angleInput) {
   UI.angleInput.addEventListener('focus', (e) => {
     e.target.select();
   });
+
+  // 영상 길이 슬라이더 동기화 로직 추가
+  if (UI.paramSubDurationSlider && UI.paramSubDuration) {
+    // 슬라이더 바 컨트롤 -> 숫자칸 반영
+    UI.paramSubDurationSlider.addEventListener('input', (e) => {
+      UI.paramSubDuration.value = e.target.value;
+    });
+
+    // 숫자 타이핑 제어 -> 슬라이더 바 반영
+    UI.paramSubDuration.addEventListener('input', (e) => {
+      let val = parseInt(e.target.value);
+      if (isNaN(val)) val = 5;
+      if (val > 60) val = 60;
+      if (val < 5) val = 5;
+      UI.paramSubDurationSlider.value = val;
+    });
+
+    // 포커스 시 한번에 숫자를 지우기 편하도록 전체 선택 지원
+    UI.paramSubDuration.addEventListener('focus', (e) => {
+      e.target.select();
+    });
+  }
+
+  // ===== Video Production Suite 탭 전환 =====
+  document.querySelectorAll('.vps-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.vps-tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.vps-panel').forEach(p => p.classList.remove('active'));
+      tab.classList.add('active');
+      const panel = document.getElementById(`vps-panel-${tab.dataset.vpsTab}`);
+      if (panel) panel.classList.add('active');
+    });
+  });
+
+  // ===== VPS 통합 생성 버튼 핸들러 (스토리보드/숏리스트/SEO/BGM/컨셉) =====
+  document.querySelectorAll('.vps-gen-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const tool = btn.dataset.tool;
+      const config = getVpsToolConfig(tool);
+      if (!config) return;
+
+      const { inputEl, outputEl, systemPrompt } = config;
+      const userInput = inputEl.value.trim();
+
+      if (!userInput) {
+        inputEl.style.borderColor = '#ff6b6b';
+        setTimeout(() => inputEl.style.borderColor = '', 2000);
+        return;
+      }
+
+      btn.disabled = true;
+      startLoadingAnimation(outputEl, '생성 중');
+      updateStatusUI('vps', 'processing', `${tool.toUpperCase()} 생성 중...`);
+
+      try {
+        const res = await fetch('/api/engineer', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ intent: userInput, systemPrompt })
+        });
+        const data = await res.json();
+        stopLoadingAnimation(outputEl);
+
+        if (!res.ok) throw new Error(data.error || 'AI 응답 실패');
+
+        // 모델이 줄바꿈을 생략하는 경우를 방지, 이모지 및 구분선 단위로 강제 줄바꿈
+        let formattedText = data.result
+          .replace(/(🎬|📷|📐|🎥|💡|📌|🎵|📝|💬|⏱️|🔍|📢|🏷️|#️⃣|🎯|---|═══)/g, '\n$1')
+          .replace(/^\n+/g, '')       // 시작 부분의 불필요한 공백 제거
+          .replace(/\n\n\n+/g, '\n\n') // 3줄 이상의 연속 줄바꿈 방지
+          .trim();
+
+        if (tool === 'shotlist' && formattedText.includes('|')) {
+          // 간혹 표 형식으로 출력됐을 경우 표 기호(|) 앞뒤로 줄바꿈 시도 (안전망)
+          formattedText = formattedText.replace(/\|/g, '\n|');
+        }
+
+        outputEl.innerText = formattedText;
+        outputEl.dataset.rawResult = formattedText; // PDF 내보내기를 위한 원본 데이터 
+        outputEl.style.color = 'var(--fg)';
+        addLog(`✓ ${tool.toUpperCase()} 생성 완료.`, 'success');
+        updateStatusUI('vps', 'idle', `${tool.toUpperCase()} 생성 완료`);
+      } catch (err) {
+        stopLoadingAnimation(outputEl);
+        outputEl.innerText = `[생성 실패: ${err.message}]\n다시 시도해주세요.`;
+        outputEl.style.color = '#ff6b6b';
+        addLog(`!! VPS_${tool.toUpperCase()}_FAULT: ${err.message}`, 'error');
+        updateStatusUI('vps', 'error', `에러: ${err.message}`);
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  });
+
+  // ===== VPS 복사 버튼 핸들러 =====
+  document.querySelectorAll('.vps-copy-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const targetId = btn.dataset.target;
+      const el = document.getElementById(targetId);
+      if (el && el.innerText) {
+        navigator.clipboard.writeText(el.innerText);
+        const original = btn.innerText;
+        btn.innerText = '완료!';
+        setTimeout(() => btn.innerText = original, 1500);
+      }
+    });
+  });
+
+  // ===== 통합 기획서 내보내기 로직 =====
+  function getMasterplanContent(format) {
+    const sections = [
+      { id: 'vps-concept-output', title: '🎨 1. 컨셉 기획서 (Concept Brief)' },
+      { id: 'vps-storyboard-output', title: '📋 2. 스토리보드 (Storyboard)' },
+      { id: 'vps-shotlist-output', title: '🎥 3. 촬영 숏 리스트 (Shot List)' },
+      { id: 'vps-bgm-output', title: '🎵 4. BGM 추천 (Audio & SFX)' },
+      { id: 'subtitle-output', title: '🎬 5. AI 대본/자막 (Script/Timeline)' },
+      { id: 'vps-seo-output', title: '🏷️ 6. 제목 및 태그 (SEO & Release)' }
+    ];
+
+    let txtContent = '====================================\n';
+    txtContent += '     VIDEO PRODUCTION MASTERPLAN    \n';
+    txtContent += '====================================\n\n';
+
+    let htmlContent = `
+      <html>
+      <head>
+        <title>Video Production Masterplan</title>
+        <style>
+          body { font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif; line-height: 1.6; color: #111; padding: 40px; }
+          h1 { text-align: center; border-bottom: 2px solid #111; padding-bottom: 10px; margin-bottom: 40px; }
+          h2 { color: #5b21b6; background: #f3e8ff; padding: 10px 15px; border-radius: 8px; margin-top: 40px; font-size: 1.2rem; }
+          pre { background: #f8fafc; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px; white-space: pre-wrap; word-wrap: break-word; font-family: inherit; font-size: 0.95rem; }
+          @media print {
+            body { padding: 0; }
+            h1 { font-size: 18pt; margin-bottom: 20px; }
+            h2 { font-size: 14pt; color: #000; background: #eee; border: 1px solid #ddd; margin-top: 20px; page-break-after: avoid; }
+            h2:not(:first-of-type) { page-break-before: always; }
+            pre { border: 1px solid #ccc; font-size: 11pt; background: transparent; white-space: pre-wrap; word-wrap: break-word; }
+            @page { margin: 15mm; }
+          }
+        </style>
+      </head>
+      <body>
+        <h1>VIDEO PRODUCTION MASTERPLAN</h1>
+    `;
+
+    sections.forEach(sec => {
+      const el = document.getElementById(sec.id);
+      let content = '(아직 생성되지 않았습니다)';
+      
+      if (el) {
+        // 화면 숨김(display:none) 상태에 의한 줄바꿈 삭제를 방지하기 위해 생성 시 저장된 원본 데이터(rawResult) 우선 사용
+        const rawText = el.dataset.rawResult || el.innerText;
+        if (rawText.trim() !== '' && !rawText.includes('대기 중')) {
+          content = rawText.trim();
+        }
+      }
+      
+      // TXT Append
+      txtContent += `[ ${sec.title} ]\n`;
+      txtContent += `${content}\n\n`;
+      txtContent += '------------------------------------\n\n';
+
+      // HTML Append
+      htmlContent += `<h2>${sec.title}</h2><pre>${content}</pre>`;
+    });
+
+    htmlContent += '</body></html>';
+    return format === 'html' ? htmlContent : txtContent;
+  }
+
+  const btnExportTxt = document.getElementById('btn-export-txt');
+  if (btnExportTxt) {
+    btnExportTxt.addEventListener('click', () => {
+      const text = getMasterplanContent('txt');
+      const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'Video_Masterplan.txt';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    });
+  }
+
+  const btnExportPdf = document.getElementById('btn-export-pdf');
+  if (btnExportPdf) {
+    btnExportPdf.addEventListener('click', () => {
+      const html = getMasterplanContent('html');
+      const win = window.open('', '_blank');
+      if (win) {
+        win.document.open();
+        win.document.write(html);
+        win.document.close();
+        
+        // 인쇄창 호출 (약간의 딜레이 후 렌더링 보장)
+        setTimeout(() => {
+          win.focus();
+          win.print();
+        }, 500);
+      } else {
+        alert('팝업 차단이 설정되어 있습니다. 팝업 차단을 해제해주세요.');
+      }
+    });
+  }
 
   // 🖱️ 스크러버(Scrubber) 드래그 조절 기능
   let isDragging = false;
@@ -660,6 +913,175 @@ function startLoadingAnimation(el, baseText) {
     dots = (dots + 1) % 4;
     el.innerText = baseText + '.'.repeat(dots);
   }, 400);
+}
+
+/**
+ * VPS 도구별 설정을 반환하는 함수
+ * 각 도구에 최적화된 시스템 프롬프트와 I/O DOM 요소를 매핑
+ */
+function getVpsToolConfig(tool) {
+  const configs = {
+    storyboard: {
+      inputEl: document.getElementById('vps-storyboard-input'),
+      outputEl: document.getElementById('vps-storyboard-output'),
+      systemPrompt: (() => {
+        const style = document.getElementById('vps-storyboard-style')?.value || 'vlog';
+        return `당신은 전문 영상 스토리보드 작가입니다. 사용자가 제공한 대본/주제를 기반으로 장면별 스토리보드를 생성하세요.
+
+[영상 스타일] ${style}
+
+[출력 형식 - 반드시 이 형식으로]
+각 장면마다:
+---
+🎬 씬 (번호): (장면 제목)
+📷 카메라: (샷 타입 - 와이드샷/미디엄샷/클로즈업/오버숄더 등)
+🎥 카메라 무빙: (고정/팬/틸트/트래킹/줌인/줌아웃 등)
+📝 장면 설명: (이 장면에서 화면에 보이는 것들 묘사)
+💬 대사/나레이션: (이 장면의 대사 또는 나레이션)
+⏱️ 예상 길이: (초 단위)
+---
+
+[규칙]
+- 100% 한글 작성
+- 장면 수는 5~10개 사이
+- 각 장면은 구체적이고 촬영 가능하게 작성`;
+      })()
+    },
+    shotlist: {
+      inputEl: document.getElementById('vps-shotlist-input'),
+      outputEl: document.getElementById('vps-shotlist-output'),
+      systemPrompt: (() => {
+        const gear = document.getElementById('vps-shotlist-gear')?.value || 'smartphone';
+        return `당신은 20년 경력의 수석 촬영 감독입니다.
+제공된 대본/시나리오를 분석하여, 실제 촬영 현장에서 바로 쓸 수 있는 직관적이고 실용적인 숏 리스트(Shot List)를 작성하세요.
+
+[촬영 장비] ${gear}
+
+[출력 형식 - 불필요한 서론/인사말, 촬영 스태프 목록 등은 절대 빼고 아래 형식만 반복하세요]
+---
+🎬 샷 (번호): (장면의 핵심 설명, 예: 주인공 스마트폰 확인)
+📷 렌즈/프레임: (예: 와이드 샷, 익스트림 클로즈업 등)
+📐 카메라 앵글: (예: 하이 앵글, 아이 레벨 등)
+🎥 카메라 무빙: (예: 피사체 따라 트래킹, 핸드헬드, 고정 등)
+💡 조명 및 톤: (예: 창가 자연광, 역광 활용 등)
+📌 디렉팅 포인트: (구도나 연출 시 가장 주의할 핵심 팁 1줄)
+---
+
+[규칙]
+- 마크다운 표(| |)를 절대 사용하지 마세요. 모바일/웹에서 읽기 힘들기 때문입니다.
+- 무조건 위에서 제시한 블록(---) 형식으로만 출력하세요.
+- 불필요한 전체 요약, 장소 정리, 스태프 목록은 절대 출력하지 마세요.
+- 장비(${gear})의 물리적 특성을 고려한 현실적인 촬영법을 제안하세요.
+- 총 8~12개의 숏으로 분할하여 상세하게 작성하세요.`;
+      })()
+    },
+    seo: {
+      inputEl: document.getElementById('vps-seo-input'),
+      outputEl: document.getElementById('vps-seo-output'),
+      systemPrompt: (() => {
+        const platform = document.getElementById('vps-seo-platform')?.value || 'youtube';
+        return `당신은 ${platform} SEO 전문가입니다. 주어진 영상 주제를 분석하여 최적화된 SEO 패키지를 생성하세요.
+
+[타겟 플랫폼] ${platform}
+
+[출력 형식]
+📌 추천 제목 (5개):
+1. (클릭을 유도하는 매력적인 제목)
+2. ...
+
+📝 영상 설명문:
+(${platform}에 최적화된 설명문, 200자 이상)
+
+🏷️ 태그 (20개):
+(쉼표로 구분된 관련 태그)
+
+#️⃣ 해시태그 (10개):
+(#으로 시작하는 해시태그)
+
+🎯 타겟 키워드:
+- 메인 키워드: 
+- 서브 키워드: 
+
+[규칙]
+- 100% 한글 작성 (영어 키워드는 검색 최적화용으로 병기 가능)
+- ${platform} 알고리즘에 최적화된 키워드 선정
+- 클릭률(CTR)을 높이는 제목 작성`;
+      })()
+    },
+    bgm: {
+      inputEl: document.getElementById('vps-bgm-input'),
+      outputEl: document.getElementById('vps-bgm-output'),
+      systemPrompt: (() => {
+        const mood = document.getElementById('vps-bgm-mood')?.value || 'auto';
+        return `당신은 영상 음악 감독입니다. 주어진 영상 내용을 분석하여 장면별 BGM과 효과음을 추천하세요.
+
+[원하는 분위기] ${mood === 'auto' ? '내용에 맞게 자동 판단' : mood}
+
+[출력 형식]
+🎵 전체 분위기 요약:
+(이 영상에 어울리는 전반적인 음악 방향)
+
+📋 장면별 BGM 추천:
+각 장면마다:
+---
+🎬 장면: (장면 설명)
+🎵 추천 BGM 스타일: (장르/분위기)
+🔍 검색 키워드: (유튜브 오디오 라이브러리나 무료 BGM 사이트에서 검색할 키워드)
+💡 비슷한 레퍼런스: (이런 느낌의 유명한 곡 참고)
+📢 추천 효과음: (이 장면에 필요한 SFX)
+---
+
+[규칙]
+- 100% 한글 작성
+- 저작권 무료(로열티 프리) 음원 위주 추천
+- 장면 전환 시 음악 전환 포인트도 제안
+- 3~8개 장면으로 구분`;
+      })()
+    },
+    concept: {
+      inputEl: document.getElementById('vps-concept-input'),
+      outputEl: document.getElementById('vps-concept-output'),
+      systemPrompt: (() => {
+        const platform = document.getElementById('vps-concept-platform')?.value || 'youtube-long';
+        return `당신은 영상 기획 전문가입니다. 주어진 아이디어를 기반으로 완성도 높은 영상 컨셉 기획서를 작성하세요.
+
+[타겟 플랫폼] ${platform}
+
+[출력 형식]
+═══ 영상 컨셉 기획서 ═══
+
+📌 영상 제목 (안):
+(3개의 제목 후보)
+
+🎯 타겟 시청자:
+- 연령대:
+- 관심사:
+- 이 영상을 클릭할 이유:
+
+🎨 컨셉 & 톤앤매너:
+- 전체 분위기:
+- 색감/비주얼:
+- 말투/화법:
+
+📋 영상 구성 (흐름):
+(도입 → 전개 → 클라이맥스 → 마무리 순서로)
+
+📐 레퍼런스 채널/영상:
+(비슷한 느낌의 유명 채널이나 영상 스타일 제안)
+
+💡 차별화 포인트:
+(경쟁 영상 대비 이 영상만의 강점)
+
+⏱️ 추천 영상 길이:
+
+[규칙]
+- 100% 한글 작성
+- ${platform} 사용자 특성에 맞게 최적화
+- 현실적이고 실행 가능한 기획`;
+      })()
+    }
+  };
+  return configs[tool] || null;
 }
 
 async function applyEngineering() {
@@ -767,6 +1189,7 @@ async function applyEngineering() {
       startLoadingAnimation(UI.optimizedOutput, '엔진 설계 중');
     }
 
+    updateStatusUI('lab', 'processing', '아키텍처 설계 중...');
     addLog(`$ prod --engineer --type=${config.type} --style=${config.style}`, true);
     const startTime = Date.now();
 
@@ -951,6 +1374,7 @@ async function applyEngineering() {
       UI.optimizedOutput.style.color = 'var(--fg)';
     }
     addLog(`✓ 프롬프트 추론 성공. [유형: ${config.type.toUpperCase()}]`, true);
+    updateStatusUI('lab', 'idle', '아키텍처 설계 완료');
 
     // Update global metrics for view
     window.currentMetrics = {
@@ -973,6 +1397,7 @@ async function applyEngineering() {
     console.error('APPLY_ERROR:', error);
     stopLoadingAnimation(UI.optimizedOutput);
     addLog(`!! CRITICAL_FAULT: ${error.message}`, 'error');
+    updateStatusUI('lab', 'error', `치명적 오류: ${error.message}`);
     if (UI.optimizedOutput) UI.optimizedOutput.innerText = "오류 발생: " + error.message;
 
     // 🚨 에러 시 스피너가 무한정 도는 현상 방지: 실패 상태 시각화
@@ -1049,41 +1474,77 @@ async function generateSubtitles() {
       
       if (UI.subtitleOutput) {
         UI.subtitleOutput.innerText = whisperData.result;
+        UI.subtitleOutput.dataset.rawResult = whisperData.result;
         UI.subtitleOutput.style.color = 'var(--fg)';
       }
       addLog('✓ 음성 분석 및 자막 추출 성공.', 'success');
       return;
     }
 
-    const tempoMap = { 'slow': 'Slow & Epic (5-7s per line)', 'fast': 'Fast & Energetic (2-3s per line)', 'standard': 'Standard Narration (4-5s per line)' };
     const duration = UI.paramSubDuration ? UI.paramSubDuration.value : '15';
-    
-    const tempoStyle = tempoMap[tempo] || tempoMap['standard'];
     const durationNum = parseInt(duration) || 15;
-    const blockCount = Math.floor(durationNum / 5);
 
-    const systemPrompt = `You are a Top-Tier Professional Content Creator & Scriptwriter.
-    TASK: Generate a ${durationNum}-second high-quality Korean video script in SRT format.
+    // 템포(Tempo)에 따른 동적 블록 길이 계산 및 분위기 설정
+    let secondsPerBlock = 5;
+    let tempoDesc = "보통 속도 (한 블록당 약 5초)";
+    if (tempo === 'slow') {
+        secondsPerBlock = 7;
+        tempoDesc = "느리고 감성적인 속도 (한 블록당 약 7~8초 배정, 대사를 길게 풀어서)";
+    } else if (tempo === 'fast') {
+        secondsPerBlock = 3;
+        tempoDesc = "빠르고 경쾌한 속도 (한 블록당 2~3초 배정, 틱톡/릴스 숏폼처럼 짧고 타격감 있게)";
+    }
     
-    [STRICT OUTPUT FORMAT]
-    (Index)
-    (Start Time) --> (End Time)
-    (Subtitle Text)
-    [Blank Line]
+    let blockCount = Math.max(1, Math.floor(durationNum / secondsPerBlock));
 
-    Example:
-    1
-    00:00:00,000 --> 00:00:05,000
-    안녕! 오늘 하루는 어땠어?
+    // LLM 컨텍스트 한계 및 넘버링 무한 구조 붕괴(Loop) 방지를 위해 최대 블록 수를 10개로 제한
+    if (blockCount > 10) {
+        blockCount = 10;
+        secondsPerBlock = Math.floor(durationNum / 10); 
+        tempoDesc = `긴 호흡의 스토리텔링 (한 블록당 약 ${secondsPerBlock}초씩, 총 ${blockCount}블록)`;
+    }
 
-    [EXECUTION RULES - ABSOLUTE]
-    1. NO PREAMBLE: Start immediately with the number '1'. No "Sure", "Okay", or "Here is your script".
-    2. NO DRAFTING: Do not write your reasoning, thinking process, or draft lines.
-    3. NO ENGLISH: All subtitle text must be pure Korean. 
-    4. NO SINGLE-LINE: Index, Time, and Text MUST be on separate lines as shown in the example.
-    5. BLOCK COUNT: Exactly ${blockCount} blocks.
-    6. TONE: Adapt to topic "${intent}" with vibe "${context || 'Natural'}".
-    7. ONLY output the final SRT string. I will lose my job if you include any other text.`;
+    let timeJumpWarning = "";
+    if (secondsPerBlock >= 10) {
+        timeJumpWarning = `\n    (★타임코드 간격: 블록 하나의 시작~종료 시간 간격을 반드시 ${secondsPerBlock}초 이상으로 넓게 잡으세요.)`;
+    }
+
+    let formatInstruction = "";
+    if (format === 'srt') {
+        formatInstruction = `[출력 형식: SRT]${timeJumpWarning}
+    (순번)
+    (시작) --> (종료)
+    (이 블록 안에서 ${secondsPerBlock}초 분량의 긴 대사를 작성)
+    [빈 줄]`;
+    } else if (format === 'script') {
+        formatInstruction = `[출력 형식: 나레이션 대본]${timeJumpWarning}
+    [시작 ~ 종료]
+    (이 블록 안에서 ${secondsPerBlock}초 분량의 긴 대사를 작성)
+    [빈 줄]`;
+    } else {
+        formatInstruction = `[출력 형식: 순수 텍스트]
+    타임코드나 번호 없이, 단락으로 구분된 대본만 작성하세요.`;
+    }
+
+    // 초를 00:00:00 포맷으로 변환하여 AI에게 가장 명확한 한계선을 제시
+    const targetMin = Math.floor(durationNum / 60).toString().padStart(2, '0');
+    const targetSec = (durationNum % 60).toString().padStart(2, '0');
+    const timeTargetStr = `00:${targetMin}:${targetSec}`;
+
+    const systemPrompt = `당신은 ${context ? `'${context}' 말투의 ` : ''}한국인 유튜브 대본 작가입니다.
+
+[임무] "${intent}" 주제로 ${durationNum}초(${timeTargetStr}까지) 분량의 한국어 영상 대본을 ${blockCount}블록으로 작성하세요.
+${context ? `[말투] ${context}` : ''}
+
+[핵심 규칙]
+1. 100% 한글만 사용. 한자(漢字), 일본어, 러시아어 등 외국어 혼용 절대 금지.
+2. 마지막 블록 종료 시간이 ${timeTargetStr}을 넘지 않도록 하세요.
+3. ★가장 중요★ 절대 같은 내용을 반복하지 마세요! 매 블록마다 새로운 장면, 새로운 사건, 새로운 감정을 전개하세요.
+   - 나쁜 예: 매 블록마다 "친구와의 대화는 재미있었어요" 같은 비슷한 말 반복
+   - 좋은 예: 매 블록마다 시간 순서에 따라 다른 장면과 사건을 전개 (장면1 → 장면2 → 장면3... 절대 같은 장면 반복 금지)
+4. 첫 블록은 "OOO은 좋은 주제입니다" 같은 식상한 서론 대신, 바로 장면 속으로 뛰어드세요.
+
+${formatInstruction}`;
 
     const res = await fetch('/api/engineer', {
       method: 'POST',
@@ -1100,12 +1561,17 @@ async function generateSubtitles() {
 
     if (UI.subtitleOutput) {
       UI.subtitleOutput.innerText = data.result;
+      UI.subtitleOutput.dataset.rawResult = data.result;
       UI.subtitleOutput.style.color = 'var(--fg)';
     }
     addLog('✓ 영상 자막 데이터 생성 완료.', 'success');
 
   } catch (err) {
     stopLoadingAnimation(UI.subtitleOutput);
+    if (UI.subtitleOutput) {
+      UI.subtitleOutput.innerText = `[자막 생성 실패: ${err.message}]\n서버의 일시적 오류이거나 타임아웃이 발생했습니다.\n다시 버튼을 눌러 재시도해주세요.`;
+      UI.subtitleOutput.style.color = '#ff6b6b';
+    }
     addLog(`!! SUB_GEN_FAULT: ${err.message}`, 'error');
   } finally {
     if (UI.subGenBtn) UI.subGenBtn.disabled = false;
@@ -1162,13 +1628,17 @@ if (UI.downloadSrtBtn) {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       
-      // 파일명 생성 로직 (원본 파일명 활용)
-      let fileName = 'subtitles.srt';
+      
+      // 파일명 및 확장자 동적 지정
+      const currentFormat = UI.paramSubFormat ? UI.paramSubFormat.value : 'srt';
+      const ext = currentFormat === 'srt' ? 'srt' : 'txt';
+      let fileName = `subtitles.${ext}`;
+      
       if (UI.fileNameDisplay && UI.fileNameDisplay.innerText !== 'None') {
         const baseName = UI.fileNameDisplay.innerText.substring(0, UI.fileNameDisplay.innerText.lastIndexOf('.')) || 'subtitles';
-        fileName = `${baseName}.srt`;
+        fileName = `${baseName}.${ext}`;
       } else {
-        fileName = `subtitles_${new Date().getTime()}.srt`;
+        fileName = `subtitles_${new Date().getTime()}.${ext}`;
       }
 
       a.href = url;
@@ -1185,6 +1655,18 @@ if (UI.downloadSrtBtn) {
       const originalText = UI.downloadSrtBtn.innerText;
       UI.downloadSrtBtn.innerText = '저장 완료!';
       setTimeout(() => UI.downloadSrtBtn.innerText = originalText, 2000);
+    }
+  });
+}
+
+// 자막 형식 변경 시 다운로드 버튼 UI 텍스트 실시간 반영
+if (UI.paramSubFormat && UI.downloadSrtBtn) {
+  UI.paramSubFormat.addEventListener('change', (e) => {
+    const format = e.target.value;
+    if (format === 'srt') {
+      UI.downloadSrtBtn.innerText = '저장 (.srt)';
+    } else {
+      UI.downloadSrtBtn.innerText = '저장 (.txt)';
     }
   });
 }

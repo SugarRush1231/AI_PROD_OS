@@ -386,6 +386,12 @@ button:focus-visible { outline: 2px solid var(--skills-cyan); outline-offset: 2p
 }
 .dot { width: 6px; height: 6px; border-radius: 50%; background: #10b981; }
 .dot.pulse { animation: pulse 2s infinite; }
+
+/* Status Dot Variations */
+.dot.idle { background: #10b981; box-shadow: 0 0 10px rgba(16, 185, 129, 0.4); }
+.dot.processing { background: var(--skills-purple); box-shadow: 0 0 12px rgba(139, 92, 246, 0.6); }
+.dot.warning { background: #f59e0b; box-shadow: 0 0 10px rgba(245, 158, 11, 0.4); }
+.dot.error { background: #ef4444; box-shadow: 0 0 12px rgba(239, 68, 68, 0.6); }
 @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
 
 /* ── Skill Cards ── */
@@ -1611,6 +1617,48 @@ footer { padding: 80px 0 40px; border-top: 1px solid var(--border); margin-top: 
   gap: 12px; 
   width: 100%;
   box-sizing: border-box;
+}
+
+/* ── Video Production Suite Tabs ── */
+.vps-tab-bar {
+  border-bottom: 1px solid var(--border);
+}
+
+.vps-tab {
+  background: transparent;
+  border: 1px solid transparent;
+  border-bottom: none;
+  color: var(--fg-dim);
+  padding: 10px 18px;
+  border-radius: 8px 8px 0 0;
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 200ms ease;
+  white-space: nowrap;
+}
+
+.vps-tab:hover {
+  color: var(--fg);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.vps-tab.active {
+  background: var(--panel);
+  color: var(--skills-purple);
+  border-color: var(--border);
+  border-bottom: 2px solid var(--skills-purple);
+  box-shadow: 0 -2px 10px rgba(139, 92, 246, 0.15);
+}
+
+.vps-panel {
+  display: none;
+}
+
+.vps-panel.active {
+  display: block;
+  animation: fadeIn 0.3s ease;
 }
 
 /* ── Audio Upload Zone (Whisper Future) ── */

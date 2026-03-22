@@ -216,48 +216,98 @@ app.post('/api/engineer', apiLimiter, async (req, res, next) => {
         const cleanIntent = intent.trim();
         console.log(`[AI_REQUEST] Input: ${cleanIntent.substring(0, 50)}...`);
 
-        let aiResponse;
         let fetchSuccess = false;
         let lastStatus = 0;
+        let rawText = '';
 
-        // 무료 AI 노드(pollinations)의 간헐적 502/429 통신 실패를 방어하기 위한 3회 자동 재시도 로직
-        for (let attempt = 1; attempt <= 3; attempt++) {
+        // 여러 개의 Groq API 키를 수집 (무료 한도 회피용)
+        const groqKeys = [
+            process.env.GROQ_API_KEY,
+            process.env.GROQ_API_KEY_2,
+            process.env.GROQ_API_KEY_3,
+            process.env.GROQ_API_KEY_4
+        ].filter(k => k && k.length > 10 && !k.includes('your-'));
+
+        let aiNodes = [];
+        
+        // 등록된 모든 키에 대해 고순도 70B -> 가벼운 8B 순서로 사용 노드 생성
+        // 예: 키1의 70B 실패 -> 키1의 8B 실패 -> 키2의 70B 시도 -> 이런 식으로 동작
+        groqKeys.forEach(key => {
+            const headers = {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${key}`
+            };
+            aiNodes.push({ url: 'https://api.groq.com/openai/v1/chat/completions', model: 'llama-3.3-70b-versatile', headers });
+            aiNodes.push({ url: 'https://api.groq.com/openai/v1/chat/completions', model: 'llama-3.1-70b-versatile', headers });
+            aiNodes.push({ url: 'https://api.groq.com/openai/v1/chat/completions', model: 'llama3-70b-8192', headers });
+            aiNodes.push({ url: 'https://api.groq.com/openai/v1/chat/completions', model: 'llama-3.1-8b-instant', headers });
+        });
+
+        for (let i = 0; i < aiNodes.length; i++) {
+            const node = aiNodes[i];
             try {
-                const seed = Math.floor(Math.random() * 1000000);
+
+                const requestBody = {
+                    messages: [
+                        { role: 'system', content: systemPrompt },
+                        { role: 'user', content: cleanIntent }
+                    ]
+                };
                 
-                aiResponse = await fetch('https://text.pollinations.ai/', {
+                // 캐시 우회를 위해 보이지 않는 임의의 시스템 해시 추가
+                const randomHash = Math.random().toString(36).substring(2, 10);
+                requestBody.messages[0].content += `\n\n[System Hash: ${randomHash}]`;
+                
+                if (node.model) requestBody.model = node.model;
+                
+                // 1. 모델 창의력 상향 (Temperature)
+                // 2. 무한 반복/복붙 방지 (Frequency & Presence Penalty) - 앵무새처럼 루프도는 현상 하드웨어적 차단
+                if (node.url.includes('groq.com')) {
+                    requestBody.temperature = 0.7;
+                    requestBody.max_tokens = 4096;
+                    requestBody.frequency_penalty = 0.2; // 1.2는 기형적인 문장을 유발하므로, 0.2 안정값으로 롤백하여 자연스러운 문맥 보장
+                    requestBody.presence_penalty = 0.2;  // 마찬가지로 0.2로 안정화하여 강박적인 화제 전환(조현병 현상) 방지
+                }
+                
+                const aiResponse = await fetch(node.url, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        messages: [
-                            { role: 'system', content: systemPrompt },
-                            { role: 'user', content: cleanIntent }
-                        ],
-                        seed: seed
-                    })
+                    headers: node.headers,
+                    body: JSON.stringify(requestBody)
                 });
                 
                 lastStatus = aiResponse.status;
 
+                // Rate Limit 방어: 429 에러 시 멍청한 모델로 점프하지 않고, 그 다음 줄(70B 형제)로 자연스레 넘어가도록 수정
+                if (lastStatus === 429 && node.model === 'llama-3.3-70b-versatile') {
+                    console.warn(`[AI_RATE_LIMIT] 429 block hit. Automatically routing to the next 70B fallback model in the list...`);
+                }
+
                 if (aiResponse.ok) {
+                    let tempText = await aiResponse.text();
+                    
+                    // 🛡️ 최후의 방어선: 오픈소스 모델의 한자/일본어/러시아어 등 외국어 출력 환각이 발생할 경우, 응답을 거름망(Regex)으로 버리고 즉시 재시도 
+                    const foreignCharRegex = /[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\uFAFF\u0400-\u052F\u0E00-\u0E7F\u0600-\u06FF]/;
+                    if (foreignCharRegex.test(tempText)) {
+                        console.warn(`[AI_NODE_REJECT] Node ${node.model} generated foreign characters (Hanja/Kana/Cyrillic). Retrying...`);
+                        lastStatus = 406; // Not Acceptable
+                        continue; // 결과를 버리고 다음 폴백 노드(재시도)로 강제 이동
+                    }
+
                     fetchSuccess = true;
+                    rawText = tempText;
+                    console.log(`[AI_NODE_SUCCESS] ${node.url} (model: ${node.model})`);
                     break;
                 }
                 
-                // 에러 발생 시 잠시 대기 후 재시도
-                console.warn(`[AI_RETRY] Attempt ${attempt} failed with status ${lastStatus}. Retrying in 1.5s...`);
-                await new Promise(r => setTimeout(r, 1500));
+                console.warn(`[AI_NODE_FAIL] Node ${node.model} failed with status ${lastStatus}. Trying next...`);
             } catch (err) {
-                console.error(`[AI_FETCH_ERROR] Attempt ${attempt}: ${err.message}`);
-                await new Promise(r => setTimeout(r, 1500));
+                console.error(`[AI_FETCH_ERROR] Node ${node.model}: ${err.message}`);
             }
         }
 
         if (!fetchSuccess) {
-            throw new Error(`AI Node Error (Status: ${lastStatus})`);
+            throw new Error(`AI Nodes Exhausted. (Last Status: ${lastStatus})`);
         }
-
-        const rawText = await aiResponse.text();
         let extractionTarget = rawText.trim();
 
         // 🛡️ [무적의 SRT 수색 엔진 V3] - 비표준 형식(Index/Line/번호) 전역 교정
@@ -304,6 +354,72 @@ app.post('/api/engineer', apiLimiter, async (req, res, next) => {
             .replace(/🌸\s*Ad\s*🌸[\s\S]*/gi, '')
             .replace(/Powered by Pollinations\.AI[\s\S]*/gi, '')
             .trim();
+
+        // ==================================================================================
+        // 🛡️ [최후의 방어선] 서버사이드 반복 블록 감지 및 자동 절단 필터
+        // 프롬프트로는 절대 해결 불가능한 오픈소스 LLM의 근본적인 반복 환각을 프로그래밍으로 강제 차단
+        // ==================================================================================
+        try {
+            // 자막 블록 분리: 번호, 타임코드, 또는 빈 줄 기준 (SRT, Script, 일반 텍스트 모두 대응)
+            const blocks = finalResult.split(/\n\s*\n/).filter(b => b.trim().length > 0);
+            
+            if (blocks.length >= 4) {
+                // 각 블록에서 순수 텍스트만 추출 (숫자, 타임코드, 특수기호 제거)
+                const extractPureText = (block) => {
+                    return block
+                        .replace(/^\s*\(?\d+\)?\s*$/gm, '')                    // 순번 제거
+                        .replace(/^\s*\*?\*?\(?\d+\)?\*?\*?\s*$/gm, '')        // 볼드 순번 제거
+                        .replace(/[\d:,.\-\->()]+/g, '')                        // 타임코드/숫자 제거
+                        .replace(/[^\uAC00-\uD7AF\s]/g, '')                     // 한글과 공백만 남김
+                        .replace(/\s+/g, ' ')
+                        .trim();
+                };
+
+                // 두 텍스트의 유사도 계산 (자카드 유사도 기반)
+                const similarity = (a, b) => {
+                    if (!a || !b || a.length < 10 || b.length < 10) return 0;
+                    const wordsA = new Set(a.split(' '));
+                    const wordsB = new Set(b.split(' '));
+                    const intersection = [...wordsA].filter(w => wordsB.has(w)).length;
+                    const union = new Set([...wordsA, ...wordsB]).size;
+                    return union === 0 ? 0 : intersection / union;
+                };
+
+                let cutIndex = -1;
+                let repeatCount = 0;
+                const pureTexts = blocks.map(extractPureText);
+
+                for (let i = 2; i < pureTexts.length; i++) {
+                    // 현재 블록과 이전 블록들 중 하나라도 70% 이상 유사하면 반복으로 판정
+                    let isRepeat = false;
+                    for (let j = Math.max(0, i - 4); j < i; j++) {
+                        if (similarity(pureTexts[i], pureTexts[j]) > 0.7) {
+                            isRepeat = true;
+                            break;
+                        }
+                    }
+                    
+                    if (isRepeat) {
+                        repeatCount++;
+                        if (repeatCount >= 2 && cutIndex === -1) {
+                            cutIndex = i - 1; // 반복이 시작된 바로 전 블록에서 자름
+                            console.warn(`[REPETITION_FILTER] Detected repetition loop starting at block ${i}. Truncating after block ${cutIndex}.`);
+                        }
+                    } else {
+                        repeatCount = 0; // 새로운 내용이면 카운터 리셋
+                    }
+                }
+
+                if (cutIndex > 0 && cutIndex < blocks.length - 1) {
+                    const keptBlocks = blocks.slice(0, cutIndex + 1);
+                    finalResult = keptBlocks.join('\n\n');
+                    console.log(`[REPETITION_FILTER] Trimmed from ${blocks.length} blocks to ${keptBlocks.length} blocks.`);
+                }
+            }
+        } catch (filterErr) {
+            console.error(`[REPETITION_FILTER_ERROR] ${filterErr.message}`);
+            // 필터 오류 시 원본 결과 그대로 반환 (안전 장치)
+        }
 
         res.json({ result: finalResult || "자막 데이터를 추출하지 못했습니다.", model: 'orchestrated' });
 

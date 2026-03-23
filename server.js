@@ -496,7 +496,15 @@ app.get('/api/presets', ensureAuthenticated, async (req, res) => {
       'SELECT preset_id as id, name, params FROM user_presets WHERE user_id = $1 ORDER BY created_at DESC',
       [userId]
     );
-    res.json(result.rows);
+
+    // PostgreSQL의 BIGINT(preset_id)는 문자열로 반환되므로, 
+    // 프론트엔드(script.js)와의 호환성을 위해 숫자로 변환합니다.
+    const presets = result.rows.map(row => ({
+      ...row,
+      id: Number(row.id)
+    }));
+
+    res.json(presets);
   } catch (e) {
     console.error('[DB_GET_ERROR]', e.message);
     res.json([]);

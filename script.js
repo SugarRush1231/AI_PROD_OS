@@ -1,5 +1,4 @@
 const UI = {
-  log: document.getElementById('terminal-log'),
   intentInput: document.getElementById('intent-input'),
   engineerBtn: document.getElementById('engineer-btn'),
   optimizedOutput: document.getElementById('optimized-output'),
@@ -31,7 +30,6 @@ const UI = {
   paramCatBreed: document.getElementById('param-cat-breed'),
   paramAnimalPose: document.getElementById('param-animal-pose'),
   paramAnimalPov: document.getElementById('param-animal-pov'),
-  paramCustom: document.getElementById('param-custom'),
   paramSubFormat: document.getElementById('param-sub-format'),
   paramSubIntent: document.getElementById('param-sub-intent'), // 추가
   paramSubTempo: document.getElementById('param-sub-tempo'),
@@ -65,9 +63,9 @@ const UI = {
   paramSceneShot: document.getElementById('param-scene-shot'),
   paramSceneComp: document.getElementById('param-scene-comp'),
   angleInput: document.getElementById('angle-input'),
-  chipContainer: document.getElementById('directive-chips'),
   systemStatusSection: document.getElementById('system-status'),
   statLatency: document.getElementById('stat-latency'),
+  statLatencyTrend: document.getElementById('stat-latency-trend'),
   statUptime: document.getElementById('stat-uptime'),
   statBootTime: document.getElementById('stat-boot-time'),
   statClusterStatus: document.getElementById('stat-cluster-status'),
@@ -82,7 +80,8 @@ const UI = {
   modalInput: document.getElementById('modal-input'),
   modalInputContainer: document.getElementById('modal-input-container'),
   themeSlider: document.getElementById('theme-slider'),
-  themeLabel: document.getElementById('theme-current-label')
+  themeLabel: document.getElementById('theme-current-label'),
+  allParamsContainer: document.getElementById('all-params-container')
 };
 
 let USER_LOGGED_IN = false;
@@ -412,8 +411,7 @@ const MyPresets = {
   }
 };
 
-// 초기화 시 서버 데이터 호출
-MyPresets.fetchFromServer();
+// 초기화 시 서버 데이터 호출 막음 (비로그인 401 에러 로그 방지. checkAuthStatus()에서 호출됨)
 
 // 프리셋 버튼 리스너
 if (UI.savePresetBtn) {
@@ -426,8 +424,28 @@ MyPresets.render();
 // --- CORE SYSTEM HEALTH CHECK ---
 async function fetchServerStatus() {
   try {
+    const startTime = performance.now();
     const res = await fetch('/api/status');
     const data = await res.json();
+    const endTime = performance.now();
+    
+    // API 레이턴시 실시간 반영 (ms) + 상태별 색상
+    const latency = Math.round(endTime - startTime);
+    if (UI.statLatency) {
+      UI.statLatency.innerText = `${latency}ms`;
+      const trend = UI.statLatencyTrend;
+      
+      if (latency < 300) {
+        UI.statLatency.style.color = '#10b981';
+        if (trend) { trend.innerText = 'Stable'; trend.style.backgroundColor = 'rgba(16, 185, 129, 0.1)'; trend.style.color = '#10b981'; }
+      } else if (latency < 800) {
+        UI.statLatency.style.color = '#f59e0b';
+        if (trend) { trend.innerText = 'Moderate'; trend.style.backgroundColor = 'rgba(245, 158, 11, 0.1)'; trend.style.color = '#f59e0b'; }
+      } else {
+        UI.statLatency.style.color = '#ff5555';
+        if (trend) { trend.innerText = 'Unstable'; trend.style.backgroundColor = 'rgba(255, 85, 85, 0.1)'; trend.style.color = '#ff5555'; }
+      }
+    }
 
     // 1. 서버 부팅 시간 연동 (정직한 지표)
     if (data.startTime) {
@@ -588,16 +606,22 @@ if (UI.paramType) {
     if (UI.bgHumanContainer) UI.bgHumanContainer.style.display = 'none';
     if (UI.bgAnimalContainer) UI.bgAnimalContainer.style.display = 'none';
     if (UI.bgSceneContainer) UI.bgSceneContainer.style.display = 'none';
+    if (UI.allParamsContainer) UI.allParamsContainer.style.display = 'none';
 
     if (val === 'human') {
+      if (UI.allParamsContainer) UI.allParamsContainer.style.display = 'block';
       if (UI.humanParamsGroup) UI.humanParamsGroup.style.display = 'block';
       if (UI.bgHumanContainer) UI.bgHumanContainer.style.display = 'flex';
     } else if (val === 'animal') {
+      if (UI.allParamsContainer) UI.allParamsContainer.style.display = 'block';
       if (UI.animalParamsGroup) UI.animalParamsGroup.style.display = 'block';
       if (UI.bgAnimalContainer) UI.bgAnimalContainer.style.display = 'flex';
-    } else {
+    } else if (val === 'scene') {
+      if (UI.allParamsContainer) UI.allParamsContainer.style.display = 'block';
       if (UI.sceneParamsGroup) UI.sceneParamsGroup.style.display = 'block';
       if (UI.bgSceneContainer) UI.bgSceneContainer.style.display = 'flex';
+    } else {
+      // none (do nothing, stay hidden)
     }
   });
 }
@@ -1142,7 +1166,7 @@ async function applyEngineering() {
     let selectedBg = 'none';
     if (subjectType === 'human' && UI.paramBgHuman) selectedBg = UI.paramBgHuman.value;
     else if (subjectType === 'animal' && UI.paramBgAnimal) selectedBg = UI.paramBgAnimal.value;
-    else if (UI.paramBgScene) selectedBg = UI.paramBgScene.value;
+    else if (subjectType === 'scene' && UI.paramBgScene) selectedBg = UI.paramBgScene.value;
 
     let selectedCamAngle = 'none';
     if (subjectType === 'human' && UI.paramHumanCamAngle) selectedCamAngle = UI.paramHumanCamAngle.value;
@@ -1447,7 +1471,7 @@ ${PromptContext.visual.camera.shot !== 'none' ? `- Camera Shot: ${PromptContext.
 ${PromptContext.visual.camera.composition !== 'none' ? `- Composition: ${PromptContext.visual.camera.composition}` : ''}
 - Perspective: ${PromptContext.visual.camera.perspective}
       `;
-    } else {
+    } else if (config.type === 'human') {
       enrichedIntent = `
 [CORE DESIGN SPECIFICATIONS]
 - Subject Identity: ${PromptContext.core.subject}
@@ -1465,6 +1489,13 @@ ${PromptContext.visual.camera.camAngle !== 'none' ? `- Vertical Camera Angle: ${
 ${PromptContext.visual.camera.shot !== 'none' ? `- Camera Shot: ${PromptContext.visual.camera.shot}` : ''}
 ${PromptContext.visual.camera.composition !== 'none' ? `- Composition: ${PromptContext.visual.camera.composition}` : ''}
 - Perspective: ${PromptContext.visual.camera.perspective}
+      `;
+    } else if (config.type === 'none') {
+      enrichedIntent = `
+[CORE DESIGN SPECIFICATIONS]
+- Overall Intent: ${intent}
+- Subject/Category: Infer from the core intent description
+- Requirement: Optimize purely based on the user's raw input, maintaining the core essence while adding professional image engineering details, depth, and cinematic quality.
       `;
     }
 
@@ -1501,7 +1532,7 @@ ${PromptContext.visual.camera.composition !== 'none' ? `- Composition: ${PromptC
       - DO NOT explain anything. Start the prompt immediately.
       - DO NOT add titles like "Paragraph 1:". Use the bold headers directly.
       - PRIORITY: Follow the lighting ("${PromptContext.core.sceneLight}") and effect ("${PromptContext.core.sceneEffect}") instructions with 100% fidelity.`;
-    } else {
+    } else if (config.type === 'human') {
       systemPrompt = `You are a High-End AI Prompt Architect.
       TASK: Convert the [DESIGN SPECIFICATIONS] into a structured 4-paragraph English prompt for professional image generation.
       
@@ -1516,6 +1547,28 @@ ${PromptContext.visual.camera.composition !== 'none' ? `- Composition: ${PromptC
       - DO NOT explain anything. Start the prompt immediately.
       - DO NOT add titles like "Paragraph 1:". Use the bold headers directly.
       - PRIORITY: Follow the ${PromptContext.core.pose} instructions with 100% fidelity.`;
+    } else if (config.type === 'none') {
+      systemPrompt = `You are a Universal Prompt Engineer.
+      TASK: Convert the [DESIGN SPECIFICATIONS] into an English structured prompt for high-fidelity image generation.
+      
+      Since no specific category was selected, you must strictly preserve the literal intent of the user's input. Avoid adding abstract "luxury," "futuristic," or "sophisticated" flowery prose unless specifically requested by the user. 
+      
+      STRUCTURE RULES:
+      1. Paragraph 1: **Subject Formulation**. State the primary subject clearly based on the user's literal keywords. Define the core aesthetic (e.g., Flat, 3D, Minimalist, Sketch) derived ONLY from the intent.
+      2. Paragraph 2: **Structural Features**. Describe the physical or graphic properties—shapes, line weights, color palette, and textures from the user's intent. Do not add complex lighting effects to simple 2D icons.
+      3. Paragraph 3: **Contextual Layout**. Describe the positioning, background, and spatial arrangement. If the intent is an icon, keep the background clean (white/isolated) as typically expected for icons.
+      4. Paragraph 4: **Technical Specification**. ADAPT based on the subject:
+         - IF ICON/GUI: Use terms like "Vector quality," "Ultra-crisp edges," "Digital illustration," "Uniform line weight," "SVG style."
+         - IF PHOTO/SCENE: Use "8k resolution," "Ray-tracing," "Photorealistic textures," "Cinema-grade lighting."
+      5. Footer: Add a "# Negative Prompts" section.
+      
+      STRICT RULES:
+      - DO NOT add abstract marketing fluff (Elegance, Innovation, High-tech) unless mentioned in the intent.
+      - DO NOT explain anything. Start the prompt immediately.
+      - PRIORITY: Maximum fidelity to the user's literal prompt while providing professional engineering depth.`;
+    } else {
+      // General Fallback
+      systemPrompt = `You are a High-End AI Prompt Architect. Provide a professional 4-paragraph prompt based on [DESIGN SPECIFICATIONS].`;
     }
 
     const apiPromise = fetch('/api/engineer', {

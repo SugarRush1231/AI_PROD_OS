@@ -1727,27 +1727,32 @@ footer { padding: 80px 0 40px; border-top: 1px solid var(--border); margin-top: 
   flex-direction: column;
   align-items: center;
   gap: 8px;
-  padding: 16px 20px;
-  background: rgba(255, 255, 255, 0.02);
+  padding: 16px 12px;
+  background: var(--panel); /* 불투명한 배경색으로 뒤의 선을 가림 */
+  overflow: hidden; /* 점이 노드 영역 밖으로 삐져나오지 않게 방지 */
   border: 1px solid var(--border);
   border-radius: 12px;
-  min-width: 120px;
+  width: 140px; /* Enforced fixed width for vertical alignment */
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: default;
   position: relative;
+  flex-shrink: 0;
+  z-index: 2; /* 노드 레이어를 커넥터 위로 올림 */
 }
 
 .p-node:hover {
-  background: rgba(255, 255, 255, 0.05);
-  border-color: var(--skills-cyan);
+  background: var(--panel);
+  border-color: var(--skills-purple);
+  filter: brightness(1.15); /* Slightly lighter but opaque */
   transform: translateY(-4px);
-  box-shadow: 0 8px 24px rgba(59, 130, 246, 0.15);
+  box-shadow: 0 8px 32px rgba(59, 130, 246, 0.2);
 }
 
 .p-node.active {
   border-color: var(--skills-cyan);
-  background: rgba(59, 130, 246, 0.06);
-  box-shadow: 0 0 20px rgba(59, 130, 246, 0.1);
+  background: var(--panel); /* 불투명하게 변경 */
+  box-shadow: 0 0 20px rgba(59, 130, 246, 0.15);
+  position: relative;
 }
 
 .p-node-icon {
@@ -1756,11 +1761,14 @@ footer { padding: 80px 0 40px; border-top: 1px solid var(--border); margin-top: 
 }
 
 .p-node-text {
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   font-weight: 600;
   color: var(--fg-dim);
   white-space: nowrap;
   text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  width: 100%;
 }
 
 .p-node:hover .p-node-text {
@@ -1775,9 +1783,27 @@ footer { padding: 80px 0 40px; border-top: 1px solid var(--border); margin-top: 
   background-size: 200% 100%;
   min-width: 40px;
   position: relative;
+  z-index: 1;
+  margin: 0 -12px;
   border-radius: 1px;
   opacity: 0.5;
 }
+
+/* Node Glow Animation (Synchronized with Dot Flow) */
+@keyframes p-node-glow {
+  0%   { border-color: var(--border); background: var(--panel); box-shadow: none; }
+  5%   { border-color: var(--skills-purple); background: var(--panel); box-shadow: 0 0 25px rgba(129, 140, 248, 0.3), inset 0 0 10px rgba(129, 140, 248, 0.1); }
+  15%  { border-color: var(--border); background: var(--panel); box-shadow: none; }
+  100% { border-color: var(--border); background: var(--panel); box-shadow: none; }
+}
+
+.p-node.flow-active {
+  animation: p-node-glow 6s ease-in-out infinite;
+}
+
+.p-node.flow-active.flow-delay-2 { animation-delay: 1.5s; } /* Dot arrives at 1.5s */
+.p-node.flow-active.flow-delay-3 { animation-delay: 3s; }   /* Dot arrives at 3.0s */
+.p-node.flow-active.flow-delay-4 { animation-delay: 4.5s; } /* Cycle end */
 
 /* Flowing Dot Animation */
 .p-dot-flow {
@@ -1788,26 +1814,34 @@ footer { padding: 80px 0 40px; border-top: 1px solid var(--border); margin-top: 
   height: 6px;
   background: var(--skills-cyan);
   border-radius: 50%;
-  transform: translateY(-50%);
+  transform: translateY(-50%) scale(0); /* 기본적으로 크기 0 (숨김) */
   box-shadow: 0 0 8px rgba(59, 130, 246, 0.8), 0 0 16px rgba(59, 130, 246, 0.4);
-  animation: dotFlow 2.5s ease-in-out infinite;
+  animation: dotFlow 6s linear infinite;
+  animation-fill-mode: both;
+  opacity: 0;
 }
 
-.p-dot-flow.delay {
-  animation-delay: 1.25s;
+.p-dot-flow.step-2 {
+  animation-delay: 1.5s;
+}
+
+.p-dot-flow.step-3 {
+  animation-delay: 3s;
 }
 
 @keyframes dotFlow {
-  0% { left: -6px; opacity: 0; }
-  10% { opacity: 1; }
-  90% { opacity: 1; }
-  100% { left: calc(100% + 6px); opacity: 0; }
+  0%   { left: 0%; opacity: 0; transform: translateY(-50%) scale(0); }
+  5%   { opacity: 1; transform: translateY(-50%) scale(1); }
+  20%  { opacity: 1; transform: translateY(-50%) scale(1); }
+  25%  { left: 100%; opacity: 0; transform: translateY(-50%) scale(0); }
+  100% { left: 100%; opacity: 0; transform: translateY(-50%) scale(0); }
 }
 
 /* dotFlowVertical keyframes (used in responsive mode) */
 @keyframes dotFlowVertical {
-  0% { top: -6px; opacity: 0; }
-  10% { opacity: 1; }
-  90% { opacity: 1; }
-  100% { top: calc(100% + 6px); opacity: 0; }
+  0%   { top: 0%; opacity: 0; transform: translateX(-50%) scale(0); }
+  5%   { opacity: 1; transform: translateX(-50%) scale(1); }
+  20%  { opacity: 1; transform: translateX(-50%) scale(1); }
+  25%  { top: 100%; opacity: 0; transform: translateX(-50%) scale(0); }
+  100% { top: 100%; opacity: 0; transform: translateX(-50%) scale(0); }
 }

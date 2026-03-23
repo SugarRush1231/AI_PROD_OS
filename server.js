@@ -450,59 +450,91 @@ app.get('/api/status', async (req, res) => {
 });
 
 // --- PRESET DATABASE API ---
-// --- [PRIVATE USER STORAGE ENGINE] ---
-const USER_PRESETS_DIR = path.join(__dirname, 'user_presets');
+// --- [PERSISTENT POSTGRES STORAGE ENGINE] ---
+const { Pool } = require('pg');
 
-// 🛠️ 유저별 개별 파일 경로 생성기
-const getUserFilePath = (userId) => path.join(USER_PRESETS_DIR, `user_${userId}.json`);
+// Koyeb Managed Postgres: DATABASE_URL 환경변수를 사용합니다.
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: {
+    rejectUnauthorized: false // 외부 연결 및 Koyeb 환경용 (Self-signed 인증 허용)
+  }
+});
 
-// 프리셋 리스트 가져오기 (오직 본인의 독립 파일에서만)
+// 데이터베이스 테이블 초기화 (최초 1회 실행)
+const initDb = async () => {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS user_presets (
+        id SERIAL PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        preset_id BIGINT NOT NULL,
+        name TEXT NOT NULL,
+        params JSONB NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(user_id, preset_id)
+      );
+    `);
+    console.log('[DB] user_presets table is ready.');
+  } catch (err) {
+    console.error('[DB_INIT_ERROR]', err.message);
+  }
+};
+
+// 서버 시작 시 DB 체크
+if (process.env.DATABASE_URL) {
+  initDb();
+} else {
+  console.warn('[DB_WARNING] DATABASE_URL is missing in .env. Persistence will fail.');
+}
+
+// 프리셋 리스트 가져오기 (DB에서 내 user_id 데이터만)
 app.get('/api/presets', ensureAuthenticated, async (req, res) => {
-    try {
-        await fs.mkdir(USER_PRESETS_DIR, { recursive: true }); // 폴더 자동 생성 (최초 1회)
-        const userFilePath = getUserFilePath(req.user.id);
-
-        // 내 파일이 없으면 새 리스트[] 반환, 있으면 파싱
-        const data = await fs.readFile(userFilePath, 'utf8').catch(() => '[]');
-        res.json(JSON.parse(data));
-    } catch (e) {
-        res.json([]);
-    }
+  try {
+    const userId = req.user.id;
+    const result = await pool.query(
+      'SELECT preset_id as id, name, params FROM user_presets WHERE user_id = $1 ORDER BY created_at DESC',
+      [userId]
+    );
+    res.json(result.rows);
+  } catch (e) {
+    console.error('[DB_GET_ERROR]', e.message);
+    res.json([]);
+  }
 });
 
-// 프리셋 저장하기 (사용자 전용 독립 파일에 기록)
+// 프리셋 저장하기 (DB에 INSERT)
 app.post('/api/presets', ensureAuthenticated, async (req, res) => {
-    try {
-        await fs.mkdir(USER_PRESETS_DIR, { recursive: true });
-        const userFilePath = getUserFilePath(req.user.id);
-        const newPreset = req.body;
+  try {
+    const userId = req.user.id;
+    const { id: presetId, name, params } = req.body;
 
-        // 🛡️ 내 파일만 읽어와서 저장 (다른 사람 데이터와 물리적으로 분리)
-        const data = await fs.readFile(userFilePath, 'utf8').catch(() => '[]');
-        const presets = JSON.parse(data);
-        presets.push(newPreset);
-
-        await fs.writeFile(userFilePath, JSON.stringify(presets, null, 2));
-        res.json({ success: true });
-    } catch (e) {
-        res.status(500).json({ error: 'Failed to save preset to your locker' });
-    }
+    await pool.query(
+      'INSERT INTO user_presets (user_id, preset_id, name, params) VALUES ($1, $2, $3, $4)',
+      [userId, presetId, name, JSON.stringify(params)]
+    );
+    res.json({ success: true });
+  } catch (e) {
+    console.error('[DB_SAVE_ERROR]', e.message);
+    res.status(500).json({ error: '데이터베이스 저장에 실패했습니다.' });
+  }
 });
 
-// 프리셋 삭제하기 (내 독립 파일 안에서만 처리)
+// 프리셋 삭제하기 (DB에서 DELETE)
 app.delete('/api/presets/:id', ensureAuthenticated, async (req, res) => {
-    try {
-        const id = parseInt(req.params.id);
-        const userFilePath = getUserFilePath(req.user.id);
+  try {
+    const userId = req.user.id;
+    const presetId = req.params.id;
 
-        const data = await fs.readFile(userFilePath, 'utf8').catch(() => '[]');
-        const presets = JSON.parse(data).filter(p => p.id !== id);
-
-        await fs.writeFile(userFilePath, JSON.stringify(presets, null, 2));
-        res.json({ success: true });
-    } catch (e) {
-        res.status(500).json({ error: 'Failed to delete preset from your locker' });
-    }
+    await pool.query(
+      'DELETE FROM user_presets WHERE user_id = $1 AND preset_id = $2',
+      [userId, presetId]
+    );
+    res.json({ success: true });
+  } catch (e) {
+    console.error('[DB_DELETE_ERROR]', e.message);
+    res.status(500).json({ error: '데이터베이스 삭제 실패.' });
+  }
 });
 
 // 5. 404 에러 미들웨어

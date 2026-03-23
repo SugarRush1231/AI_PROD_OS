@@ -1288,60 +1288,177 @@ async function applyEngineering() {
         `;
     }
 
-    // --- 1. SET PromptContext OBJECTS ---
-    PromptContext.core = {
-      subject: intent,
-      type: config.type,
-      pose: poseDescription,
-      facial: config.face,
-      identity: config.humanRef,
-      outfit: outfitText
-    };
+    // --- 1. SET PromptContext OBJECTS (TYPE-AWARE) ---
+    if (config.type === 'animal') {
+      PromptContext.core = {
+        subject: intent,
+        type: config.type,
+        pose: config.animalPose,
+        dogBreed: config.dogBreed,
+        catBreed: config.catBreed,
+        animalPov: config.animalPov
+      };
+      PromptContext.visual = {
+        style: config.style,
+        background: bgDescription,
+        camera: {
+          angle: config.angle,
+          perspective: povDescription,
+          shot: config.animalShot,
+          composition: config.animalComp
+        }
+      };
+    } else if (config.type === 'scene') {
+      PromptContext.core = {
+        subject: intent,
+        type: config.type,
+        sceneEffect: config.sceneEffect,
+        sceneLight: config.sceneLight,
+        sceneRef: config.sceneRef
+      };
+      PromptContext.visual = {
+        style: config.style,
+        background: bgDescription,
+        camera: {
+          angle: config.angle,
+          perspective: povDescription,
+          shot: config.sceneShot,
+          composition: config.sceneComp
+        }
+      };
+    } else {
+      // Human (default)
+      const identityDescription = config.humanRef === 'strict'
+        ? 'STRICTLY MAINTAIN the face and unique identity of the reference human.'
+        : config.humanRef === 'selective'
+          ? 'Focus on key facial features and vibe from reference, but allow minor variations.'
+          : 'Generate a completely new and independent character identity.';
 
-    PromptContext.visual = {
-      style: config.style,
-      background: bgDescription,
-      camera: {
-        angle: config.angle,
-        perspective: povDescription,
-        shot: config.humanShot || config.animalShot || config.sceneShot,
-        composition: config.humanComp || config.animalComp || config.sceneComp
-      }
-    };
+      PromptContext.core = {
+        subject: intent,
+        type: config.type,
+        pose: poseDescription,
+        facial: config.face,
+        identity: identityDescription,
+        outfit: outfitText
+      };
+      PromptContext.visual = {
+        style: config.style,
+        background: bgDescription,
+        camera: {
+          angle: config.angle,
+          perspective: povDescription,
+          shot: config.humanShot,
+          composition: config.humanComp
+        }
+      };
+    }
 
-    // --- 2. ASSEMBLE FINAL PROMPT INTENT (Natural Language Format) ---
-    enrichedIntent = `
+    // --- 2. ASSEMBLE FINAL PROMPT INTENT (TYPE-AWARE Natural Language Format) ---
+    if (config.type === 'animal') {
+      enrichedIntent = `
+[CORE DESIGN SPECIFICATIONS]
+- Subject Identity: ${PromptContext.core.subject}
+- Subject Category: Animal
+${PromptContext.core.dogBreed !== 'none' ? `- Dog Breed: ${PromptContext.core.dogBreed}` : ''}
+${PromptContext.core.catBreed !== 'none' ? `- Cat Breed: ${PromptContext.core.catBreed}` : ''}
+- Required Animal Pose: ${PromptContext.core.pose}
+- Animal POV/Perspective: ${PromptContext.core.animalPov}
+
+[VISUAL ENVIRONMENT]
+- Visual Style: ${PromptContext.visual.style}
+- Background: ${PromptContext.visual.background}
+- Camera Angle: ${PromptContext.visual.camera.angle} degrees
+${PromptContext.visual.camera.shot !== 'none' ? `- Camera Shot: ${PromptContext.visual.camera.shot}` : ''}
+${PromptContext.visual.camera.composition !== 'none' ? `- Composition: ${PromptContext.visual.camera.composition}` : ''}
+- Perspective: ${PromptContext.visual.camera.perspective}
+      `;
+    } else if (config.type === 'scene') {
+      enrichedIntent = `
+[CORE DESIGN SPECIFICATIONS]
+- Subject Identity: ${PromptContext.core.subject}
+- Subject Category: Scene/Object
+- Commercial Effect: ${PromptContext.core.sceneEffect}
+- Marketing Lighting: ${PromptContext.core.sceneLight}
+- Reference Integrity: ${PromptContext.core.sceneRef === 'strict' ? 'STRICTLY PRESERVE the exact geometry, branding, and structural details.' : 'Allow artistic reinterpretation and creative changes.'}
+
+[VISUAL ENVIRONMENT]
+- Visual Style: ${PromptContext.visual.style}
+- Background: ${PromptContext.visual.background}
+- Camera Angle: ${PromptContext.visual.camera.angle} degrees
+${PromptContext.visual.camera.shot !== 'none' ? `- Camera Shot: ${PromptContext.visual.camera.shot}` : ''}
+${PromptContext.visual.camera.composition !== 'none' ? `- Composition: ${PromptContext.visual.camera.composition}` : ''}
+- Perspective: ${PromptContext.visual.camera.perspective}
+      `;
+    } else {
+      enrichedIntent = `
 [CORE DESIGN SPECIFICATIONS]
 - Subject Identity: ${PromptContext.core.subject}
 - Character Category: ${PromptContext.core.type}
 - Required Pose: ${PromptContext.core.pose}
-- Face Identity Strategy: ${PromptContext.core.identity}
+- Facial Aesthetic: ${PromptContext.core.facial}
+- Identity Strategy: ${PromptContext.core.identity}
 - Outfit Strategy: ${PromptContext.core.outfit}
 
 [VISUAL ENVIRONMENT]
 - Visual Style: ${PromptContext.visual.style}
 - Background: ${PromptContext.visual.background}
-- Shot/Angle: ${PromptContext.visual.camera.angle} degrees, ${PromptContext.visual.camera.shot}
-- Composition: ${PromptContext.visual.camera.composition}
+- Camera Angle: ${PromptContext.visual.camera.angle} degrees
+${PromptContext.visual.camera.shot !== 'none' ? `- Camera Shot: ${PromptContext.visual.camera.shot}` : ''}
+${PromptContext.visual.camera.composition !== 'none' ? `- Composition: ${PromptContext.visual.camera.composition}` : ''}
 - Perspective: ${PromptContext.visual.camera.perspective}
-    `;
+      `;
+    }
 
     enrichedIntent += `\n[FINAL DIRECTIVES]\n${config.chips}, ${config.custom || ''}`;
 
-    const systemPrompt = `You are a High-End AI Prompt Architect.
-    TASK: Convert the [DESIGN SPECIFICATIONS] into a structured 4-paragraph English prompt for professional image generation.
-    
-    STRUCTURE RULES:
-    1. Paragraph 1: **Identity & Style**. Focus on the subject and the ${PromptContext.visual.style} aesthetic.
-    2. Paragraph 2: **Physical Attributes**. Describe facial features, skin texture, and identity with extreme cinematic detail.
-    3. Paragraph 3: **Pose & Context**. Detail the ${PromptContext.core.pose} and the ${PromptContext.visual.background} with perfect spatial awareness.
-    4. Paragraph 4: **Technical Architecture**. Detail pro-lighting (rim, volumetric), high-end camera specs, and 8k ray-tracing rendering.
-    5. Footer: Add a "# Negative Prompts" section for professional-grade exclusion.
+    let systemPrompt;
+    if (config.type === 'animal') {
+      systemPrompt = `You are a High-End AI Prompt Architect specialized in animal photography and illustration.
+      TASK: Convert the [DESIGN SPECIFICATIONS] into a structured 4-paragraph English prompt for professional animal image generation.
+      
+      STRUCTURE RULES:
+      1. Paragraph 1: **Subject & Style**. Describe the animal species/breed and the ${PromptContext.visual.style} aesthetic.
+      2. Paragraph 2: **Physical Features**. Detail the animal's fur texture, markings, eye color, build, and breed-specific characteristics with extreme photographic detail.
+      3. Paragraph 3: **Pose & Environment**. CRITICAL: The animal MUST be in a "${PromptContext.core.pose}" pose. Describe the pose with specific body positioning (legs, tail, head direction, ear position). Place the animal in the ${PromptContext.visual.background} with perfect spatial awareness.
+      4. Paragraph 4: **Technical Architecture**. Detail pro-lighting (rim, volumetric), high-end camera specs, and 8k ray-tracing rendering.
+      5. Footer: Add a "# Negative Prompts" section for professional-grade exclusion.
 
-    STRICT RULES:
-    - DO NOT explain anything. Start the prompt immediately.
-    - DO NOT add titles like "Paragraph 1:". Use the bold headers directly.
-    - PRIORITY: Follow the ${PromptContext.core.pose} instructions with 100% fidelity.`;
+      STRICT RULES:
+      - DO NOT explain anything. Start the prompt immediately.
+      - DO NOT add titles like "Paragraph 1:". Use the bold headers directly.
+      - HIGHEST PRIORITY: The animal MUST be "${PromptContext.core.pose}". This pose instruction must be followed with 100% fidelity and described in vivid detail.`;
+    } else if (config.type === 'scene') {
+      systemPrompt = `You are a High-End AI Prompt Architect specialized in product photography, commercial advertising, and cinematic landscape composition.
+      TASK: Convert the [DESIGN SPECIFICATIONS] into a structured 4-paragraph English prompt for professional scene/object image generation.
+      
+      STRUCTURE RULES:
+      1. Paragraph 1: **Subject & Style**. Describe the object/scene and the ${PromptContext.visual.style} aesthetic with commercial-grade precision.
+      2. Paragraph 2: **Material & Surface Detail**. Detail textures, materials, reflections, surface quality, branding elements, and color accuracy with extreme photographic detail.
+      3. Paragraph 3: **Environment & Composition**. Place the subject in ${PromptContext.visual.background}. Apply "${PromptContext.core.sceneEffect}" effects and "${PromptContext.core.sceneLight}" lighting concept with perfect spatial awareness.
+      4. Paragraph 4: **Technical Architecture**. Detail pro-lighting (rim, volumetric, ${PromptContext.core.sceneLight}), high-end camera specs, and 8k ray-tracing rendering.
+      5. Footer: Add a "# Negative Prompts" section for professional-grade exclusion.
+
+      STRICT RULES:
+      - DO NOT explain anything. Start the prompt immediately.
+      - DO NOT add titles like "Paragraph 1:". Use the bold headers directly.
+      - PRIORITY: Follow the lighting ("${PromptContext.core.sceneLight}") and effect ("${PromptContext.core.sceneEffect}") instructions with 100% fidelity.`;
+    } else {
+      systemPrompt = `You are a High-End AI Prompt Architect.
+      TASK: Convert the [DESIGN SPECIFICATIONS] into a structured 4-paragraph English prompt for professional image generation.
+      
+      STRUCTURE RULES:
+      1. Paragraph 1: **Identity & Style**. Focus on the subject and the ${PromptContext.visual.style} aesthetic.
+      2. Paragraph 2: **Physical Attributes**. Describe facial features, skin texture, and identity with extreme cinematic detail.
+      3. Paragraph 3: **Pose & Context**. Detail the ${PromptContext.core.pose} and the ${PromptContext.visual.background} with perfect spatial awareness.
+      4. Paragraph 4: **Technical Architecture**. Detail pro-lighting (rim, volumetric), high-end camera specs, and 8k ray-tracing rendering.
+      5. Footer: Add a "# Negative Prompts" section for professional-grade exclusion.
+
+      STRICT RULES:
+      - DO NOT explain anything. Start the prompt immediately.
+      - DO NOT add titles like "Paragraph 1:". Use the bold headers directly.
+      - PRIORITY: Follow the ${PromptContext.core.pose} instructions with 100% fidelity.`;
+    }
 
     const apiPromise = fetch('/api/engineer', {
       method: 'POST',

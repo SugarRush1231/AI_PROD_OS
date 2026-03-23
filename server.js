@@ -29,6 +29,15 @@ app.set('trust proxy', 1); // ✅ Railway 리버스 프록시 뒤에서 https를
 const PORT = process.env.PORT || 3000;
 const SERVER_START_TIME = Date.now();
 
+// 🕒 외부 요청 최신 유입 시각 기록용 변수 (cron-job 중단 감지용)
+let lastRequestTime = Date.now();
+
+// 모든 접속(cron-job 포함)에 대해 제일 먼저 통과하도록 하여 시간 갱신
+app.use((req, res, next) => {
+    lastRequestTime = Date.now();
+    next();
+});
+
 // --- [PASSPORT AUTH CONFIG] ---
 passport.serializeUser((user, done) => done(null, user));
 passport.deserializeUser((obj, done) => done(null, obj));
@@ -94,10 +103,6 @@ app.get('/logout', (req, res, next) => {
     });
 });
 
-app.get('/api/me', (req, res) => {
-    res.json({ user: req.user || null });
-});
-
 // 4. 속도 제한 및 교차 출처
 const apiLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
@@ -105,6 +110,40 @@ const apiLimiter = rateLimit({
     standardHeaders: 'draft-7',
     legacyHeaders: false,
     message: { error: '시스템 과부하 방지를 위해 요청이 제한되었습니다. 잠시 후 다시 시도해주세요.' }
+});
+
+// ✅ AI 전용 빡센 제한 (1분에 3회 허용 = 연타 방지 및 사용자 단위 격리)
+const strictAiLimiter = rateLimit({
+    windowMs: 1 * 60 * 1000,
+    max: 3,
+    keyGenerator: (req) => req.user ? req.user.id : req.ip,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    message: { error: '비정상적인 다중 요청(연타)이 잦습니다. 서버 보호를 위해 1분 뒤에 다시 시도해주세요.' }
+});
+
+// ✅ 일반 API 연타 방지 (1분에 10회 허용)
+const generalApiLimiter = rateLimit({
+    windowMs: 1 * 60 * 1000,
+    max: 10,
+    keyGenerator: (req) => req.user ? req.user.id : req.ip,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    message: { error: '단기간에 너무 많은 조회 요청이 발생했습니다. 잠시 대기해주세요.' }
+});
+
+// ✅ DB 및 설정 무한 연타 방지 (1분에 20회 허용 - 버튼 더블 클릭 보호 등)
+const dbApiLimiter = rateLimit({
+    windowMs: 1 * 60 * 1000,
+    max: 20,
+    keyGenerator: (req) => req.user ? req.user.id : req.ip,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    message: { error: '데이터 저장 및 삭제 클릭이 너무 잦습니다. 연타를 멈추고 기다려주세요.' }
+});
+
+app.get('/api/me', generalApiLimiter, (req, res) => {
+    res.json({ user: req.user || null });
 });
 
 // 4. 교차 출처 및 파싱 제한
@@ -129,13 +168,17 @@ app.get('/', (req, res) => {
  * Whisper STT API (Audio to Subtitles)
  * Only available for Authenticated Users + Rate Limiting
  */
-app.post('/api/whisper', ensureAuthenticated, apiLimiter, upload.single('audio'), async (req, res, next) => {
+app.post('/api/whisper', ensureAuthenticated, strictAiLimiter, upload.single('audio'), async (req, res, next) => {
     try {
         if (!req.file) return res.status(400).json({ error: 'No audio file' });
 
-        // 🛡️ Groq API 사용 (OpenAI 대신)
-        const groqKey = process.env.GROQ_API_KEY;
-        if (!groqKey || groqKey === 'your-groq-key-here') {
+        // 🛡️ 멀티 키 도입 (6개 조합) - 50명 동시접속 방어용
+        const groqKeys = [
+            process.env.GROQ_API_KEY, process.env.GROQ_API_KEY_2, process.env.GROQ_API_KEY_3,
+            process.env.GROQ_API_KEY_4, process.env.GROQ_API_KEY_5, process.env.GROQ_API_KEY_6
+        ].filter(k => k && k.length > 10 && !k.includes('your-'));
+
+        if (groqKeys.length === 0) {
             await fs.unlink(req.file.path).catch(() => { });
             return res.status(500).json({ error: 'GROQ_API_KEY is missing in .env' });
         }
@@ -143,35 +186,50 @@ app.post('/api/whisper', ensureAuthenticated, apiLimiter, upload.single('audio')
         // 🛡️ 한글 파일명 인코딩 수정 (Multer/Windows 특유의 깨짐 방지)
         const originalName = Buffer.from(req.file.originalname, 'latin1').toString('utf8');
         addLogServer(`[GROQ_WHISPER] Processing: ${originalName}`);
-
-        // 🛠️ FIX: 멀터 임시 파일은 확장자가 없어서 Groq이 파일 형식을 못 알아먹습니다. 
-        // 원본 확장자를 명시적으로 전달해줘야 에러가 안 납니다!
         const fileExt = path.extname(originalName) || '.mp3';
-        const formData = new FormData();
-        formData.append('file', fs_sync.createReadStream(req.file.path), {
-            filename: `audio${fileExt}`, // 'audio.mp3' 식으로 API에 전달
-            contentType: req.file.mimetype
-        });
-        formData.append('model', 'whisper-large-v3');
-        formData.append('response_format', 'verbose_json');
 
-        const response = await axios.post('https://api.groq.com/openai/v1/audio/transcriptions', formData, {
-            headers: {
-                ...formData.getHeaders(),
-                'Authorization': `Bearer ${groqKey}`
+        let fetchSuccess = false;
+        let srtData = "";
+
+        // 여러 개의 키를 순서대로 시도하며 터지면 바로 다음 키로 릴레이 (로드밸런싱 및 폴백)
+        for (const key of groqKeys) {
+            try {
+                const formData = new FormData();
+                formData.append('file', fs_sync.createReadStream(req.file.path), {
+                    filename: `audio${fileExt}`,
+                    contentType: req.file.mimetype
+                });
+                formData.append('model', 'whisper-large-v3');
+                formData.append('response_format', 'verbose_json');
+
+                const response = await axios.post('https://api.groq.com/openai/v1/audio/transcriptions', formData, {
+                    headers: {
+                        ...formData.getHeaders(),
+                        'Authorization': `Bearer ${key}`
+                    }
+                });
+
+                srtData = convertJsonToSrt(response.data.segments);
+                fetchSuccess = true;
+                console.log(`[GROQ_WHISPER_SUCCESS] STT Processed properly. Using a valid key.`);
+                break; // 에러 안 나고 성공하면 반복문 종료
+            } catch (err) {
+                console.warn(`[GROQ_WHISPER_FAIL] Key exhausted. Trying next fallback key...`);
             }
-        });
+        }
 
         // 사용 후 임시 파일 삭제
         await fs.unlink(req.file.path).catch(() => { });
 
-        // JSON 데이터를 SRT 형식으로 정밀 변환
-        const srtData = convertJsonToSrt(response.data.segments);
+        if (!fetchSuccess) {
+            return res.status(500).json({ error: '모든 AI STT 노드가 혼잡합니다. 잠시 후 재시도하거나 관리자에게 문의하세요.' });
+        }
+
         res.json({ result: srtData });
     } catch (err) {
         if (req.file) await fs.unlink(req.file.path).catch(() => { });
-        console.error('[GROQ_ERROR]', err.response ? err.response.data : err.message);
-        res.status(500).json({ error: 'STT 분석 중 오류가 발생했습니다.' });
+        console.error('[GROQ_ERROR_GLOBAL]', err.message);
+        res.status(500).json({ error: 'STT 시스템 오류가 발생했습니다.' });
     }
 });
 
@@ -200,7 +258,7 @@ function addLogServer(msg) {
 /**
  * AI 엔지니어링 API
  */
-app.post('/api/engineer', apiLimiter, async (req, res, next) => {
+app.post('/api/engineer', ensureAuthenticated, strictAiLimiter, async (req, res, next) => {
     try {
         const { intent, systemPrompt } = req.body;
 
@@ -220,12 +278,14 @@ app.post('/api/engineer', apiLimiter, async (req, res, next) => {
         let lastStatus = 0;
         let rawText = '';
 
-        // 여러 개의 Groq API 키를 수집 (무료 한도 회피용)
+        // 여러 개의 Groq API 키를 수집 (무료 한도 회피 6개 배열)
         const groqKeys = [
             process.env.GROQ_API_KEY,
             process.env.GROQ_API_KEY_2,
             process.env.GROQ_API_KEY_3,
-            process.env.GROQ_API_KEY_4
+            process.env.GROQ_API_KEY_4,
+            process.env.GROQ_API_KEY_5,
+            process.env.GROQ_API_KEY_6
         ].filter(k => k && k.length > 10 && !k.includes('your-'));
 
         let aiNodes = [];
@@ -431,7 +491,7 @@ app.post('/api/engineer', apiLimiter, async (req, res, next) => {
 
 
 // 서버 상태 조회 API (서버 시작 시간 + 외부 AI 노드 체크)
-app.get('/api/status', async (req, res) => {
+app.get('/api/status', generalApiLimiter, async (req, res) => {
     let aiNodeStatus = 'ONLINE';
     try {
         // AI 서버 가용성 체크 (단순 HEAD 대신 실제 접속 확인)
@@ -496,7 +556,7 @@ if (process.env.DATABASE_URL) {
 }
 
 // 프리셋 리스트 가져오기 (DB에서 내 user_id 데이터만)
-app.get('/api/presets', ensureAuthenticated, async (req, res) => {
+app.get('/api/presets', ensureAuthenticated, dbApiLimiter, async (req, res) => {
   try {
     const userId = req.user.id;
     const result = await pool.query(
@@ -519,7 +579,7 @@ app.get('/api/presets', ensureAuthenticated, async (req, res) => {
 });
 
 // 프리셋 저장하기 (DB에 INSERT)
-app.post('/api/presets', ensureAuthenticated, async (req, res) => {
+app.post('/api/presets', ensureAuthenticated, dbApiLimiter, async (req, res) => {
   try {
     const userId = req.user.id;
     const { id: presetId, name, params } = req.body;
@@ -536,7 +596,7 @@ app.post('/api/presets', ensureAuthenticated, async (req, res) => {
 });
 
 // 프리셋 삭제하기 (DB에서 DELETE)
-app.delete('/api/presets/:id', ensureAuthenticated, async (req, res) => {
+app.delete('/api/presets/:id', ensureAuthenticated, dbApiLimiter, async (req, res) => {
   try {
     const userId = req.user.id;
     const presetId = req.params.id;
@@ -555,7 +615,7 @@ app.delete('/api/presets/:id', ensureAuthenticated, async (req, res) => {
 // --- VPS SETTINGS API (로그인 사용자 전용 설정 저장/복원) ---
 
 // VPS 설정 불러오기
-app.get('/api/vps-settings', ensureAuthenticated, async (req, res) => {
+app.get('/api/vps-settings', ensureAuthenticated, dbApiLimiter, async (req, res) => {
   try {
     const userId = req.user.id;
     const result = await pool.query(
@@ -570,7 +630,7 @@ app.get('/api/vps-settings', ensureAuthenticated, async (req, res) => {
 });
 
 // VPS 설정 저장 (UPSERT)
-app.put('/api/vps-settings', ensureAuthenticated, async (req, res) => {
+app.put('/api/vps-settings', ensureAuthenticated, dbApiLimiter, async (req, res) => {
   try {
     const userId = req.user.id;
     const settings = req.body;
@@ -596,17 +656,33 @@ app.use((req, res) => {
 
 // 6. 중앙 집중식 에러 핸들링 미들웨어 (모든 서버 에러의 종착역)
 app.use((err, req, res, next) => {
-    console.error(`[SERVER_EXCEPTION] ${err.stack || err.message}`);
+    // 1️⃣ Multer 파일 업로드 에러 방어
+    if (err instanceof multer.MulterError) {
+        return res.status(400).json({ error: `파일 업로드 오류: ${err.message}` });
+    }
+    
+    // 2️⃣ Body-parser (JSON) 문법 에러 방어 (해킹 시도나 엉뚱한 값 차단)
+    if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
+        console.warn('[MALFORMED_JSON] 이상한 형식의 데이터가 유입되어 차단했습니다.');
+        return res.status(400).json({ error: '잘못된 형식의 데이터(JSON)입니다.' });
+    }
 
-    // 외부에 민감한 에러 스택을 감추고 정제된 응답만 전송
-    const statusCode = err.status || 500;
+    // 파일이 남아있을 수 있는 경우(Multer 등 처리 직후) 쓰레기 파일 안전 삭제
+    if (req.file && req.file.path) {
+        fs.unlink(req.file.path).catch(() => {});
+    }
+
+    // 에러 로깅
+    console.error(`[SERVER_EXCEPTION] 경로: ${req.path} | 에러: ${err.stack || err.message}`);
+
+    // 3️⃣ 외부에 민감한 에러 정보 스택 유출 방지 (배포 환경)
+    const statusCode = err.status || err.statusCode || 500;
     res.status(statusCode).json({
         error: process.env.NODE_ENV === 'production'
-            ? 'Internal System Fault'
-            : err.message || 'Unknown Server Error'
+            ? '내부 시스템 오류가 발생했습니다. 잠시 후 다시 시도해주세요.'
+            : (err.message || 'Unknown Server Error')
     });
 });
-
 const server = app.listen(PORT, () => {
     console.log(`
     -------------------------------------------
@@ -617,9 +693,37 @@ const server = app.listen(PORT, () => {
     `);
 });
 
+// --- [KEEP-ALIVE SELF-PING] ---
+// 외부 cron-job 서비스가 중단될 경우에만(10분 이상 유입이 없을 때만) 스스로 URL을 호출하여 깨어있는 상태를 유지합니다.
+setInterval(() => {
+    const idleTime = Date.now() - lastRequestTime;
+    
+    // 10분(600,000ms) 동안 외부 요청(크론잡 등)이 단 한 건도 없었던 경우에만 자체 핑 가동
+    if (idleTime >= 10 * 60 * 1000) {
+        const targetUrl = process.env.PUBLIC_URL || 'https://ai-prod.live';
+        
+        axios.get(targetUrl)
+            .then(() => console.log(`[KEEP-ALIVE] cron-job missing for 10m. Emergency self-ping successful.`))
+            .catch(err => console.log(`[KEEP-ALIVE] Emergency self-ping failed: ${err.message}`));
+    }
+}, 1 * 60 * 1000); // 유휴 상태 여부는 매 1분마다 검사
+
 // 포트 중복 방지
 server.on('error', (e) => {
     if (e.code === 'EADDRINUSE') {
         process.exit(1);
     }
+});
+
+// ========================================================
+// 🚨 Node.js 치명적 시스템 에러 최후방 방어벽 (무중단 킵얼라이브)
+// ========================================================
+// 서버 전체를 강제 종료시킬 수 있는 동기식 예외를 캐치하여 프로세스를 살립니다.
+process.on('uncaughtException', (err) => {
+    console.error('[CRITICAL_SHIELD] Uncaught Exception 차단 성공:', err.stack || err.message);
+});
+
+// 처리되지 않은 비동기(Promise) 에러로 인해 서버가 터지는 것을 방지합니다.
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('[CRITICAL_SHIELD] Unhandled Rejection 차단 성공:', reason);
 });

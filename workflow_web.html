@@ -448,12 +448,21 @@
             </div>
 
             <div class="param-group">
-              <label>카메라 각도 (0-360°)</label>
+              <label>수평 회전 0-360°</label>
               <div class="slider-container">
                 <input type="range" id="param-angle" min="0" max="360" value="0" class="lab-slider">
                 <div class="angle-input-container">
                   <input type="number" id="angle-input" class="mono-val-input" value="0" min="0" max="360">
                   <span class="angle-unit">°</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="param-group" style="display: flex; flex-direction: column; min-width: 0;">
+              <label style="visibility: hidden;">수평 회전 0-360°</label>
+              <div style="flex: 1; display: flex; align-items: center; min-width: 0; overflow: visible;">
+                <div id="angle-description" style="color: var(--skills-purple); font-size: 0.9rem; font-weight: 500; white-space: nowrap;">
+                  Front View (정면)
                 </div>
               </div>
             </div>
@@ -483,7 +492,7 @@
                 <label>촬영 관점 (POV)</label>
                 <select id="param-pov" class="lab-select">
                   <option value="standard">기본 촬영 (Standard)</option>
-                  <option value="selfie">셀카 느낌 (Handheld Selfie)</option>
+                  <option value="selfie">셀카 느낌 (거울 셀카)</option>
                   <option value="arm-extended">셀카 (한쪽 팔 뻗음)</option>
                   <option value="candid">타인이 찍어준 느낌 (Candid)</option>
                   <option value="pov">1인칭 시점 (First Person POV)</option>
@@ -545,6 +554,29 @@
                   <option value="symmetry">대칭 구도 (Symmetry)</option>
                   <option value="diagonal">대각선 구도 (Diagonal)</option>
                   <option value="golden-ratio">황금비 구도 (Golden Ratio)</option>
+                </select>
+              </div>
+              <div class="param-group">
+                <label>종합 카메라 앵글 (Camera Angles)</label>
+                <select id="param-human-cam-angle" class="lab-select">
+                  <option value="none">기본 (None)</option>
+                  <optgroup label="1. 수직 각도 (Vertical)">
+                    <option value="birds-eye">버즈 아이 뷰 (Bird's Eye View)</option>
+                    <option value="high-angle">하이 앵글 (High Angle)</option>
+                    <option value="eye-level">아이 레벨 (Eye Level)</option>
+                    <option value="low-angle">로우 앵글 (Low Angle)</option>
+                    <option value="worms-eye">웜즈 아이 뷰 (Worm's Eye View)</option>
+                  </optgroup>
+                  <optgroup label="2. 수평 위치 및 관계 (Horizontal)">
+                    <option value="shoulder-level">숄더 레벨 (Shoulder Level)</option>
+                    <option value="over-the-shoulder">오버 더 숄더 (OTS)</option>
+                    <option value="hip-angle">힙 앵글 (Hip Angle)</option>
+                    <option value="knee-angle">니 앵글 (Knee Angle)</option>
+                  </optgroup>
+                  <optgroup label="3. 특수 앵글 (Special)">
+                    <option value="dutch-angle">더치 앵글 (Dutch Angle)</option>
+                    <option value="pov">POV (1인칭 시점)</option>
+                  </optgroup>
                 </select>
               </div>
             </div>
@@ -641,6 +673,29 @@
                   <option value="dynamic">역동적 구도 (Dynamic)</option>
                 </select>
               </div>
+              <div class="param-group">
+                <label>종합 카메라 앵글 (Camera Angles)</label>
+                <select id="param-animal-cam-angle" class="lab-select">
+                  <option value="none">기본 (None)</option>
+                  <optgroup label="1. 수직 각도 (Vertical)">
+                    <option value="birds-eye">버즈 아이 뷰 (Bird's Eye View)</option>
+                    <option value="high-angle">하이 앵글 (High Angle)</option>
+                    <option value="eye-level">아이 레벨 (Eye Level)</option>
+                    <option value="low-angle">로우 앵글 (Low Angle)</option>
+                    <option value="worms-eye">웜즈 아이 뷰 (Worm's Eye View)</option>
+                  </optgroup>
+                  <optgroup label="2. 수평 위치 및 관계 (Horizontal)">
+                    <option value="shoulder-level">숄더 레벨 (Shoulder Level)</option>
+                    <option value="over-the-shoulder">오버 더 숄더 (OTS)</option>
+                    <option value="hip-angle">힙 앵글 (Hip Angle)</option>
+                    <option value="knee-angle">니 앵글 (Knee Angle)</option>
+                  </optgroup>
+                  <optgroup label="3. 특수 앵글 (Special)">
+                    <option value="dutch-angle">더치 앵글 (Dutch Angle)</option>
+                    <option value="pov">POV (1인칭 시점)</option>
+                  </optgroup>
+                </select>
+              </div>
             </div>
           </div>
 
@@ -699,6 +754,29 @@
                   <option value="golden-spiral">황금 나선 구도 (Golden Spiral)</option>
                 </select>
               </div>
+              <div class="param-group">
+                <label>종합 카메라 앵글 (Camera Angles)</label>
+                <select id="param-scene-cam-angle" class="lab-select">
+                  <option value="none">기본 (None)</option>
+                  <optgroup label="1. 수직 각도 (Vertical)">
+                    <option value="birds-eye">버즈 아이 뷰 (Bird's Eye View)</option>
+                    <option value="high-angle">하이 앵글 (High Angle)</option>
+                    <option value="eye-level">아이 레벨 (Eye Level)</option>
+                    <option value="low-angle">로우 앵글 (Low Angle)</option>
+                    <option value="worms-eye">웜즈 아이 뷰 (Worm's Eye View)</option>
+                  </optgroup>
+                  <optgroup label="2. 수평 위치 및 관계 (Horizontal)">
+                    <option value="shoulder-level">숄더 레벨 (Shoulder Level)</option>
+                    <option value="over-the-shoulder">오버 더 숄더 (OTS)</option>
+                    <option value="hip-angle">힙 앵글 (Hip Angle)</option>
+                    <option value="knee-angle">니 앵글 (Knee Angle)</option>
+                  </optgroup>
+                  <optgroup label="3. 특수 앵글 (Special)">
+                    <option value="dutch-angle">더치 앵글 (Dutch Angle)</option>
+                    <option value="pov">POV (1인칭 시점)</option>
+                  </optgroup>
+                </select>
+              </div>
             </div>
           </div>
 
@@ -742,7 +820,10 @@
           <div class="visualizer-output">
             <div class="output-header">
               <div class="label-mono">프롬프트 (최적화)</div>
-              <button class="btn-copy" id="copy-btn">복사</button>
+              <div style="display: flex; gap: 8px;">
+                <button class="btn-copy" id="json-btn">JSON 복사</button>
+                <button class="btn-copy" id="copy-btn">복사</button>
+              </div>
             </div>
             <div id="optimized-output" class="output-block"
               style="min-height: 200px; font-size: 0.85rem; line-height: 1.6; padding: 20px;">
@@ -1090,15 +1171,18 @@
       </div>
 
       <!-- ===== 통합 기획서 내보내기 ===== -->
-      <div class="vps-export-bar" style="margin-top: 40px; padding-top: 24px; border-top: 1px dashed var(--border-strong); display: flex; flex-direction: column; align-items: center; gap: 16px;">
+      <div class="vps-export-bar"
+        style="margin-top: 40px; padding-top: 24px; border-top: 1px dashed var(--border-strong); display: flex; flex-direction: column; align-items: center; gap: 16px;">
         <div class="label-mono" style="margin: 0;">EXPORT FULL MASTERPLAN (통합 기획서 내보내기)</div>
-        <p style="font-size: 0.8rem; color: var(--fg-dim); margin: 0; text-align: center;">지금까지 생성된 6개의결과(컨셉, 스토리보드, 숏리스트, BGM, 자막, SEO)를<br>하나의 문서로 합쳐서 다운로드합니다.</p>
+        <p style="font-size: 0.8rem; color: var(--fg-dim); margin: 0; text-align: center;">지금까지 생성된 6개의결과(컨셉, 스토리보드,
+          숏리스트, BGM, 자막, SEO)를<br>하나의 문서로 합쳐서 다운로드합니다.</p>
         <div style="display: flex; gap: 16px;">
           <button class="btn-skills secondary" id="btn-export-txt" style="padding: 12px 24px; font-weight: 700;">
             📝 텍스트(.txt) 저장
           </button>
-          <button class="btn-skills secondary" id="btn-export-pdf" style="padding: 12px 24px; font-weight: 700; background: var(--skills-purple); color: #fff; border-color: var(--skills-purple);">
-            🖨️ PDF 변환 / 인쇄
+          <button class="btn-skills secondary" id="btn-export-pdf"
+            style="padding: 12px 24px; font-weight: 700; background: var(--skills-purple); color: #fff; border-color: var(--skills-purple);">
+            🖨️ PDF 저장
           </button>
         </div>
       </div>

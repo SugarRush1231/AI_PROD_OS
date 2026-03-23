@@ -4,6 +4,7 @@ const UI = {
   engineerBtn: document.getElementById('engineer-btn'),
   optimizedOutput: document.getElementById('optimized-output'),
   copyBtn: document.getElementById('copy-btn'),
+  jsonBtn: document.getElementById('json-btn'),
   layers: [
     document.getElementById('layer-1'),
     document.getElementById('layer-2'),
@@ -12,6 +13,9 @@ const UI = {
   paramType: document.getElementById('param-type'),
   paramStyle: document.getElementById('param-style'),
   paramAngle: document.getElementById('param-angle'),
+  paramHumanCamAngle: document.getElementById('param-human-cam-angle'),
+  paramAnimalCamAngle: document.getElementById('param-animal-cam-angle'),
+  paramSceneCamAngle: document.getElementById('param-scene-cam-angle'),
   paramBgHuman: document.getElementById('param-bg-human'),
   paramBgAnimal: document.getElementById('param-bg-animal'),
   paramBgScene: document.getElementById('param-bg-scene'),
@@ -206,6 +210,9 @@ const MyPresets = {
       paramStyle: 'cinematic',
       paramAngle: '0',
       angleInput: '0',
+      paramHumanCamAngle: 'none',
+      paramAnimalCamAngle: 'none',
+      paramSceneCamAngle: 'none',
       paramBgHuman: 'none',
       paramBgAnimal: 'none',
       paramBgScene: 'none',
@@ -275,6 +282,9 @@ const MyPresets = {
         paramType: UI.paramType?.value,
         paramStyle: UI.paramStyle?.value,
         paramAngle: UI.paramAngle?.value,
+        paramHumanCamAngle: UI.paramHumanCamAngle?.value,
+        paramAnimalCamAngle: UI.paramAnimalCamAngle?.value,
+        paramSceneCamAngle: UI.paramSceneCamAngle?.value,
         paramBgHuman: UI.paramBgHuman?.value,
         paramBgAnimal: UI.paramBgAnimal?.value,
         paramBgScene: UI.paramBgScene?.value,
@@ -1134,10 +1144,16 @@ async function applyEngineering() {
     else if (subjectType === 'animal' && UI.paramBgAnimal) selectedBg = UI.paramBgAnimal.value;
     else if (UI.paramBgScene) selectedBg = UI.paramBgScene.value;
 
+    let selectedCamAngle = 'none';
+    if (subjectType === 'human' && UI.paramHumanCamAngle) selectedCamAngle = UI.paramHumanCamAngle.value;
+    else if (subjectType === 'animal' && UI.paramAnimalCamAngle) selectedCamAngle = UI.paramAnimalCamAngle.value;
+    else if (subjectType === 'scene' && UI.paramSceneCamAngle) selectedCamAngle = UI.paramSceneCamAngle.value;
+
     const config = {
       type: subjectType,
       style: UI.paramStyle ? UI.paramStyle.value : 'cinematic',
       angle: UI.paramAngle ? UI.paramAngle.value : '0',
+      camAngle: selectedCamAngle,
       bg: selectedBg,
       pose: UI.paramPose ? UI.paramPose.value : 'dynamic',
       pov: UI.paramPov ? UI.paramPov.value : 'standard',
@@ -1218,9 +1234,11 @@ async function applyEngineering() {
     const startTime = Date.now();
 
     // Construct Context-Aware Intent
-    const povDescription = (config.pov === 'arm-extended' || config.pov === 'selfie')
-      ? 'Mode: Selfie. It looks like a photo taken with an outstretched arm. Intimate connection.'
-      : `Mode: Fixed Camera. Perspective: ${config.pov}. STRICTLY FORBID any mention of selfies, arms reaching out, or handheld cameras. This is a tripod or professional camera shot.`;
+    const povDescription = config.pov === 'arm-extended'
+      ? 'Mode: First-Person Selfie. It looks like a photo taken with an outstretched arm. Intimate connection.'
+      : config.pov === 'selfie'
+        ? 'Mode: Mirror Selfie or Handheld Selfie. The subject is holding a smartphone or camera visibly in the frame, taking a picture (e.g., looking into a mirror).'
+        : `Mode: Fixed Camera. Perspective: ${config.pov}. STRICTLY FORBID any mention of selfies, arms reaching out, or handheld cameras. This is a tripod or professional camera shot.`;
 
     let poseDescription = config.pose || 'none';
     let outfitText = config.outfit || 'none';
@@ -1327,6 +1345,7 @@ async function applyEngineering() {
         background: bgDescription,
         camera: {
           angle: config.angle,
+          camAngle: config.camAngle,
           perspective: povDescription,
           shot: config.animalShot,
           composition: config.animalComp
@@ -1345,6 +1364,7 @@ async function applyEngineering() {
         background: bgDescription,
         camera: {
           angle: config.angle,
+          camAngle: config.camAngle,
           perspective: povDescription,
           shot: config.sceneShot,
           composition: config.sceneComp
@@ -1371,6 +1391,7 @@ async function applyEngineering() {
         background: bgDescription,
         camera: {
           angle: config.angle,
+          camAngle: config.camAngle,
           perspective: povDescription,
           shot: config.humanShot,
           composition: config.humanComp
@@ -1379,6 +1400,16 @@ async function applyEngineering() {
     }
 
     // --- 2. ASSEMBLE FINAL PROMPT INTENT (TYPE-AWARE Natural Language Format) ---
+    const getAngleText = (angleStr) => {
+      const num = parseInt(angleStr, 10);
+      if (num >= 0 && num <= 15) return `${num} degrees (Front View, straight on)`;
+      if (num >= 16 && num <= 60) return `${num} degrees (Three-Quarter View)`;
+      if (num >= 61 && num <= 120) return `${num} degrees (Side Profile)`;
+      if (num >= 121 && num <= 240) return `${num} degrees (Back View, from behind)`;
+      if (num >= 241 && num <= 344) return `${num} degrees (Reverse Side Profile, moving around the subject)`;
+      if (num >= 345 && num <= 360) return `${num} degrees (Front View, straight on)`;
+      return `${num} degrees`;
+    };
     if (config.type === 'animal') {
       enrichedIntent = `
 [CORE DESIGN SPECIFICATIONS]
@@ -1392,7 +1423,8 @@ ${PromptContext.core.catBreed !== 'none' ? `- Cat Breed: ${PromptContext.core.ca
 [VISUAL ENVIRONMENT]
 - Visual Style: ${PromptContext.visual.style}
 - Background: ${PromptContext.visual.background}
-- Camera Angle: ${PromptContext.visual.camera.angle} degrees
+- Camera Angle (Horizontal Orbit): ${getAngleText(PromptContext.visual.camera.angle)}
+${PromptContext.visual.camera.camAngle !== 'none' ? `- Cinematic Camera Angle: ${PromptContext.visual.camera.camAngle}` : ''}
 ${PromptContext.visual.camera.shot !== 'none' ? `- Camera Shot: ${PromptContext.visual.camera.shot}` : ''}
 ${PromptContext.visual.camera.composition !== 'none' ? `- Composition: ${PromptContext.visual.camera.composition}` : ''}
 - Perspective: ${PromptContext.visual.camera.perspective}
@@ -1409,7 +1441,8 @@ ${PromptContext.visual.camera.composition !== 'none' ? `- Composition: ${PromptC
 [VISUAL ENVIRONMENT]
 - Visual Style: ${PromptContext.visual.style}
 - Background: ${PromptContext.visual.background}
-- Camera Angle: ${PromptContext.visual.camera.angle} degrees
+- Camera Angle (Horizontal Orbit): ${getAngleText(PromptContext.visual.camera.angle)}
+${PromptContext.visual.camera.camAngle !== 'none' ? `- Cinematic Camera Angle: ${PromptContext.visual.camera.camAngle}` : ''}
 ${PromptContext.visual.camera.shot !== 'none' ? `- Camera Shot: ${PromptContext.visual.camera.shot}` : ''}
 ${PromptContext.visual.camera.composition !== 'none' ? `- Composition: ${PromptContext.visual.camera.composition}` : ''}
 - Perspective: ${PromptContext.visual.camera.perspective}
@@ -1427,7 +1460,8 @@ ${PromptContext.visual.camera.composition !== 'none' ? `- Composition: ${PromptC
 [VISUAL ENVIRONMENT]
 - Visual Style: ${PromptContext.visual.style}
 - Background: ${PromptContext.visual.background}
-- Camera Angle: ${PromptContext.visual.camera.angle} degrees
+- Camera Angle (Horizontal 0-360): ${PromptContext.visual.camera.angle} degrees
+${PromptContext.visual.camera.camAngle !== 'none' ? `- Vertical Camera Angle: ${PromptContext.visual.camera.camAngle}` : ''}
 ${PromptContext.visual.camera.shot !== 'none' ? `- Camera Shot: ${PromptContext.visual.camera.shot}` : ''}
 ${PromptContext.visual.camera.composition !== 'none' ? `- Composition: ${PromptContext.visual.camera.composition}` : ''}
 - Perspective: ${PromptContext.visual.camera.perspective}
@@ -1498,6 +1532,24 @@ ${PromptContext.visual.camera.composition !== 'none' ? `- Composition: ${PromptC
 
     const data = await apiPromise; // Wait purely for the true API response
     const endTime = Date.now();
+
+    // [하드코딩] 셀카 POV별 기형 / 기기 노출 분기 처리
+    let selfieNegatives = "";
+    if (config.pov === 'arm-extended') {
+      // 1인칭 순수 시점 (스마트폰/기기 노출 금지 + 신체 기형 방지)
+      selfieNegatives = "- Smartphone, Camera, Hand holding device, Mobile phone, Selfie stick, monopod, extra hands, multiple arms, floating limbs, disconnected arms, weird fingers, deformed arm, long arm, deformed phone, holding two phones";
+    } else if (config.pov === 'selfie') {
+      // 거울 셀카 등 (뷰어 상 기기 노출 허용, 신체 기형만 엄격 방지)
+      selfieNegatives = "- extra hands, multiple arms, floating limbs, disconnected arms, weird fingers, deformed arm, long arm, holding two phones";
+    }
+
+    if (selfieNegatives) {
+      if (data.result.includes('# Negative Prompts') || data.result.includes('# Negative Prompts:')) {
+        data.result += `\n${selfieNegatives}`;
+      } else {
+        data.result += `\n\n# Negative Prompts\n${selfieNegatives}`;
+      }
+    }
     const duration = endTime - startTime;
 
     // API 도착 후 즉시 모든 레이어를 성공("완료") 상태로 변경 (시간차 없이 자연스럽게)
@@ -1735,6 +1787,87 @@ if (UI.copyBtn) {
       UI.copyBtn.innerText = '완료!';
       setTimeout(() => UI.copyBtn.innerText = originalText, 2000);
       addLog('✓ 최적화 프롬프트가 복사되었습니다.');
+    }
+  });
+}
+
+// 프롬프트 JSON 복사 리스너
+if (UI.jsonBtn) {
+  UI.jsonBtn.addEventListener('click', () => {
+    const el = UI.optimizedOutput;
+    const text = el ? el.innerText : '';
+    const isLoading = el && el._loadingInterval;
+
+    if (text && !isLoading && !text.includes('대기 중') && !text.includes('설계 중')) {
+      const parsedPrompt = {};
+      const lines = text.split('\n');
+      let currentKey = "general";
+
+      lines.forEach(line => {
+        const trimmed = line.trim();
+        if (!trimmed) return;
+
+        // Headers like **Heading**
+        const headerMatch = trimmed.match(/^\*\*(.*?)\*\*$/);
+        if (headerMatch) {
+          currentKey = headerMatch[1].trim();
+          parsedPrompt[currentKey] = "";
+        }
+        // Headers like # Negative Prompts or # Negative Prompts:
+        else if (trimmed.startsWith('#')) {
+          const colonIndex = trimmed.indexOf(':');
+          if (colonIndex !== -1) {
+            currentKey = trimmed.substring(1, colonIndex).trim();
+            const val = trimmed.substring(colonIndex + 1).trim();
+            parsedPrompt[currentKey] = val;
+          } else {
+            currentKey = trimmed.substring(1).trim();
+            parsedPrompt[currentKey] = "";
+          }
+        }
+        else {
+          if (!parsedPrompt[currentKey]) parsedPrompt[currentKey] = "";
+          parsedPrompt[currentKey] += (parsedPrompt[currentKey] ? " " : "") + trimmed;
+        }
+      });
+
+      // 공백 정리
+      Object.keys(parsedPrompt).forEach(key => {
+        parsedPrompt[key] = parsedPrompt[key].trim();
+      });
+
+      // 기사 레퍼런스(aisparkup) 스타일 구조화 (Nested JSON Schema)
+      const mappedJson = {
+        "task": "Generate a professional high-fidelity image",
+        "description": {},
+        "constraints": {}
+      };
+
+      Object.keys(parsedPrompt).forEach(key => {
+        const lKey = key.toLowerCase();
+
+        if (lKey.includes('technical') || lKey.includes('architecture')) {
+          mappedJson.constraints["technical_architecture"] = parsedPrompt[key];
+        } else if (lKey.includes('negative')) {
+          mappedJson.constraints["negative_prompts"] = parsedPrompt[key];
+        } else if (lKey.includes('identity') || lKey.includes('style') || lKey.includes('subject')) {
+          mappedJson.description["subject_and_style"] = parsedPrompt[key];
+        } else if (lKey.includes('physical') || lKey.includes('material') || lKey.includes('detail')) {
+          mappedJson.description["physical_attributes"] = parsedPrompt[key];
+        } else if (lKey.includes('pose') || lKey.includes('context') || lKey.includes('environment') || lKey.includes('composition')) {
+          mappedJson.description["scene_and_context"] = parsedPrompt[key];
+        } else {
+          // 기타 키워드 방어 로직
+          mappedJson.description[key.replace(/ /g, '_').toLowerCase()] = parsedPrompt[key];
+        }
+      });
+
+      navigator.clipboard.writeText(JSON.stringify(mappedJson, null, 2));
+
+      const originalText = UI.jsonBtn.innerText;
+      UI.jsonBtn.innerText = '완료!';
+      setTimeout(() => UI.jsonBtn.innerText = originalText, 2000);
+      addLog('✓ 프롬프트 세부 내용 파싱 후 JSON 형식으로 복사되었습니다.', 'success');
     }
   });
 }
@@ -2149,4 +2282,39 @@ VPS_SETTING_IDS.forEach(id => {
 
 // 1. 페이지 로드 시 즉각 복원 (시각적으로 옵션이 나중에 바뀌는 깜빡임 완전 방지)
 restoreLocalVpsSettings();
+
+// --- 0-360도 수평 회전 자동 라벨링 부착 ---
+window.updateAngleDescription = function (val) {
+  const descEl = document.getElementById('angle-description');
+  if (!descEl) return;
+  const num = parseInt(val, 10);
+
+  let title = "Front View (정면)";
+  if (num >= 0 && num <= 15) title = "Front View (정면)";
+  else if (num >= 16 && num <= 60) title = "Three-Quarter View (쿼터)";
+  else if (num >= 61 && num <= 120) title = "Side Profile (측면)";
+  else if (num >= 121 && num <= 240) title = "Back View (후면)";
+  else if (num >= 241 && num <= 344) title = "Reverse Side (반대측면)";
+  else if (num >= 345 && num <= 360) title = "Front View (정면)";
+
+  const htmlContent = title;
+
+  if (descEl.innerHTML !== htmlContent) {
+    descEl.innerHTML = htmlContent;
+  }
+};
+
+setTimeout(() => {
+  const angleSlider = document.getElementById('param-angle');
+  const angleInput = document.getElementById('angle-input');
+  if (angleSlider) {
+    angleSlider.addEventListener('input', (e) => window.updateAngleDescription(e.target.value));
+  }
+  if (angleInput) {
+    angleInput.addEventListener('input', (e) => {
+      if (angleSlider) angleSlider.value = e.target.value;
+      window.updateAngleDescription(e.target.value);
+    });
+  }
+}, 500);
 

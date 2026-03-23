@@ -199,7 +199,7 @@ const MyPresets = {
 
   resetForm() {
     this.activeId = null;
-    
+
     // 1. 셀렉트 박스류 초기화
     const defaults = {
       paramType: 'human',
@@ -241,7 +241,7 @@ const MyPresets = {
     if (UI.paramCustom) UI.paramCustom.value = '';
     if (UI.intentInput) UI.intentInput.value = '';
     document.querySelectorAll('.chip.active').forEach(c => c.classList.remove('active'));
-    
+
     // 3. UI 정리
     document.querySelectorAll('.preset-chip').forEach(c => c.classList.remove('active'));
     addLog('✓ 설정이 초기화되었습니다.', 'info');
@@ -771,7 +771,7 @@ if (UI.paramAngle && UI.angleInput) {
     sections.forEach(sec => {
       const el = document.getElementById(sec.id);
       let content = '(아직 생성되지 않았습니다)';
-      
+
       if (el) {
         // 화면 숨김(display:none) 상태에 의한 줄바꿈 삭제를 방지하기 위해 생성 시 저장된 원본 데이터(rawResult) 우선 사용
         const rawText = el.dataset.rawResult || el.innerText;
@@ -779,7 +779,7 @@ if (UI.paramAngle && UI.angleInput) {
           content = rawText.trim();
         }
       }
-      
+
       // TXT Append
       txtContent += `[ ${sec.title} ]\n`;
       txtContent += `${content}\n\n`;
@@ -818,7 +818,7 @@ if (UI.paramAngle && UI.angleInput) {
         win.document.open();
         win.document.write(html);
         win.document.close();
-        
+
         // 인쇄창 호출 (약간의 딜레이 후 렌더링 보장)
         setTimeout(() => {
           win.focus();
@@ -1013,29 +1013,44 @@ function getVpsToolConfig(tool) {
       outputEl: document.getElementById('vps-bgm-output'),
       systemPrompt: (() => {
         const mood = document.getElementById('vps-bgm-mood')?.value || 'auto';
-        return `당신은 영상 음악 감독입니다. 주어진 영상 내용을 분석하여 장면별 BGM과 효과음을 추천하세요.
+        const musicType = document.getElementById('vps-bgm-type')?.value || 'auto';
 
-[원하는 분위기] ${mood === 'auto' ? '내용에 맞게 자동 판단' : mood}
+        let typeInstruction = '';
+        let keywordSuffix = '';
+        if (musicType === 'inst') {
+          typeInstruction = `\n[음악 유형] 인스트루멘탈 전용 (Instrumental Only)\n- 반드시 보컬이 없는 인스트루멘탈(inst) 버전만 추천하세요.\n- 원곡이 보컬 곡이라면 반드시 "(Inst)" 또는 "(Instrumental)" 버전을 명시하세요.`;
+          keywordSuffix = ' + "inst" 또는 "instrumental" 키워드를 반드시 포함';
+        } else if (musicType === 'vocal') {
+          typeInstruction = `\n[음악 유형] 보컬 포함 (With Vocals)\n- 보컬이 포함된 곡 위주로 추천하세요. 가사가 영상 분위기와 어울리는 곡을 선정하세요.`;
+          keywordSuffix = '';
+        }
+
+        return `당신은 10년 경력의 영상 음악 감독이자 음악 큐레이터입니다. 주어진 영상 내용을 분석하여 장면별 BGM과 효과음을 추천하세요.
+
+[원하는 분위기] ${mood === 'auto' ? '내용에 맞게 자동 판단' : mood}${typeInstruction}
 
 [출력 형식]
 🎵 전체 분위기 요약:
-(이 영상에 어울리는 전반적인 음악 방향)
+(이 영상에 어울리는 전반적인 음악 방향${musicType === 'inst' ? ' — 인스트루멘탈 기반' : ''})
 
 📋 장면별 BGM 추천:
 각 장면마다:
 ---
 🎬 장면: (장면 설명)
-🎵 추천 BGM 스타일: (장르/분위기)
-🔍 검색 키워드: (유튜브 오디오 라이브러리나 무료 BGM 사이트에서 검색할 키워드)
-💡 비슷한 레퍼런스: (이런 느낌의 유명한 곡 참고)
+🎵 추천곡: (실제 존재하는 곡 제목) - (실제 아티스트/작곡가 이름)${musicType === 'inst' ? ' (Inst Ver.)' : ''}
+🎵 대안곡: (다른 실제 곡 제목) - (아티스트)${musicType === 'inst' ? ' (Inst)' : ''}
+🔍 유튜브 검색어: (이 곡을 유튜브에서 찾기 위한 정확한 검색어${keywordSuffix})
 📢 추천 효과음: (이 장면에 필요한 SFX)
 ---
 
-[규칙]
-- 100% 한글 작성
-- 저작권 무료(로열티 프리) 음원 위주 추천
+[핵심 규칙]
+- ★★★ 가장 중요: 반드시 실제로 존재하는 곡명과 아티스트를 추천하세요. 가상의 곡이나 존재하지 않는 곡을 지어내지 마세요.
+- 추천곡 카테고리:
+  1. 로열티 프리 곡: YouTube Audio Library, Epidemic Sound, Artlist 등에서 실제로 제공하는 곡
+  2. 유명곡 레퍼런스: 분위기 참고용으로 실제 유명한 곡 (저작권 유의 표시)
+- 100% 한글 작성 (곡명/아티스트는 원어 표기)
 - 장면 전환 시 음악 전환 포인트도 제안
-- 3~8개 장면으로 구분`;
+- 3~8개 장면으로 구분${musicType === 'inst' ? '\n- ★ 모든 추천곡은 반드시 인스트루멘탈(inst) 버전이어야 합니다. 보컬이 포함된 원곡을 추천할 경우 반드시 "(Inst Ver.)" 을 명시하세요.' : ''}`;
       })()
     },
     concept: {
@@ -1066,8 +1081,16 @@ function getVpsToolConfig(tool) {
 📋 영상 구성 (흐름):
 (도입 → 전개 → 클라이맥스 → 마무리 순서로)
 
-📐 레퍼런스 채널/영상:
-(비슷한 느낌의 유명 채널이나 영상 스타일 제안)
+📐 벤치마킹 콘텐츠 가이드:
+(특정 채널명을 추천하지 말고, 아래 형식으로 벤치마킹할 콘텐츠 유형을 안내)
+- 벤치마킹 유형 1:
+  콘텐츠 스타일: (예: "감성 일상 브이로그", "빠른 편집의 숏폼 꿀팁" 등)
+  유튜브 검색어: (이런 스타일의 채널을 찾기 위한 검색 키워드)
+  참고할 포인트: (이 스타일에서 벤치마킹할 구체적인 요소 — 편집, 구성, 썸네일 등)
+- 벤치마킹 유형 2:
+  콘텐츠 스타일: (다른 참고 스타일)
+  유튜브 검색어: (검색 키워드)
+  참고할 포인트: (벤치마킹 요소)
 
 💡 차별화 포인트:
 (경쟁 영상 대비 이 영상만의 강점)
@@ -1077,7 +1100,8 @@ function getVpsToolConfig(tool) {
 [규칙]
 - 100% 한글 작성
 - ${platform} 사용자 특성에 맞게 최적화
-- 현실적이고 실행 가능한 기획`;
+- 현실적이고 실행 가능한 기획
+- ★★★ 절대 특정 유튜브 채널명이나 URL을 언급하지 마세요. AI는 실제 채널을 알 수 없으므로, 존재하지 않는 채널을 지어낼 수 있습니다. 대신 "유튜브 검색어"를 제공하여 사용자가 직접 찾도록 안내하세요.`;
       })()
     }
   };
@@ -1150,9 +1174,9 @@ async function applyEngineering() {
     addLog(`  - Background: ${config.bg}`, 'secondary');
 
     // 3단계: 시각적 레이어 처리 (Process Layers)
-    UI.layers.forEach(l => { 
+    UI.layers.forEach(l => {
       if (l) {
-        l.classList.remove('active'); 
+        l.classList.remove('active');
         l.style.borderColor = '';
         const status = l.querySelector('.layer-status');
         if (status) {
@@ -1169,13 +1193,13 @@ async function applyEngineering() {
         layer.style.borderColor = ''; // reset border from previous run
         const status = layer.querySelector('.layer-status');
         if (status) status.innerHTML = '<span class="spinner-icon"></span> 최적화 중...';
-        
+
         const logs = [
           '> [L1] Context & Alignment Processing...',
           '> [L2] Style Consistency Refinement...',
           '> [L3] Semantic Expansion & Details...'
         ];
-        addLog(logs[i] || `> [L${i+1}] Processing...`, 'success');
+        addLog(logs[i] || `> [L${i + 1}] Processing...`, 'success');
         await new Promise(r => setTimeout(r, 300));
       }
     }
@@ -1544,7 +1568,7 @@ async function generateSubtitles() {
   const format = UI.paramSubFormat.value;
   const tempo = UI.paramSubTempo.value;
   const context = UI.paramSubContext ? UI.paramSubContext.value.trim() : '';
-  
+
   // 🎯 비디오 전용 입력창(paramSubIntent)을 최우선으로, 없으면 상단 공통 입력창(intentInput) 사용
   let vIntent = UI.paramSubIntent && UI.paramSubIntent.value.trim();
   if (!vIntent) vIntent = UI.intentInput.value.trim();
@@ -1566,7 +1590,7 @@ async function generateSubtitles() {
   try {
     if (UI.subGenBtn) UI.subGenBtn.disabled = true;
     if (UI.subtitleOutput) startLoadingAnimation(UI.subtitleOutput, isAudioMode ? 'Whisper AI 음성 분석 중' : '자막 타임라인 연산 중');
-    
+
     addLog(`$ VIDEO_SUB_ENGINE --mode=${isAudioMode ? 'WHISPER_STT' : 'AI_GEN'} --format=${format}`, 'secondary');
 
     if (isAudioMode) {
@@ -1575,7 +1599,7 @@ async function generateSubtitles() {
       formData.append('audio', UI.audioFileInput.files[0]);
 
       addLog('>> [SYSTEM] Sending audio to Whisper AI...', 'primary');
-      
+
       const whisperRes = await fetch('/api/whisper', {
         method: 'POST',
         body: formData
@@ -1588,7 +1612,7 @@ async function generateSubtitles() {
 
       const whisperData = await whisperRes.json();
       stopLoadingAnimation(UI.subtitleOutput);
-      
+
       if (UI.subtitleOutput) {
         UI.subtitleOutput.innerText = whisperData.result;
         UI.subtitleOutput.dataset.rawResult = whisperData.result;
@@ -1605,41 +1629,41 @@ async function generateSubtitles() {
     let secondsPerBlock = 5;
     let tempoDesc = "보통 속도 (한 블록당 약 5초)";
     if (tempo === 'slow') {
-        secondsPerBlock = 7;
-        tempoDesc = "느리고 감성적인 속도 (한 블록당 약 7~8초 배정, 대사를 길게 풀어서)";
+      secondsPerBlock = 7;
+      tempoDesc = "느리고 감성적인 속도 (한 블록당 약 7~8초 배정, 대사를 길게 풀어서)";
     } else if (tempo === 'fast') {
-        secondsPerBlock = 3;
-        tempoDesc = "빠르고 경쾌한 속도 (한 블록당 2~3초 배정, 틱톡/릴스 숏폼처럼 짧고 타격감 있게)";
+      secondsPerBlock = 3;
+      tempoDesc = "빠르고 경쾌한 속도 (한 블록당 2~3초 배정, 틱톡/릴스 숏폼처럼 짧고 타격감 있게)";
     }
-    
+
     let blockCount = Math.max(1, Math.floor(durationNum / secondsPerBlock));
 
     // LLM 컨텍스트 한계 및 넘버링 무한 구조 붕괴(Loop) 방지를 위해 최대 블록 수를 10개로 제한
     if (blockCount > 10) {
-        blockCount = 10;
-        secondsPerBlock = Math.floor(durationNum / 10); 
-        tempoDesc = `긴 호흡의 스토리텔링 (한 블록당 약 ${secondsPerBlock}초씩, 총 ${blockCount}블록)`;
+      blockCount = 10;
+      secondsPerBlock = Math.floor(durationNum / 10);
+      tempoDesc = `긴 호흡의 스토리텔링 (한 블록당 약 ${secondsPerBlock}초씩, 총 ${blockCount}블록)`;
     }
 
     let timeJumpWarning = "";
     if (secondsPerBlock >= 10) {
-        timeJumpWarning = `\n    (★타임코드 간격: 블록 하나의 시작~종료 시간 간격을 반드시 ${secondsPerBlock}초 이상으로 넓게 잡으세요.)`;
+      timeJumpWarning = `\n    (★타임코드 간격: 블록 하나의 시작~종료 시간 간격을 반드시 ${secondsPerBlock}초 이상으로 넓게 잡으세요.)`;
     }
 
     let formatInstruction = "";
     if (format === 'srt') {
-        formatInstruction = `[출력 형식: SRT]${timeJumpWarning}
+      formatInstruction = `[출력 형식: SRT]${timeJumpWarning}
     (순번)
     (시작) --> (종료)
     (이 블록 안에서 ${secondsPerBlock}초 분량의 긴 대사를 작성)
     [빈 줄]`;
     } else if (format === 'script') {
-        formatInstruction = `[출력 형식: 나레이션 대본]${timeJumpWarning}
+      formatInstruction = `[출력 형식: 나레이션 대본]${timeJumpWarning}
     [시작 ~ 종료]
     (이 블록 안에서 ${secondsPerBlock}초 분량의 긴 대사를 작성)
     [빈 줄]`;
     } else {
-        formatInstruction = `[출력 형식: 순수 텍스트]
+      formatInstruction = `[출력 형식: 순수 텍스트]
     타임코드나 번호 없이, 단락으로 구분된 대본만 작성하세요.`;
     }
 
@@ -1668,12 +1692,12 @@ ${formatInstruction}`;
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ intent, systemPrompt })
     });
-    
+
     const data = await res.json();
     stopLoadingAnimation(UI.subtitleOutput);
 
     if (!res.ok) {
-        throw new Error(data.error || 'AI 엔진 응답 실패');
+      throw new Error(data.error || 'AI 엔진 응답 실패');
     }
 
     if (UI.subtitleOutput) {
@@ -1704,7 +1728,7 @@ if (UI.copyBtn) {
     const text = el ? el.innerText : '';
     // 🛡️ 애니메이션 엔진의 상태를 직접 체크하여 더 완벽하게 방어
     const isLoading = el && el._loadingInterval;
-    
+
     if (text && !isLoading && !text.includes('대기 중') && !text.includes('설계 중')) {
       navigator.clipboard.writeText(text);
       const originalText = UI.copyBtn.innerText;
@@ -1744,13 +1768,13 @@ if (UI.downloadSrtBtn) {
       const blob = new Blob([text], { type: 'text/plain' });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
-      
-      
+
+
       // 파일명 및 확장자 동적 지정
       const currentFormat = UI.paramSubFormat ? UI.paramSubFormat.value : 'srt';
       const ext = currentFormat === 'srt' ? 'srt' : 'txt';
       let fileName = `subtitles.${ext}`;
-      
+
       if (UI.fileNameDisplay && UI.fileNameDisplay.innerText !== 'None') {
         const baseName = UI.fileNameDisplay.innerText.substring(0, UI.fileNameDisplay.innerText.lastIndexOf('.')) || 'subtitles';
         fileName = `${baseName}.${ext}`;
@@ -1762,13 +1786,13 @@ if (UI.downloadSrtBtn) {
       a.download = fileName;
       document.body.appendChild(a);
       a.click();
-      
+
       // 정리
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
-      
+
       addLog(`✓ 자막 파일 다운로드 시작: ${fileName}`, 'success');
-      
+
       const originalText = UI.downloadSrtBtn.innerText;
       UI.downloadSrtBtn.innerText = '저장 완료!';
       setTimeout(() => UI.downloadSrtBtn.innerText = originalText, 2000);
@@ -1815,7 +1839,7 @@ if (UI.btnSourceText && UI.btnSourceAudio) {
       UI.subtitleParamsContainer.style.display = 'grid';
       UI.subtitleIntentContainer.style.display = 'block';
       UI.subtitleContextContainer.style.display = 'block';
-      
+
       // 텍스트 모드는 항상 활성화
       UI.subGenBtn.disabled = false;
       UI.subGenBtn.innerText = 'AI 영상 자막 생성 (Timeline)';
@@ -1832,11 +1856,11 @@ if (UI.btnSourceText && UI.btnSourceAudio) {
       UI.subtitleParamsContainer.style.display = 'none';
       UI.subtitleIntentContainer.style.display = 'none';
       UI.subtitleContextContainer.style.display = 'none';
-      
+
       // 오디오 모드는 로그인이 필요함
       UI.subGenBtn.disabled = !USER_LOGGED_IN;
       UI.subGenBtn.innerText = !USER_LOGGED_IN ? '🔒 로그인 필요' : 'STT 자막 추출 시작';
-      
+
       const alertVideo = document.getElementById('auth-alert-video');
       if (alertVideo) alertVideo.style.display = USER_LOGGED_IN ? 'none' : 'flex';
     }
@@ -1918,19 +1942,19 @@ async function checkAuthStatus() {
       UI.engineerBtn.disabled = !isLoggedIn;
       UI.engineerBtn.innerText = isLoggedIn ? "적용 후 프롬프트 생성" : "🔒 로그인 필요";
     }
-      if (UI.subGenBtn) {
-        const isAudioMode = UI.btnSourceAudio && UI.btnSourceAudio.classList.contains('active');
-        UI.subGenBtn.disabled = isAudioMode && !isLoggedIn;
-        UI.subGenBtn.innerText = (isAudioMode && !isLoggedIn) ? '🔒 로그인 필요' : (isAudioMode ? 'STT 자막 추출 시작' : 'AI 영상 자막 생성 (Timeline)');
-      }
-      
-      const alertPrompt = document.getElementById('auth-alert-prompt');
-      const alertVideo = document.getElementById('auth-alert-video');
-      if (alertPrompt) alertPrompt.style.display = isLoggedIn ? 'none' : 'flex';
-      
+    if (UI.subGenBtn) {
       const isAudioMode = UI.btnSourceAudio && UI.btnSourceAudio.classList.contains('active');
-      if (alertVideo) alertVideo.style.display = (isLoggedIn || !isAudioMode) ? 'none' : 'flex';
-    };
+      UI.subGenBtn.disabled = isAudioMode && !isLoggedIn;
+      UI.subGenBtn.innerText = (isAudioMode && !isLoggedIn) ? '🔒 로그인 필요' : (isAudioMode ? 'STT 자막 추출 시작' : 'AI 영상 자막 생성 (Timeline)');
+    }
+
+    const alertPrompt = document.getElementById('auth-alert-prompt');
+    const alertVideo = document.getElementById('auth-alert-video');
+    if (alertPrompt) alertPrompt.style.display = isLoggedIn ? 'none' : 'flex';
+
+    const isAudioMode = UI.btnSourceAudio && UI.btnSourceAudio.classList.contains('active');
+    if (alertVideo) alertVideo.style.display = (isLoggedIn || !isAudioMode) ? 'none' : 'flex';
+  };
 
   // 1. 로그인 버튼 이벤트 바인딩 (인라인 onclick 대신)
   if (loginBtn) {
@@ -1945,7 +1969,7 @@ async function checkAuthStatus() {
     const res = await fetch('/api/me');
     if (!res.ok) throw new Error('Auth fetch failed');
     const data = await res.json();
-    
+
     if (data.user) {
       USER_LOGGED_IN = true;
       if (loginBtn) loginBtn.style.display = 'none';
@@ -1961,11 +1985,14 @@ async function checkAuthStatus() {
       // 로그인 성공 시 프리셋 새로고침
       MyPresets.fetchFromServer();
       updateAuthUIInputs(true);
+      if (typeof syncVpsSettingsFromServer === 'function') {
+        syncVpsSettingsFromServer();
+      }
     } else {
       USER_LOGGED_IN = false;
       if (loginBtn) loginBtn.style.display = 'block';
       if (profileArea) profileArea.style.display = 'none';
-      
+
       // 🛡️ 로그아웃 시 UI 전역 정화 (Factory Reset)
       MyPresets.data = [];
       MyPresets.render();
@@ -2009,3 +2036,117 @@ if (heroStartBtn) {
     document.getElementById('prompt-lab').scrollIntoView({ behavior: 'smooth' });
   });
 }
+
+// --- VPS 설정 자동 저장/복원 시스템 (로그인: 서버 DB / 비로그인: localStorage) ---
+const VPS_SETTINGS_KEY = 'vps-settings';
+const VPS_SETTING_IDS = [
+  'vps-storyboard-style',
+  'vps-shotlist-gear',
+  'vps-seo-platform',
+  'vps-bgm-mood',
+  'vps-bgm-type',
+  'vps-concept-platform',
+  'param-sub-format',
+  'param-sub-tempo',
+  'param-sub-duration',
+  'param-sub-duration-slider'
+];
+
+function collectVpsSettings() {
+  const settings = {};
+  VPS_SETTING_IDS.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) settings[id] = el.value;
+  });
+  return settings;
+}
+
+function applyVpsSettings(saved) {
+  if (!saved) return;
+  VPS_SETTING_IDS.forEach(id => {
+    const el = document.getElementById(id);
+    if (el && saved[id] !== undefined) {
+      if (el.tagName === 'SELECT') {
+        const optionExists = Array.from(el.options).some(o => o.value === saved[id]);
+        if (optionExists) el.value = saved[id];
+      } else {
+        el.value = saved[id];
+      }
+    }
+  });
+  // 슬라이더 ↔ 숫자 입력 동기화
+  const durationSlider = document.getElementById('param-sub-duration-slider');
+  const durationInput = document.getElementById('param-sub-duration');
+  if (durationSlider && durationInput) {
+    durationInput.value = durationSlider.value;
+  }
+}
+
+// 디바운스: 설정 변경 시 0.5초 후 저장 (과도한 API 호출 방지)
+let vpsSaveTimer = null;
+function saveVpsSettings() {
+  const settings = collectVpsSettings();
+
+  // localStorage에도 항상 저장 (즉시 반영용)
+  localStorage.setItem(VPS_SETTINGS_KEY, JSON.stringify(settings));
+
+  // 로그인 상태면 서버에도 저장 (디바운스)
+  if (USER_LOGGED_IN) {
+    clearTimeout(vpsSaveTimer);
+    vpsSaveTimer = setTimeout(async () => {
+      try {
+        await fetch('/api/vps-settings', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(settings)
+        });
+        console.log('[VPS] Settings saved to server.');
+      } catch (e) {
+        console.warn('[VPS] Server save failed:', e.message);
+      }
+    }, 500);
+  }
+}
+
+function restoreLocalVpsSettings() {
+  try {
+    const local = JSON.parse(localStorage.getItem(VPS_SETTINGS_KEY));
+    if (local) {
+      applyVpsSettings(local);
+      console.log('[VPS] Settings restored from localStorage (Instant).');
+    }
+  } catch (e) {
+    console.warn('[VPS] Failed to restore local settings:', e);
+  }
+}
+
+async function syncVpsSettingsFromServer() {
+  if (!USER_LOGGED_IN) return;
+  try {
+    const res = await fetch('/api/vps-settings');
+    if (res.ok) {
+      const serverSettings = await res.json();
+      if (serverSettings) {
+        applyVpsSettings(serverSettings);
+        // 서버 동기화 후 localStorage 업데이트
+        localStorage.setItem(VPS_SETTINGS_KEY, JSON.stringify(serverSettings));
+        console.log('[VPS] Settings synced from server DB.');
+      }
+    }
+  } catch (e) {
+    console.warn('[VPS] Failed to sync settings from server:', e);
+  }
+}
+
+// 각 VPS 셀렉트/입력에 자동 저장 리스너 등록
+VPS_SETTING_IDS.forEach(id => {
+  const el = document.getElementById(id);
+  if (el) {
+    el.addEventListener('change', saveVpsSettings);
+    el.addEventListener('input', saveVpsSettings);
+  }
+});
+
+// 1. 페이지 로드 시 즉각 복원 (시각적으로 옵션이 나중에 바뀌는 깜빡임 완전 방지)
+restoreLocalVpsSettings();
+

@@ -475,7 +475,14 @@ const initDb = async () => {
         UNIQUE(user_id, preset_id)
       );
     `);
-    console.log('[DB] user_presets table is ready.');
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS user_vps_settings (
+        user_id TEXT PRIMARY KEY,
+        settings JSONB NOT NULL,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    console.log('[DB] user_presets & user_vps_settings tables are ready.');
   } catch (err) {
     console.error('[DB_INIT_ERROR]', err.message);
   }
@@ -542,6 +549,43 @@ app.delete('/api/presets/:id', ensureAuthenticated, async (req, res) => {
   } catch (e) {
     console.error('[DB_DELETE_ERROR]', e.message);
     res.status(500).json({ error: '데이터베이스 삭제 실패.' });
+  }
+});
+
+// --- VPS SETTINGS API (로그인 사용자 전용 설정 저장/복원) ---
+
+// VPS 설정 불러오기
+app.get('/api/vps-settings', ensureAuthenticated, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const result = await pool.query(
+      'SELECT settings FROM user_vps_settings WHERE user_id = $1',
+      [userId]
+    );
+    res.json(result.rows[0]?.settings || null);
+  } catch (e) {
+    console.error('[VPS_SETTINGS_GET_ERROR]', e.message);
+    res.json(null);
+  }
+});
+
+// VPS 설정 저장 (UPSERT)
+app.put('/api/vps-settings', ensureAuthenticated, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const settings = req.body;
+
+    await pool.query(`
+      INSERT INTO user_vps_settings (user_id, settings, updated_at)
+      VALUES ($1, $2, CURRENT_TIMESTAMP)
+      ON CONFLICT (user_id)
+      DO UPDATE SET settings = $2, updated_at = CURRENT_TIMESTAMP
+    `, [userId, JSON.stringify(settings)]);
+
+    res.json({ success: true });
+  } catch (e) {
+    console.error('[VPS_SETTINGS_SAVE_ERROR]', e.message);
+    res.status(500).json({ error: 'VPS 설정 저장 실패' });
   }
 });
 

@@ -60,11 +60,12 @@ app.use(helmet({
     contentSecurityPolicy: {
         directives: {
             defaultSrc: ["'self'"],
-            scriptSrc: ["'self'", "'unsafe-inline'"],
+            scriptSrc: ["'self'", "'unsafe-inline'", "blob:"],
             styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
             fontSrc: ["'self'", "https://fonts.gstatic.com"],
             imgSrc: ["'self'", "data:", "https://*", "https://lh3.googleusercontent.com"],
-            connectSrc: ["'self'", "https://text.pollinations.ai", "https://api.groq.com"],
+            connectSrc: ["'self'", "https://text.pollinations.ai", "https://api.groq.com", "https:", "http://202.182.97.39:5678"],
+            upgradeInsecureRequests: null,
         },
     },
 }));
@@ -154,7 +155,7 @@ const corsOptions = {
     optionsSuccessStatus: 200
 };
 app.use(cors(corsOptions));
-app.use(express.json({ limit: '10kb' }));
+app.use(express.json({ limit: '50mb' }));
 app.use(express.static(path.join(__dirname)));
 
 // --- ROUTES ---
@@ -486,6 +487,53 @@ app.post('/api/engineer', ensureAuthenticated, strictAiLimiter, async (req, res,
     } catch (error) {
         // 에러를 next()로 넘기면 중앙 집중식 핸들러에서 최종 처리됨
         next(error);
+    }
+});
+
+/**
+ * n8n 이미지 생성 API 프록시 (CORS 방어용)
+ */
+app.post('/api/generate-image', ensureAuthenticated, strictAiLimiter, async (req, res, next) => {
+    try {
+        const { prompt, aspect_ratio, image } = req.body;
+        if (!prompt) return res.status(400).json({ error: '프롬프트가 필요합니다.' });
+
+        // ✅ n8n 실운용을 위해 production 웹훅 주소로 변경 (webhook-test 는 수동 활성화가 필요함)
+        const n8nWebhookUrl = "http://202.182.97.39:5678/webhook/generate-image";
+
+        const response = await fetch(n8nWebhookUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                // n8n에서 $json.body.xxx 로 접근할 수 있도록 body로 감싸서 전달
+                body: { prompt, aspect_ratio, image },
+                // 혹시 모를 대비를 위해 평문 필드도 유지
+                prompt, aspect_ratio, image 
+            })
+        });
+
+        const textData = await response.text();
+        let parsedData;
+        try {
+            parsedData = JSON.parse(textData);
+        } catch (e) {
+            parsedData = { error: "n8n 서버 응답이 올바른 JSON이 아닙니다.", raw: textData };
+        }
+
+        // n8n 자체가 에러(404 등)를 뱉었을 경우 처리
+        if (!response.ok || (parsedData.code && parsedData.code >= 400)) {
+            console.error("[N8N_ERROR]", parsedData);
+            return res.status(response.status || 500).json({ 
+                error: parsedData.message || parsedData.hint || "n8n 워크플로우 활성화 상태를 확인해주세요.",
+                details: parsedData
+            });
+        }
+
+        res.status(200).json({ data: parsedData });
+
+    } catch (error) {
+        console.error('[N8N_PROXY_ERROR]', error.message);
+        res.status(500).json({ error: 'n8n 서버와 연결하지 못했습니다.' });
     }
 });
 

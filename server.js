@@ -64,6 +64,7 @@ app.use(helmet({
             styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
             fontSrc: ["'self'", "https://fonts.gstatic.com"],
             imgSrc: ["'self'", "data:", "https://*", "https://lh3.googleusercontent.com"],
+            mediaSrc: ["'self'", "data:", "blob:", "https://*"], // 비디오 재생 허용
             connectSrc: ["'self'", "https://text.pollinations.ai", "https://api.groq.com", "https:", "http://202.182.97.39:5678"],
             upgradeInsecureRequests: null,
         },
@@ -497,18 +498,43 @@ app.post('/api/generate-image', ensureAuthenticated, strictAiLimiter, async (req
     try {
         const { prompt, aspect_ratio, image } = req.body;
         if (!prompt) return res.status(400).json({ error: '프롬프트가 필요합니다.' });
-
-        // ✅ n8n 실운용을 위해 production 웹훅 주소로 변경 (webhook-test 는 수동 활성화가 필요함)
+        // ✅ n8n 실운용을 위해 production 웹훅 주소로 변경
         const n8nWebhookUrl = "http://202.182.97.39:5678/webhook/generate-image";
+
+        // 🖼️ URL 기반 이미지가 들어오면 n8n 호환성을 위해 서버사이드에서 Base64로 자동 변환 (투명한 프록시)
+        const convertToB64 = async (url) => {
+            if (!url || typeof url !== 'string' || !url.startsWith('http')) return url;
+            try {
+                const imgRes = await fetch(url);
+                if (imgRes.ok) {
+                    const buffer = await imgRes.arrayBuffer();
+                    return Buffer.from(buffer).toString('base64');
+                }
+            } catch (err) {
+                console.warn("[SERVER_PROXY] Conversion failed for:", url, err.message);
+            }
+            return url;
+        };
+
+        // 개별 필드 변환
+        if (req.body.image) req.body.image = await convertToB64(req.body.image);
+        if (req.body.start_image) req.body.start_image = await convertToB64(req.body.start_image);
+        if (req.body.end_image) req.body.end_image = await convertToB64(req.body.end_image);
+        
+        // 배열 필드(image_urls) 전체 변환
+        if (req.body.image_urls && Array.isArray(req.body.image_urls)) {
+            console.log("[SERVER_PROXY] Converting image_urls array items...");
+            for (let i = 0; i < req.body.image_urls.length; i++) {
+                req.body.image_urls[i] = await convertToB64(req.body.image_urls[i]);
+            }
+        }
 
         const response = await fetch(n8nWebhookUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                // n8n에서 $json.body.xxx 로 접근할 수 있도록 body로 감싸서 전달
-                body: { prompt, aspect_ratio, image },
-                // 혹시 모를 대비를 위해 평문 필드도 유지
-                prompt, aspect_ratio, image 
+            body: JSON.stringify({
+                ...req.body, // 평탄한 필드 (비디오 로직 등 최신용)
+                body: req.body // 중첩된 필드 (기존 n8n 이미지 노드 호환용)
             })
         });
 

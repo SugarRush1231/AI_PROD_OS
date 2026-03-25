@@ -1320,6 +1320,8 @@ async function applyEngineering() {
         poseDescription = 'STRICT TECHNICAL T-POSE: Arms fully extended horizontally to the sides at 90 degrees from the torso, palms down or forward, standing perfectly upright, legs straight together, facing front, symmetrical, character sheet orthographic style.';
       } else if (config.pose === 'a-pose') {
         poseDescription = 'STRICT TECHNICAL A-POSE: Standing with a significant gap between the legs, feet spread wide to shoulder-width apart to form a literal "A" shape with the entire body. Legs must NOT touch. Arms extended downwards at a 45-degree angle away from the body, standing perfectly upright, facing front, symmetrical, character sheet orthographic reference style.';
+      } else if (config.pose === 'arm-extended') {
+        poseDescription = 'SELFIE PERSPECTIVE: POV selfie style, the subject is holding the camera with one arm visibly extended out of the frame towards the lens, forearm reaching towards the camera, wide angle lens effect, perspective from a handheld camera in hand, close-up intimacy.';
       }
 
       enrichedIntent += `
@@ -2222,17 +2224,17 @@ async function compressImage(base64Str) {
       let width = img.width;
       let height = img.height;
       const MAX_WIDTH = 1024;
-      
+
       if (width > MAX_WIDTH) {
         height = Math.round((height * MAX_WIDTH) / width);
         width = MAX_WIDTH;
       }
-      
+
       canvas.width = width;
       canvas.height = height;
       const ctx = canvas.getContext('2d');
       ctx.drawImage(img, 0, 0, width, height);
-      
+
       // 0.7 퀄리티로 압축 (용량을 획기적으로 줄임)
       resolve(canvas.toDataURL('image/jpeg', 0.7));
     };
@@ -2241,181 +2243,7 @@ async function compressImage(base64Str) {
 }
 
 // n8n 이미지 생성 통신 함수
-async function generateN8NImage() {
-  if (!USER_LOGGED_IN) {
-    const confirmLogin = await showSystemConfirm('🔒 권한 확인', '이미지 생성 서비스는 로그인이 필요합니다. 로그인 페이지로 이동할까요?', 'info');
-    if (confirmLogin) window.location.href = '/auth/google';
-    return;
-  }
 
-  const promptValue = document.getElementById('imagePromptInput')?.value || document.getElementById('promptInput')?.value || "";
-  let ratioValue = document.getElementById('imageRatioInput')?.value || "3:4";
-  const resultImage = document.getElementById('generatedImage');
-  const placeholder = document.getElementById('image-placeholder');
-  const btn = document.getElementById('n8n-generate-btn');
-
-  if (!promptValue) { alert("그릴 내용을 입력해주세요!"); return; }
-
-  // 1. 프롬프트 정제 (JSON 형태면 안의 글자만 쏙 뺍니다)
-  let cleanPrompt = promptValue.trim();
-  if (cleanPrompt.startsWith('{')) {
-    try {
-      const parsed = JSON.parse(cleanPrompt);
-      cleanPrompt = parsed.task || parsed.prompt || parsed.description || cleanPrompt;
-    } catch(e) {}
-  }
-
-  // 2. 이미지 압축 (사진이 크면 1MB 아래로 줄임)
-  let processedBase64 = currentImageBase64;
-  if (currentImageBase64 && currentImageBase64.length > 1024 * 1024) {
-    console.log("📏 고용량 이미지 감지됨. 자동 압축을 시작합니다...");
-    processedBase64 = await compressImage(currentImageBase64);
-  }
-
-  // UI 초기화 (프로그레스 바 시작)
-  const orgBtnText = btn.innerHTML;
-  btn.innerHTML = '⏳ 생성 중...';
-  btn.disabled = true;
-  
-  // 프로그레스 바 영역 생성/업데이트
-  let progressContainer = document.getElementById('image-progress-container');
-  if (!progressContainer) {
-    placeholder.innerHTML = `
-      <div id="image-progress-container" style="width: 80%; margin: 0 auto; text-align: center;">
-        <div id="image-progress-text" style="font-size: 0.85rem; margin-bottom: 8px; color: var(--skills-cyan);">🚀 서버로 최적화된 데이터 전송 중...</div>
-        <div style="height: 10px; background: rgba(255,255,255,0.1); border-radius: 12px; overflow: hidden; position: relative;">
-          <div id="image-progress-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #0cebeb, #20e3b2, #29ffc6); transition: width 0.3s ease;"></div>
-        </div>
-        <div id="image-progress-tip" style="font-size: 0.7rem; margin-top: 10px; color: var(--fg-dim); opacity: 0.6;">Vultr 서버가 AI 사진을 처리 중입니다. (약 30~60초)</div>
-      </div>
-    `;
-    progressContainer = document.getElementById('image-progress-container');
-  }
-
-  const bar = document.getElementById('image-progress-bar');
-  const statusTxt = document.getElementById('image-progress-text');
-  
-  let progress = 0;
-  const progressInterval = setInterval(() => {
-    if (progress < 95) {
-      progress += (95 - progress) * 0.04;
-      if (bar) bar.style.width = `${progress}%`;
-      if (progress > 30 && statusTxt) statusTxt.innerText = "🤖 Vultr n8n 워크플로우 가동 중...";
-      if (progress > 60 && statusTxt) statusTxt.innerText = "🎨 AI 모델 연산 중... 거의 다 되었습니다!";
-      if (progress > 85 && statusTxt) statusTxt.innerText = "📦 결과 수신 대기 중 (루프 5회 돌파)...";
-    }
-  }, 1800);
-
-  // 3. 비율 정제
-  const getCleanAspectRatio = (raw) => {
-    const validMap = { '1:1': '1:1', '16:9': '16:9', '9:16': '9:16' };
-    return validMap[raw] || 'auto';
-  };
-
-  const finalizedRatio = getCleanAspectRatio(ratioValue);
-  
-  // 4. 최종 데이터 구성
-  const requestBody = {
-    prompt: cleanPrompt,
-    aspect_ratio: finalizedRatio
-  };
-
-  if (processedBase64 && processedBase64.startsWith("data:image")) {
-      const rawPayload = processedBase64.split(',')[1];
-      requestBody.image = rawPayload;
-      requestBody.imageBase64 = rawPayload; 
-  }
-
-  console.log("[Final Sended Data]:", { ...requestBody, image: requestBody.image ? "(Compressed)" : null });
-
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 300000); // 넉넉하게 5분(300초) 대기
-
-  try {
-    const response = await fetch('/api/generate-image', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      signal: controller.signal,
-      body: JSON.stringify(requestBody)
-    });
-    
-    clearTimeout(timeoutId);
-    clearInterval(progressInterval);
-    const responseData = await response.json();
-    
-    if (!response.ok) {
-       console.error("n8n 에러 상세:", responseData);
-       throw new Error(responseData.error || '워크플로우 실행 실패');
-    }
-    
-    if (bar) bar.style.width = '100%';
-    if (statusTxt) statusTxt.innerText = "✨ 이미지 수신 성공!";
-
-    // 5. 딥 서치 URL 추출
-    const findImageInObject = (obj) => {
-      if (!obj) return null;
-      if (typeof obj === 'string' && (obj.startsWith('http://') || obj.startsWith('https://'))) {
-          if (obj.match(/\.(jpeg|jpg|gif|png|webp)/i) || obj.includes('kie.ai/') || obj.includes('redpandaai.co')) return obj;
-      }
-      if (typeof obj === 'object') {
-          const specialKeys = ['param', 'resultJson', 'data'];
-          for (let key of specialKeys) {
-             if (obj[key] && typeof obj[key] === 'string' && obj[key].trim().startsWith('{')) {
-                try {
-                  const found = findImageInObject(JSON.parse(obj[key]));
-                  if (found) return found;
-                } catch(e) {}
-             }
-          }
-          if (Array.isArray(obj)) {
-              for (let item of obj) {
-                  const found = findImageInObject(item);
-                  if (found) return found;
-              }
-          } else {
-              for (let key in obj) {
-                  const found = findImageInObject(obj[key]);
-                  if (found) return found;
-              }
-          }
-      }
-      return null;
-    };
-
-    const finalImageUrl = findImageInObject(responseData.data);
-    
-    if (!finalImageUrl) {
-      console.error("URL 추출 실패:", responseData);
-      throw new Error("이미지 주소를 찾지 못했습니다.");
-    }
-
-    resultImage.src = finalImageUrl;
-    resultImage.onload = () => {
-      resultImage.style.display = "block";
-      if (placeholder) placeholder.style.display = "none";
-    };
-
-  } catch (error) {
-    clearInterval(progressInterval);
-    console.error("n8n 통신 에러:", error);
-    placeholder.innerHTML = `<div style="color: var(--status-error); padding: 20px;">❌ 생성 중 오류 발생: ${error.message}</div>`;
-  } finally {
-    btn.innerHTML = orgBtnText;
-    btn.disabled = false;
-  }
-}
-async function calculateAspectRatio(base64) {
-  return new Promise((resolve) => {
-    const img = new Image();
-    img.onload = () => {
-      const ratio = img.width / img.height;
-      if (Math.abs(ratio - 1) < 0.1) resolve("1:1");
-      else if (ratio > 1.2) resolve("16:9");
-      else resolve("9:16");
-    };
-    img.src = base64;
-  });
-}
 
 // ---------------------------------------------------------------------------------------------------
 // System Status Toggle Logic
@@ -2604,6 +2432,12 @@ setTimeout(() => {
   const promptTextarea = document.getElementById('imagePromptInput');
 
   if (imageFileInput) {
+    // 📎 이미지 첨부 버튼 클릭 → 파일 선택 대화상자 연결 (CSP 준수)
+    const imageUploadBtn = document.getElementById('image-upload-btn');
+    if (imageUploadBtn) {
+      imageUploadBtn.addEventListener('click', () => imageFileInput.click());
+    }
+
     imageFileInput.addEventListener('change', (e) => {
       if (e.target.files && e.target.files[0]) {
         handleImageSelection(e.target.files[0]);
@@ -2718,6 +2552,15 @@ async function generateN8NImage() {
   const resultImage = document.getElementById('generatedImage');
   const placeholder = document.getElementById('image-placeholder');
   const btn = document.getElementById('n8n-generate-btn');
+  const choicePanel = document.getElementById('post-gen-choices');
+
+  // UI 초기화: 이전 결과물(이미지 및 선택지)을 모두 숨기고 로딩상태 준비
+  if (resultImage) {
+    resultImage.style.display = "none";
+    resultImage.src = ""; 
+  }
+  if (choicePanel) choicePanel.style.display = "none";
+  if (placeholder) placeholder.style.display = "block";
 
   if (!promptValue) { alert("그릴 내용을 입력해주세요!"); return; }
 
@@ -2726,9 +2569,56 @@ async function generateN8NImage() {
     try { ratioValue = await calculateAspectRatio(currentImageBase64); } catch (e) { ratioValue = "3:4"; }
   }
 
+  // [초강력 정제 로직] 데이터 뭉치 속에서 진짜 프롬프트만 찾아냅니다. (JSON 및 객체 형태 완벽 대응)
+  const promptValueFinal = document.getElementById('imagePromptInput')?.value
+    || document.getElementById('promptInput')?.value
+    || promptValue;
+
+  let cleanPrompt = (promptValueFinal || "").trim();
+
+  // 🛡️ [마크다운 태그 제거] ```json 형태가 복사되어 들어오는 경우 대비
+  cleanPrompt = cleanPrompt.replace(/```(json|srt|vtt)?\n?/gi, '').replace(/```/g, '').trim();
+
+  if (cleanPrompt.startsWith('{')) {
+    try {
+      const p = JSON.parse(cleanPrompt);
+
+      // 🎯 [전략] 기획서(description/constraints) 내용이 있으면 제목(task/prompt)은 무조건 무시
+      let bestContent = "";
+      if (p.description) {
+        if (typeof p.description === 'object') {
+          bestContent += Object.values(p.description).filter(v => typeof v === 'string').join('\n\n');
+        } else {
+          bestContent += p.description;
+        }
+      }
+      if (p.constraints) {
+        if (typeof p.constraints === 'object') {
+          bestContent += '\n\n' + Object.values(p.constraints).filter(v => typeof v === 'string').join('\n\n');
+        } else {
+          bestContent += '\n\n' + p.constraints;
+        }
+      }
+
+      // 추출된 묘사 글이 넉넉하면 그것을 사용하고, 없다면 차선책 필드 사용
+      if (bestContent.trim().length > 20) {
+        cleanPrompt = bestContent.trim();
+      } else {
+        cleanPrompt = p.prompt || p.task || p.instruction || cleanPrompt;
+      }
+
+      console.log("🛡️ [Prompt Final Cleaned]:", cleanPrompt.substring(0, 100) + "...");
+    } catch (e) {
+      console.warn("[Prompt Clean] JSON parse failed, using raw text.");
+    }
+  }
+
+  // 0. 이미지 처리 (압축 제거 - 원본 전송)
+  let processedBase64 = currentImageBase64;
+
   // UI 초기화 (프로그레스 바 시작)
   const orgBtnText = btn.innerHTML;
-  btn.innerHTML = '⏳ 생성 중...';
+  btn.innerHTML = '<span class="spinner"></span> AI 이미지 생성 중...';
   btn.disabled = true;
 
   // 프로그레스 바 영역 생성/업데이트
@@ -2740,7 +2630,7 @@ async function generateN8NImage() {
         <div style="height: 6px; background: rgba(255,255,255,0.1); border-radius: 10px; overflow: hidden; position: relative;">
           <div id="image-progress-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #0cebeb, #20e3b2, #29ffc6); transition: width 0.3s ease; box-shadow: 0 0 10px var(--skills-cyan);"></div>
         </div>
-        <div id="image-progress-tip" style="font-size: 0.7rem; margin-top: 10px; color: var(--fg-dim); opacity: 0.6;">예상 소요 시간: 약 45초~60초 (Base64 포함 시 더 소요될 수 있음)</div>
+        <div id="image-progress-tip" style="font-size: 0.7rem; margin-top: 10px; color: var(--fg-dim); opacity: 0.6;">예상 소요 시간: 약 45초~60초 (중간에 멈춘 것처럼 보여도 서버는 작동 중입니다)</div>
       </div>
     `;
     progressContainer = document.getElementById('image-progress-container');
@@ -2755,57 +2645,39 @@ async function generateN8NImage() {
     if (progress < 90) {
       progress += (90 - progress) * 0.05; // 로그 곡선으로 부드럽게 상승
       if (bar) bar.style.width = `${progress}%`;
-      if (progress > 30 && statusTxt) statusTxt.innerText = "🤖 n8n 워크플로우 실행 중 (Nano Banana 2 호출)...";
+      if (progress > 30 && statusTxt) statusTxt.innerText = "🤖 n8n 워크플로우 가동 (Cloud AI 호출 중)...";
       if (progress > 60 && statusTxt) statusTxt.innerText = "🎨 AI 모델 연산 중... 거의 다 되었습니다!";
-      if (progress > 85 && statusTxt) statusTxt.innerText = "📦 결과 이미지 전송 대기 중... (루프 지속 중일 수 있음)";
+      if (progress > 85 && statusTxt) statusTxt.innerText = "📦 결과 이미지 수신 대기 중...";
     }
   }, 1500);
 
-  // 📏 비율 정제 로직 (Kie.ai 500 에러 방지 - 불안하면 'auto'가 최고!)
+  // 📏 비율 정제 로직 (Kie.ai 500 에러 방지)
   const getCleanAspectRatio = (raw) => {
     const validMap = {
-      '1:1': '1:1', '16:9': '16:9', '9:16': '9:16' 
+      '1:1': '1:1', '16:9': '16:9', '9:16': '9:16',
+      '3:4': '3:4', '4:3': '4:3', '21:9': '21:9'
     };
-    const clean = validMap[raw] || 'auto'; // 지원 안 하는 비율이면 안전하게 'auto'로 전송
-    console.log(`[Ratio Trace] 전송 비율: ${clean} (입력: ${raw})`);
-    return clean;
+    return validMap[raw] || 'auto';
   };
 
   const finalizedRatio = getCleanAspectRatio(ratioValue);
-  
-  // 📦 전송 데이터 구성 (사진이 없으면 null 대신 아예 필드를 빼버려서 n8n 에러를 막습니다)
-  // 프롬프트 입력창 ID가 다를 수 있어 두 곳 모두 체크합니다.
-  const promptValueFinal = document.getElementById('imagePromptInput')?.value 
-                          || document.getElementById('promptInput')?.value 
-                          || promptValue;
-  
-  // [초강력 정제 로직] 데이터 뭉치 속에서 진짜 프롬프트만 찾아냅니다. (JSON 탈출)
-  let cleanPrompt = promptValueFinal || "";
-  if (typeof cleanPrompt === 'string' && cleanPrompt.trim().startsWith('{')) {
-      try {
-          const p = JSON.parse(cleanPrompt);
-          cleanPrompt = p.task || p.prompt || p.description || p.instruction || cleanPrompt;
-      } catch(e) { }
-  }
 
   const requestBody = {
     prompt: cleanPrompt,
     aspect_ratio: finalizedRatio
   };
 
-  // 이미지가 진짜 있을 때 + 이미지 헤더(data:image)가 있을 때만 image 칸을 박스에 담습니다!
-  if (currentImageBase64 && currentImageBase64.startsWith("data:image")) {
-      // Kie.ai 에 맞춰 'data:image/...;base64,' 머리말을 떼고 순수한 데이터만 보냅니다!
-      const base64Raw = currentImageBase64.split(',')[1];
-      requestBody.image = base64Raw;
-      requestBody.imageBase64 = base64Raw; 
+  // 이미지 헤더가 있을 때만 image 필드 추가
+  if (processedBase64 && processedBase64.startsWith("data:image")) {
+    const base64Raw = processedBase64.split(',')[1];
+    requestBody.image = base64Raw;
+    requestBody.imageBase64 = base64Raw;
   }
 
-  // 이제 [Sended Data]에서 실제 전송 내용을 확인해보세요!
-  console.log("[Sended Data (Cleaned)]: ", { ...requestBody, image: requestBody.image ? "(Image Data Omited for Log)" : null });
+  console.log("[Final Payload]:", { ...requestBody, image: requestBody.image ? "(Image Data)" : null });
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 120000); // 120초 후 자동 취소
+  const timeoutId = setTimeout(() => controller.abort(), 180000); // 180초 타임아웃
 
   try {
     const response = await fetch('/api/generate-image', {
@@ -2827,56 +2699,70 @@ async function generateN8NImage() {
 
     if (bar) bar.style.width = '100%';
     if (statusTxt) statusTxt.innerText = "✨ 생성 완료! 이미지를 표시합니다.";
-    console.log("n8n 결과 도착:", responseData);
 
-    const data = responseData.data;
-    let finalImageUrl = null;
-
-    // 📦 [데이터 상자 뒤지기] n8n이 보내준 데이터더미 속에서 이미지 URL을 샅샅이 뒤집니다.
     const findImageInObject = (obj) => {
       if (!obj) return null;
       if (typeof obj === 'string' && (obj.startsWith('http://') || obj.startsWith('https://'))) {
-          if (obj.match(/\.(jpeg|jpg|gif|png|webp)/i) || obj.includes('kie.ai/') || obj.includes('redpandaai.co')) return obj;
+        if (obj.match(/\.(jpeg|jpg|gif|png|webp)/i) || obj.includes('kie.ai/') || obj.includes('redpandaai.co')) return obj;
       }
       if (typeof obj === 'object') {
-          const specialKeys = ['param', 'resultJson', 'data'];
-          for (let key of specialKeys) {
-             if (obj[key] && typeof obj[key] === 'string' && obj[key].trim().startsWith('{')) {
-                try {
-                  const parsed = JSON.parse(obj[key]);
-                  const found = findImageInObject(parsed);
-                  if (found) return found;
-                } catch(e) {}
-             }
+        const specialKeys = ['param', 'resultJson', 'data'];
+        for (let key of specialKeys) {
+          if (obj[key] && typeof obj[key] === 'string' && obj[key].trim().startsWith('{')) {
+            try {
+              const found = findImageInObject(JSON.parse(obj[key]));
+              if (found) return found;
+            } catch (e) { }
           }
-          if (Array.isArray(obj)) {
-              for (let item of obj) {
-                  const found = findImageInObject(item);
-                  if (found) return found;
-              }
-          } else {
-              for (let key in obj) {
-                  const found = findImageInObject(obj[key]);
-                  if (found) return found;
-              }
+        }
+        if (Array.isArray(obj)) {
+          for (let item of obj) {
+            const found = findImageInObject(item);
+            if (found) return found;
           }
+        } else {
+          for (let key in obj) {
+            const found = findImageInObject(obj[key]);
+            if (found) return found;
+          }
+        }
       }
       return null;
     };
 
-    finalImageUrl = findImageInObject(responseData.data);
-    
+    const finalImageUrl = findImageInObject(responseData.data);
+
     if (!finalImageUrl) {
       console.error("최종 이미지 추출 실패. 응답 원본:", responseData);
-      throw new Error("n8n 응답 데이터 더미 속에서 실제 이미지 URL을 찾지 못했습니다.");
+      throw new Error("n8n 응답에서 이미지 URL을 찾지 못했습니다.");
     }
 
-    // 결과 표시
     resultImage.src = finalImageUrl;
     resultImage.onload = () => {
       resultImage.style.display = "block";
       const ph = document.getElementById('image-placeholder');
       if (ph) ph.style.display = "none";
+      
+      // 🎬 [이미지 생성 후 선택지] 영상 제작 여부 확인 패널 노출
+      const choicePanel = document.getElementById('post-gen-choices');
+      const btnVideo = document.getElementById('btn-choice-video');
+      const btnImage = document.getElementById('btn-choice-image');
+
+      if (choicePanel && btnVideo && btnImage) {
+        // choicePanel.style.display = "flex"; // 요청에 의한 비활성화
+        
+        // 영상 만들기 선택 시
+        btnVideo.onclick = () => {
+          document.getElementById('kling-video-studio').scrollIntoView({ behavior: 'smooth' });
+          setVideoImageRef(finalImageUrl, 'start');
+          choicePanel.style.display = "none"; // 이동 후 숨김
+        };
+
+        // 이미지만 사용 선택 시
+        btnImage.onclick = () => {
+          choicePanel.style.display = "none";
+        };
+      }
     };
 
   } catch (error) {
@@ -2893,6 +2779,288 @@ async function generateN8NImage() {
 const n8nBtn = document.getElementById('n8n-generate-btn');
 if (n8nBtn) {
   n8nBtn.addEventListener('click', generateN8NImage);
+}
+
+/* ==========================================================================
+   KLING 3.0 VIDEO STUDIO LOGIC
+   ========================================================================== */
+
+let videoRefStartImage = null;
+let videoRefEndImage = null;
+
+// 비디오 생성을 위한 이미지 참조 설정 (type: 'start' or 'end')
+function setVideoImageRef(url, type = 'start') {
+  const previewImg = document.getElementById(`video-${type}-preview`);
+  const placeholder = document.getElementById(`${type}-placeholder`);
+  const clearBtn = document.getElementById(`clear-${type}-ref`);
+  
+  if (type === 'start') videoRefStartImage = url;
+  else videoRefEndImage = url;
+
+  if (previewImg && placeholder && clearBtn) {
+    previewImg.src = url;
+    previewImg.style.display = "block";
+    placeholder.style.display = "none";
+    clearBtn.style.display = "flex";
+  }
+}
+
+// 이미지 참조 해제 함수
+function clearVideoFrame(type) {
+  if (type === 'start') videoRefStartImage = null;
+  else videoRefEndImage = null;
+
+  const previewImg = document.getElementById(`video-${type}-preview`);
+  const placeholder = document.getElementById(`${type}-placeholder`);
+  const clearBtn = document.getElementById(`clear-${type}-ref`);
+
+  if (previewImg && placeholder && clearBtn) {
+    previewImg.src = "";
+    previewImg.style.display = "none";
+    placeholder.style.display = "block";
+    clearBtn.style.display = "none";
+  }
+}
+
+// 해제 버튼 리스너 연결
+const clearStartBtn = document.getElementById('clear-start-ref');
+if (clearStartBtn) clearStartBtn.addEventListener('click', (e) => { e.stopPropagation(); clearVideoFrame('start'); });
+const clearEndBtn = document.getElementById('clear-end-ref');
+if (clearEndBtn) clearEndBtn.addEventListener('click', (e) => { e.stopPropagation(); clearVideoFrame('end'); });
+
+// 파일 업로드 처리 함수
+function handleVideoFrameUpload(input, type) {
+  const file = input.files[0];
+  if (!file) return;
+
+  if (file.size > 10 * 1024 * 1024) {
+    alert("파일 크기는 10MB 이하만 가능합니다.");
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    setVideoImageRef(e.target.result, type);
+  };
+  reader.readAsDataURL(file);
+}
+
+// 파일 입력 리스너 연결
+const startFileInput = document.getElementById('video-start-file');
+if (startFileInput) startFileInput.addEventListener('change', (e) => handleVideoFrameUpload(e.target, 'start'));
+const endFileInput = document.getElementById('video-end-file');
+if (endFileInput) endFileInput.addEventListener('change', (e) => handleVideoFrameUpload(e.target, 'end'));
+
+// 드래그 앤 드롭 기능 추가
+function setupVideoDragDrop(boxId, type) {
+  const box = document.getElementById(boxId);
+  if (!box) return;
+
+  ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+    box.addEventListener(eventName, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+    }, false);
+  });
+
+  ['dragenter', 'dragover'].forEach(eventName => {
+    box.addEventListener(eventName, () => {
+      box.style.borderColor = 'var(--skills-purple)';
+      box.style.background = 'rgba(147, 112, 219, 0.05)';
+    }, false);
+  });
+
+  ['dragleave', 'drop'].forEach(eventName => {
+    box.addEventListener(eventName, () => {
+      box.style.borderColor = 'var(--border-strong)';
+      box.style.background = 'rgba(0,0,0,0.2)';
+    }, false);
+  });
+
+  box.addEventListener('drop', (e) => {
+    const dt = e.dataTransfer;
+    const files = dt.files;
+    if (files && files[0]) {
+      handleVideoFrameUpload({ files }, type);
+    }
+  }, false);
+
+  // 클릭 이벤트 추가 (이미지 있으면 확대, 없으면 업로드)
+  box.addEventListener('click', () => {
+    const currentImg = (type === 'start') ? videoRefStartImage : videoRefEndImage;
+    if (currentImg) {
+      openImageViewer(currentImg);
+    } else {
+      const fileInput = document.getElementById(`video-${type}-file`);
+      if (fileInput) fileInput.click();
+    }
+  });
+}
+
+setupVideoDragDrop('video-start-box', 'start');
+setupVideoDragDrop('video-end-box', 'end');
+
+// Kling 3.0 비디오 생성 함수
+async function generateKlingVideo() {
+  const btn = document.getElementById('generate-video-btn');
+  const promptInput = document.getElementById('videoPromptInput');
+  const durationInput = document.getElementById('videoDurationInput');
+  const modeInput = document.getElementById('videoModeInput');
+  const placeholder = document.getElementById('video-placeholder');
+  const videoElement = document.getElementById('generatedVideo');
+  
+  if (!promptInput.value.trim()) {
+    alert("비디오 동작/연출 프롬프트를 입력해주세요.");
+    return;
+  }
+
+  const orgBtnText = btn.innerHTML;
+  btn.innerHTML = '<span class="spinner"></span> AI 비디오 생성 중...';
+  btn.disabled = true;
+
+  // 비디오 프로그레스 UI
+  placeholder.innerHTML = `
+    <div id="video-progress-container" style="width: 80%; text-align: center;">
+      <div id="video-progress-text" style="font-size: 0.85rem; margin-bottom: 12px; color: #818cf8;">🚀 비디오 생성 요청을 보냈습니다...</div>
+      <div style="height: 6px; background: rgba(255,255,255,0.1); border-radius: 10px; overflow: hidden;">
+        <div id="video-progress-bar" style="width: 5%; height: 100%; background: linear-gradient(90deg, #6366f1, #c084fc); transition: width 0.4s ease;"></div>
+      </div>
+      <div style="font-size: 0.7rem; margin-top: 12px; color: var(--fg-muted);">Kling 3.0 모델이 연산을 시작했습니다 (약 5분 소요)</div>
+    </div>
+  `;
+  videoElement.style.display = "none";
+
+  const bar = document.getElementById('video-progress-bar');
+  const statusTxt = document.getElementById('video-progress-text');
+  
+  let progress = 5;
+  const progressInterval = setInterval(() => {
+    if (progress < 95) {
+      progress += (95 - progress) * 0.03;
+      if (bar) bar.style.width = `${progress}%`;
+      if (progress > 30 && statusTxt) statusTxt.innerText = "🎬 비디오 프레임 렌더링 중...";
+      if (progress > 60 && statusTxt) statusTxt.innerText = "✨ 화질 개선 및 AI 업스케일링 중...";
+      if (progress > 85 && statusTxt) statusTxt.innerText = "📦 최종 영상 인코딩 중...";
+    }
+  }, 2000);
+
+  const videoPrompt = promptInput.value.trim();
+  if (!videoPrompt) {
+    alert("비디오 동작/연출 프롬프트를 입력해 주세요.");
+    btn.innerHTML = orgBtnText;
+    btn.disabled = false;
+    return;
+  }
+
+  const imageUrls = [];
+  if (videoRefStartImage) imageUrls.push(videoRefStartImage);
+  if (videoRefEndImage) imageUrls.push(videoRefEndImage);
+
+  const payload = {
+    generate_video: true,         // 불리언 (n8n === true 대응)
+    generate_video_str: "true",   // 문자열
+    generate_video_num: 1,        // 숫자
+    direct_video: true,
+    is_video: true,
+    video: true,
+    is_direct_video: true,
+    prompt: videoPrompt,
+    video_duration: durationInput.value,
+    video_mode: modeInput.value,
+    // 단일 이미지(Start Frame) 전용으로 단순화
+    image: imageUrls[0] ? (imageUrls[0].startsWith("data:") ? imageUrls[0].split(',')[1] : imageUrls[0]) : null,
+    image_url: imageUrls[0] || null,
+    start_image: imageUrls[0] || null,
+    image_urls: imageUrls[0] ? [imageUrls[0]] : null
+  };
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 600000); // 10분 (600초) 타임아웃으로 확장
+
+  try {
+    const response = await fetch('/api/generate-image', { // 이미지 생성과 동일한 엔드포인트 사용 (n8n에서 flag로 분기)
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal: controller.signal,
+      body: JSON.stringify(payload)
+    });
+    clearTimeout(timeoutId);
+
+    clearInterval(progressInterval);
+    const result = await response.json();
+
+    if (!response.ok) throw new Error(result.error || "비디오 생성에 실패했습니다.");
+
+    // n8n 응답에서 비디오 URL 추출 (강화된 수색 로직 + 문자열 내 JSON 파싱)
+    const findVideoInObject = (obj, keyName = '') => {
+      if (!obj) return null;
+      
+      // 문자열인 경우
+      if (typeof obj === 'string') {
+        const lowerStr = obj.trim().toLowerCase();
+        const lowerKey = keyName.toLowerCase();
+
+        // 1. URL 여부 확인 및 비디오 관련 키워드 확인
+        if (lowerStr.startsWith('http://') || lowerStr.startsWith('https://')) {
+          if (lowerStr.match(/\.(mp4|mov|webm|mkv|avi|flv)/i) || 
+              lowerKey.includes('video') || 
+              lowerKey.includes('url') || 
+              lowerStr.includes('kling-video') || 
+              lowerStr.includes('kie.ai/') ||
+              lowerStr.includes('result')) {
+            return obj;
+          }
+        }
+
+        // 2. 문자열 내의 JSON 형태 수색 (escaped JSON 대응)
+        if (lowerStr.startsWith('{') || lowerStr.startsWith('[')) {
+          try {
+            const parsed = JSON.parse(obj);
+            const foundInParsed = findVideoInObject(parsed, keyName);
+            if (foundInParsed) return foundInParsed;
+          } catch (e) { /* ignore parse error */ }
+        }
+      }
+      
+      // 객체나 배열인 경우 재귀 탐색
+      if (typeof obj === 'object') {
+        for (let key in obj) {
+          const found = findVideoInObject(obj[key], key);
+          if (found) return found;
+        }
+      }
+      return null;
+    };
+
+    console.log("n8n Raw Response:", result); // 디버깅을 위한 로그 추가
+    const videoUrl = findVideoInObject(result.data || result);
+
+    if (!videoUrl) {
+      console.error("비디오 URL 추출 실패:", result);
+      throw new Error("응답에서 비디오 URL을 찾을 수 없습니다.");
+    }
+
+    if (bar) bar.style.width = '100%';
+    if (statusTxt) statusTxt.innerText = "✨ 생성 완료!";
+
+    videoElement.src = videoUrl;
+    videoElement.style.display = "block";
+    placeholder.style.display = "none";
+
+  } catch (error) {
+    clearInterval(progressInterval);
+    console.error("Video Gen Error:", error);
+    placeholder.innerHTML = `<div style="color: #ff5555; padding: 20px;">❌ 비디오 생성 오류<br><small>${error.message}</small></div>`;
+  } finally {
+    btn.innerHTML = orgBtnText;
+    btn.disabled = false;
+  }
+}
+
+// 이벤트 리스너 연결
+const genVideoBtn = document.getElementById('generate-video-btn');
+if (genVideoBtn) {
+  genVideoBtn.addEventListener('click', generateKlingVideo);
 }
 
 // 🔍 이미지 크게 보기 기능 (CSP 준수 및 강제 표시 로직)

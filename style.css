@@ -2772,3 +2772,8 @@ footer a { display: inline-flex; align-items: center; min-height: 24px; }
 /* 3) 흰 글자 버튼 배경 대비 보정 (3.0~3.7:1 → 4.5:1 이상, 색 계열 유지) */
 :root:not(.light-mode) .btn-video:not(:disabled) { background: #2563eb; }
 #btn-export-pdf { background: #4f46e5 !important; border-color: #4f46e5 !important; }
+
+/* 원형 컨트롤러: 거리 눈금·거리 표시 */
+.lighting-controller .lt-dist-tick { font-size: 6px; opacity: .8; }
+.lighting-controller .lt-dist-label { fill: var(--skills-cyan); font: 700 8px var(--font-mono); text-anchor: middle; pointer-events: none; paint-order: stroke; stroke: var(--panel); stroke-width: 3px; }
+.lt-caption { flex-wrap: wrap; }

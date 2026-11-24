@@ -1149,7 +1149,9 @@
                 <div class="lt-svg-wrap">
                   <svg id="lt-svg" class="lighting-controller" viewBox="0 0 200 200" role="group" aria-label="광원 위치 컨트롤러 (위에서 본 모습, 아래쪽이 카메라)">
                     <circle cx="100" cy="100" r="78" class="lt-ring"></circle>
-                    <circle cx="100" cy="100" r="50" class="lt-ring lt-ring-inner"></circle>
+                    <circle cx="100" cy="100" r="22" class="lt-ring lt-ring-inner"></circle>
+                    <circle cx="100" cy="100" r="35" class="lt-ring lt-ring-inner"></circle>
+                    <circle cx="100" cy="100" r="56" class="lt-ring lt-ring-inner"></circle>
                     <line x1="100" y1="16" x2="100" y2="184" class="lt-axis"></line>
                     <line x1="16" y1="100" x2="184" y2="100" class="lt-axis"></line>
                     <text x="100" y="12" class="lt-tick">BACK 180°</text>
@@ -1157,11 +1159,15 @@
                     <text x="50" y="95" class="lt-tick">L 270°</text>
                     <g class="lt-camera" transform="translate(100 196)"><rect x="-12" y="-9" width="24" height="9" rx="2"></rect><text y="-12" class="lt-tick">CAMERA 0°</text></g>
                     <g class="lt-subject"><ellipse cx="100" cy="100" rx="13" ry="12"></ellipse><path d="M96 111 L100 117 L104 111 Z"></path></g>
+                    <text x="103" y="64" class="lt-tick lt-dist-tick" text-anchor="start">1m</text>
+                    <text x="103" y="43" class="lt-tick lt-dist-tick" text-anchor="start">3m</text>
+                    <text x="103" y="21" class="lt-tick lt-dist-tick" text-anchor="start">10m</text>
                     <line id="lt-beam" x1="100" y1="100" x2="100" y2="178" class="lt-beam"></line>
                     <circle id="lt-handle" cx="100" cy="178" r="9" class="lt-handle" tabindex="0" role="slider"
-                      aria-label="광원 방위각 (좌우 화살표: 방위각, 위아래 화살표: 고도, Shift: 15도)" aria-valuemin="0" aria-valuemax="359" aria-valuenow="0"></circle>
+                      aria-label="광원 위치 (좌우 화살표: 방향, 위아래: 고도, PageUp/PageDown: 거리, +/-: 세기)" aria-valuemin="0" aria-valuemax="359" aria-valuenow="0"></circle>
+                    <text id="lt-dist-label" class="lt-dist-label" x="100" y="196">2m</text>
                   </svg>
-                  <div class="lt-caption"><span id="lt-angle-label">0° · +0°</span><span class="lt-hint">드래그 · 화살표 키</span></div>
+                  <div class="lt-caption"><span id="lt-angle-label">0° · +0°</span><span class="lt-hint" title="원 안에서 끌기: 방향(돌리기)·거리(안쪽=가까이) / 휠: 세기 / Shift+휠: 고도">끌기: 방향·거리 · 휠: 세기 · ⇧휠: 고도</span></div>
                 </div>
                 <div class="lt-3d-wrap">
                   <div id="lt-3d" class="lt-3d">

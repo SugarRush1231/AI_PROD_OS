@@ -405,54 +405,83 @@
   }
 
   // ── 6. SVG 광원 위치 컨트롤러 ──────────────────────────────────────────────
+  // 위에서 본 반지름 ↔ 거리 (로그 눈금: 0.5m = 안쪽 원, 10m = 바깥 원 → 가까운 거리를 세밀하게)
+  const R_MIN = 22, D_MIN = 0.5, D_MAX = 10;
+  const distToR = (d) => R_MIN + (SVG_R - R_MIN) * Math.log(clamp(d, D_MIN, D_MAX) / D_MIN) / Math.log(D_MAX / D_MIN);
+  const rToDist = (r) => Math.round(D_MIN * Math.pow(D_MAX / D_MIN, clamp((r - R_MIN) / (SVG_R - R_MIN), 0, 1)) * 10) / 10;
+
   function initSvgController(updaters) {
     const svg = $('lt-svg');
     if (!svg) return;
-    const handle = $('lt-handle'), beam = $('lt-beam'), label = $('lt-angle-label');
-    let dragging = false, raf = 0, pendingAz = null;
+    const handle = $('lt-handle'), beam = $('lt-beam'), label = $('lt-angle-label'), dist = $('lt-dist-label');
+    let dragging = false, raf = 0, pending = null;
 
     const toLocal = (evt) => {
       const pt = svg.createSVGPoint(); pt.x = evt.clientX; pt.y = evt.clientY;
       const m = svg.getScreenCTM(); if (!m) return null;
       return pt.matrixTransform(m.inverse());
     };
-    const angleFrom = (p) => norm360(Math.atan2(p.x - SVG_C, p.y - SVG_C) * 180 / Math.PI);
-    const commit = () => { raf = 0; if (pendingAz !== null) { editLighting({ azimuth: pendingAz }, 'svg'); pendingAz = null; } };
-    const queue = (az) => { pendingAz = az; if (!raf) raf = requestAnimationFrame(commit); };
+    // 방향 = 각도, 거리 = 중심에서 떨어진 정도
+    const fromPoint = (p) => ({
+      azimuth: norm360(Math.atan2(p.x - SVG_C, p.y - SVG_C) * 180 / Math.PI),
+      distance: rToDist(Math.hypot(p.x - SVG_C, p.y - SVG_C))
+    });
+    const commit = () => { raf = 0; if (pending) { editLighting(pending, 'svg'); pending = null; } };
+    const queue = (patch) => { pending = patch; if (!raf) raf = requestAnimationFrame(commit); };
 
     svg.addEventListener('pointerdown', (e) => {
       const p = toLocal(e); if (!p) return;
-      if (Math.hypot(p.x - SVG_C, p.y - SVG_C) < 22) return; // 중심 근처 클릭 무시
+      if (Math.hypot(p.x - SVG_C, p.y - SVG_C) < 12) return; // 피사체(중심) 클릭은 무시
       dragging = true; svg.setPointerCapture(e.pointerId); svg.classList.add('dragging');
-      queue(angleFrom(p)); e.preventDefault();
+      queue(fromPoint(p)); e.preventDefault();
       handle?.focus({ preventScroll: true });
     });
-    svg.addEventListener('pointermove', (e) => { if (!dragging) return; const p = toLocal(e); if (p) queue(angleFrom(p)); });
+    svg.addEventListener('pointermove', (e) => { if (!dragging) return; const p = toLocal(e); if (p) queue(fromPoint(p)); });
     const end = (e) => { if (!dragging) return; dragging = false; svg.classList.remove('dragging'); try { svg.releasePointerCapture(e.pointerId); } catch (_) { } };
     svg.addEventListener('pointerup', end); svg.addEventListener('pointercancel', end);
 
+    // 휠: 세기 ±5 · Shift+휠: 고도 ±5 (Shift+휠은 브라우저에 따라 deltaX로 옴)
+    svg.addEventListener('wheel', (e) => {
+      const delta = e.deltaY || e.deltaX; if (!delta) return;
+      e.preventDefault();
+      const l = state.lighting, dir = delta < 0 ? 1 : -1;
+      editLighting(e.shiftKey ? { elevation: l.elevation + dir * 5 } : { intensity: l.intensity + dir * 5 }, 'wheel');
+    }, { passive: false });
+
     handle?.addEventListener('keydown', (e) => {
       const step = e.shiftKey ? 15 : 1, l = state.lighting;
-      const map = { ArrowRight: { azimuth: l.azimuth + step }, ArrowLeft: { azimuth: l.azimuth - step }, ArrowUp: { elevation: l.elevation + step }, ArrowDown: { elevation: l.elevation - step }, Home: { azimuth: 0 }, End: { azimuth: 180 } };
+      const map = {
+        ArrowRight: { azimuth: l.azimuth + step }, ArrowLeft: { azimuth: l.azimuth - step },
+        ArrowUp: { elevation: l.elevation + step }, ArrowDown: { elevation: l.elevation - step },
+        PageUp: { distance: l.distance + 0.5 }, PageDown: { distance: l.distance - 0.5 },
+        '+': { intensity: l.intensity + 5 }, '=': { intensity: l.intensity + 5 }, '-': { intensity: l.intensity - 5 },
+        Home: { azimuth: 0 }, End: { azimuth: 180 }
+      };
       if (map[e.key]) { e.preventDefault(); editLighting(map[e.key], 'keyboard'); }
     });
 
     updaters.push(() => {
       const l = state.lighting, a = l.azimuth * Math.PI / 180;
-      // 고도가 높을수록 위에서 내려다본 투영 반지름이 줄어듦 (cos e)
-      const r = SVG_R * (0.45 + 0.55 * Math.cos(l.elevation * Math.PI / 180));
+      const r = distToR(l.distance); // 점 위치 = 방향 + 거리만 표현 (고도는 숫자·3D로)
       const x = SVG_C + r * Math.sin(a), y = SVG_C + r * Math.cos(a);
       if (handle) {
         handle.setAttribute('cx', x.toFixed(2)); handle.setAttribute('cy', y.toFixed(2));
         handle.setAttribute('r', (6 + l.intensity / 100 * 5).toFixed(1));
         handle.setAttribute('aria-valuenow', String(l.azimuth));
-        handle.setAttribute('aria-valuetext', `방위각 ${l.azimuth}도 (${directionWords(l.azimuth)}), 고도 ${l.elevation}도`);
+        handle.setAttribute('aria-valuetext', `방위각 ${l.azimuth}도 (${directionWords(l.azimuth)}), 거리 ${l.distance}미터, 세기 ${l.intensity}, 고도 ${l.elevation}도`);
         const [kr, kg, kb] = kelvinToRGB(l.colorTemperatureK === 'auto' ? 5600 : l.colorTemperatureK);
         handle.style.fill = `rgb(${Math.round(kr * 255)},${Math.round(kg * 255)},${Math.round(kb * 255)})`;
         handle.style.opacity = l.intensity === 0 ? 0.35 : 1;
       }
       if (beam) { beam.setAttribute('x2', x.toFixed(2)); beam.setAttribute('y2', y.toFixed(2)); }
-      if (label) label.textContent = `${l.azimuth}° · ${l.elevation >= 0 ? '+' : ''}${l.elevation}°`;
+      if (dist) {
+        // 거리 글자는 점 바깥쪽(중심 반대편)에, 원 밖으로 안 나가게
+        const lr = Math.min(r + 15, SVG_R + 14);
+        dist.setAttribute('x', (SVG_C + lr * Math.sin(a)).toFixed(1));
+        dist.setAttribute('y', (SVG_C + lr * Math.cos(a) + 2.5).toFixed(1));
+        dist.textContent = `${l.distance}m`;
+      }
+      if (label) label.textContent = `${l.azimuth}° · 고도 ${l.elevation >= 0 ? '+' : ''}${l.elevation}° · 세기 ${l.intensity}%`;
     });
   }
 

@@ -2815,3 +2815,6 @@ footer a { display: inline-flex; align-items: center; min-height: 24px; }
 .lab-panel.is-collapsed .lo-collapsed-hint { display: inline-block; }
 .lab-panel.is-collapsed .lo-switch { display: none; }
 .lab-panel.is-collapsed { opacity: .85; }
+
+/* 안내 문구는 사진 카드 한 칸이 아니라 전체 폭으로 */
+.lo-examples .lo-ex-empty { grid-column: 1 / -1; line-height: 1.6; }

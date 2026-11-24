@@ -206,7 +206,7 @@ const MyPresets = {
     // 1. 셀렉트 박스류 초기화
     const defaults = {
       paramType: 'human',
-      paramStyle: 'cinematic',
+      paramStyle: 'none',
       paramAngle: '0',
       angleInput: '0',
       paramHumanCamAngle: 'none',
@@ -1190,7 +1190,12 @@ async function applyEngineering() {
     const config = {
       type: subjectType,
       outputMode: document.getElementById('param-output-mode')?.value || 'zimage',
-      style: UI.paramStyle ? UI.paramStyle.value : 'cinematic',
+      style: (() => {
+        const v = UI.paramStyle ? UI.paramStyle.value : 'none';
+        if (v === 'none') return 'Natural photorealistic photo (infer the look from the core intent; no heavy stylization)';
+        if (v === 'photo') return 'Candid real-life smartphone snapshot, true-to-life colors';
+        return v;
+      })(),
       angle: UI.paramAngle ? UI.paramAngle.value : '0',
       camAngle: selectedCamAngle,
       bg: selectedBg,
@@ -1277,7 +1282,7 @@ async function applyEngineering() {
       ? 'Mode: First-Person Selfie. It looks like a photo taken with an outstretched arm. Intimate connection.'
       : config.pov === 'selfie'
         ? 'Mode: Mirror Selfie or Handheld Selfie. The subject is holding a smartphone or camera visibly in the frame, taking a picture (e.g., looking into a mirror).'
-        : `Mode: Fixed Camera. Perspective: ${config.pov}. STRICTLY FORBID any mention of selfies, arms reaching out, or handheld cameras. This is a tripod or professional camera shot.`;
+        : `Mode: Standard third-person view${config.pov && config.pov !== 'standard' ? ` (${config.pov})` : ''}. Not a selfie: no arms reaching toward the lens. Do not describe cameras, tripods, lights or any filming equipment.`;
 
     let poseDescription = config.pose || 'none';
     let outfitText = config.outfit || 'none';
@@ -1508,7 +1513,7 @@ ${PromptContext.visual.camera.composition !== 'none' ? `- Composition: ${PromptC
 [VISUAL ENVIRONMENT]
 - Visual Style: ${PromptContext.visual.style}
 - Background: ${PromptContext.visual.background}
-- Camera Angle (Horizontal 0-360): ${PromptContext.visual.camera.angle} degrees
+- Camera Angle (Horizontal Orbit): ${getAngleText(PromptContext.visual.camera.angle)}
 ${PromptContext.visual.camera.camAngle !== 'none' ? `- Vertical Camera Angle: ${PromptContext.visual.camera.camAngle}` : ''}
 ${PromptContext.visual.camera.shot !== 'none' ? `- Camera Shot: ${PromptContext.visual.camera.shot}` : ''}
 ${PromptContext.visual.camera.composition !== 'none' ? `- Composition: ${PromptContext.visual.camera.composition}` : ''}
@@ -1523,7 +1528,9 @@ ${PromptContext.visual.camera.composition !== 'none' ? `- Composition: ${PromptC
       `;
     }
 
-    enrichedIntent += `\n[FINAL DIRECTIVES]\n${config.chips}, ${config.custom || ''}`;
+    const finalDirectives = [config.chips, config.custom].map(x => (x || '').trim()).filter(Boolean).join(', ');
+    if (finalDirectives) enrichedIntent += `\n[FINAL DIRECTIVES]\n${finalDirectives}`;
+    enrichedIntent = enrichedIntent.replace(/\n\s*\n\s*\n+/g, '\n\n');
 
     let systemPrompt;
     if (config.type === 'animal') {
@@ -1613,7 +1620,11 @@ RULES:
 - Order: main subject and action -> appearance and outfit -> environment/background -> lighting -> camera (shot size, angle, lens feel) -> overall style/mood.
 - Use concrete visual nouns and adjectives. Avoid empty buzzwords such as 8k, masterpiece, ultra-detailed, ray-tracing, award-winning.
 - There is NO negative prompt field. Express every exclusion positively (e.g. "clean background" instead of "no clutter").
-- Follow pose, shot, composition and lighting specifications with full fidelity.
+- Follow pose, shot, composition, camera angle and lighting specifications with full fidelity. If the camera angle is a back view, the subject faces away from the viewer.
+- CONCRETE OVER ABSTRACT: turn every abstract word into visible details — exact colors (e.g. "dusty pink and lavender"), specific garments and materials, a specific action with hands/gaze, specific props and setting objects.
+- Put the main subject and its most important attributes in the first sentence.
+- Where a specification says it is inferred/automatic, choose ONE simple, plausible option that fits the core intent instead of stacking many trendy details.
+- Never mention cameras, tripods, lenses as objects, studio lights or other equipment as things visible in the image.
 - Output only the prompt itself, nothing else.`;
     }
 

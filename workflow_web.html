@@ -1141,6 +1141,57 @@
         </div>
       </div>
 
+      <!-- ===== 🎯 원클릭 제작 파이프라인 (목표 1회 입력 → 기획 → 장면 → 이미지 → 영상) ===== -->
+      <div class="lab-card" id="autopilot-card"
+        style="margin-top: 24px; padding: 28px; border: 1.5px solid var(--skills-cyan); border-radius: 12px; background: var(--panel);">
+        <div class="label-mono" style="color: var(--skills-cyan);">🎯 ONE-CLICK PIPELINE · 목표만 입력하면 영상까지</div>
+        <textarea id="ap-goal" class="lab-input-small" rows="3"
+          style="width: 100%; margin-top: 12px; resize: vertical;"
+          placeholder="예) 직장인 대상 '퇴근 후 10분 홈카페' 릴스. 따뜻하고 감성적인 톤, 마지막에 저장 유도"></textarea>
+        <div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin-top: 12px;">
+          <div class="param-group" style="min-width: 140px;">
+            <label style="display:block; font-size: 0.75rem; color: var(--fg-muted); margin-bottom: 6px;">플랫폼</label>
+            <select id="ap-platform" class="lab-select">
+              <option value="instagram-reels" selected>인스타 릴스</option>
+              <option value="youtube-shorts">유튜브 쇼츠</option>
+              <option value="tiktok">틱톡</option>
+            </select>
+          </div>
+          <div class="param-group" style="min-width: 140px;">
+            <label style="display:block; font-size: 0.75rem; color: var(--fg-muted); margin-bottom: 6px;">장면 수</label>
+            <select id="ap-scenes" class="lab-select">
+              <option value="2">2장면 (약 22크레딧)</option>
+              <option value="3" selected>3장면 (약 32크레딧)</option>
+              <option value="4">4장면 (약 43크레딧)</option>
+            </select>
+          </div>
+          <label style="display:flex; align-items:center; gap:6px; font-size: 0.8rem; color: var(--fg-muted); padding-bottom: 8px;">
+            <input type="checkbox" id="ap-make-video" checked> 영상까지 생성
+          </label>
+          <button id="ap-run-btn" class="btn-skills" style="flex: 1; min-width: 220px; height: 44px; font-size: 1rem;">▶ 전체 자동 제작</button>
+        </div>
+
+        <div id="ap-steps" style="display: none; margin-top: 20px; display: none; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px;">
+          <div class="ap-step" data-step="concept">① 컨셉 기획</div>
+          <div class="ap-step" data-step="storyboard">② 스토리보드</div>
+          <div class="ap-step" data-step="shotlist">③ 숏 리스트</div>
+          <div class="ap-step" data-step="scenes">④ 장면 설계</div>
+          <div class="ap-step" data-step="images">⑤ 장면 이미지</div>
+          <div class="ap-step" data-step="videos">⑥ 장면 영상</div>
+          <div class="ap-step" data-step="release">⑦ BGM · 제목/태그</div>
+        </div>
+
+        <div id="ap-scene-grid"
+          style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; margin-top: 16px;"></div>
+
+        <div id="ap-final" style="display: none; margin-top: 20px; text-align: center;">
+          <div class="label-mono" style="margin-bottom: 8px;">🎬 완성본 미리보기 (장면 연속 재생)</div>
+          <video id="ap-final-player" controls playsinline
+            style="max-width: 100%; max-height: 520px; border-radius: 10px; background: #000;"></video>
+          <div id="ap-final-note" style="font-size: 0.72rem; color: var(--fg-muted); margin-top: 8px;"></div>
+        </div>
+      </div>
+
       <!-- ===== 탭 바 ===== -->
       <div class="vps-tab-bar"
         style="display: flex; gap: 4px; margin-top: 20px; overflow-x: auto; padding-bottom: 2px;">

@@ -2586,3 +2586,14 @@ footer {
 
 /* 그리드 칸이 내용물(버튼 줄) 때문에 넓어져 옆 칸을 찌그러뜨리지 않도록 */
 .lab-grid > * { min-width: 0; }
+
+/* 원클릭 파이프라인 단계 표시 */
+.ap-step { font-size: 0.78rem; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border); color: var(--fg-muted); background: var(--input-bg); }
+.ap-step.running { border-color: var(--skills-cyan); color: var(--skills-cyan); }
+.ap-step.done { border-color: #10b981; color: #10b981; }
+.ap-step.done::after { content: ' ✓'; }
+.ap-step.failed { border-color: #ff5555; color: #ff5555; }
+.ap-step.skipped { opacity: 0.45; }
+.ap-scene { border: 1px solid var(--border); border-radius: 10px; padding: 10px; background: var(--input-bg); font-size: 0.75rem; color: var(--fg-muted); }
+.ap-scene .ap-media { aspect-ratio: 9 / 16; border-radius: 8px; overflow: hidden; background: rgba(127,127,127,0.12); display: flex; align-items: center; justify-content: center; margin-bottom: 8px; }
+.ap-scene img, .ap-scene video { width: 100%; height: 100%; object-fit: cover; }

@@ -117,7 +117,7 @@ const apiLimiter = rateLimit({
 // ✅ AI 전용 빡센 제한 (1분에 3회 허용 = 연타 방지 및 사용자 단위 격리)
 const strictAiLimiter = rateLimit({
     windowMs: 1 * 60 * 1000,
-    max: 3,
+    max: 12, // 원클릭 파이프라인(장면별 이미지+영상 연속 호출) 대응
     keyGenerator: (req) => req.user ? req.user.id : req.ip,
     standardHeaders: 'draft-7',
     legacyHeaders: false,

@@ -3195,7 +3195,7 @@ RULES:
 - image_prompt: photorealistic still frame, subject + action, setting, lighting, camera shot, vertical composition. Plain text, no negative prompts, no buzzwords like 8k or masterpiece.
 - motion_prompt: what moves in 5 seconds (subject action + camera movement), simple and physically plausible.
 - narration: natural spoken Korean (구어체) voice-over for that scene, readable in about 4 seconds (max 30 Korean characters). The lines must flow as one story across scenes; the last line delivers the call-to-action.
-- Scene 1 must be a strong visual hook; the last scene should support the call-to-action.`;
+- Scene 1 must be a strong visual hook; the last scene should support the call-to-action. If there is only one scene, it must deliver both the hook and the call-to-action.`;
     const intent = `[GOAL]\n${goal}\n\n[STORYBOARD]\n${(storyboard || '').slice(0, 1500)}\n\n[SHOT LIST]\n${(shotlist || '').slice(0, 1000)}`;
     const raw = await AP.engineer(intent, systemPrompt);
     const jsonText = raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1);
@@ -3325,7 +3325,7 @@ RULES:
     const goal = document.getElementById('ap-goal').value.trim();
     const platformSel = document.getElementById('ap-platform');
     const platform = platformSel.options[platformSel.selectedIndex].text;
-    const count = parseInt(document.getElementById('ap-scenes').value, 10) || 3;
+    const count = parseInt(document.getElementById('ap-scenes').value, 10) || 1;
     const makeVideo = document.getElementById('ap-make-video').checked;
     const voiceOpt = document.getElementById('ap-voice')?.value || 'female';
 

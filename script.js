@@ -473,8 +473,8 @@ async function fetchServerStatus() {
     if (UI.statClusterStatus) {
       UI.statClusterStatus.innerText = data.aiNodeStatus || 'UNKNOWN';
       const statusColors = {
-        'ONLINE': '#10b981',    // 정상 (녹색)
-        'DEGRADED': '#f59e0b',  // 불안정 (주황색)
+        'ONLINE': 'var(--ok-fg)',    // 정상 (녹색)
+        'DEGRADED': 'var(--warn-fg)',  // 불안정 (주황색)
         'OFFLINE': '#555'       // 전원 꺼짐 (짙은 회색/검정 느낌)
       };
       UI.statClusterStatus.style.color = statusColors[data.aiNodeStatus] || '#888';
@@ -575,19 +575,19 @@ function updateStatusUI(section, status, message) {
   if (status === 'processing') {
     dot.classList.add('idle'); // Change processing to use green (idle) dot
     text.innerText = message || 'Processing...';
-    text.style.color = '#10b981';
+    text.style.color = 'var(--ok-fg)';
   } else if (status === 'error') {
     dot.classList.add('error');
     text.innerText = message || 'System Error';
-    text.style.color = '#ff5555';
+    text.style.color = 'var(--err-fg)';
   } else if (status === 'warning') {
     dot.classList.add('warning');
     text.innerText = message || 'Warning';
-    text.style.color = '#f59e0b';
+    text.style.color = 'var(--warn-fg)';
   } else {
     dot.classList.add('idle');
     text.innerText = message || 'System Ready';
-    text.style.color = '#10b981';
+    text.style.color = 'var(--ok-fg)';
   }
 }
 
@@ -2650,10 +2650,10 @@ document.querySelectorAll('a[href="#system-status"]').forEach(anchor => {
       const isCurrentlyActive = UI.systemStatusSection.classList.contains('active');
       if (isCurrentlyActive) {
         UI.systemStatusSection.classList.remove('active');
-        anchor.scrollIntoView({ behavior: 'smooth' });
+        anchor.scrollIntoView({ behavior: (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) ? 'auto' : 'smooth' });
       } else {
         UI.systemStatusSection.classList.add('active');
-        UI.systemStatusSection.scrollIntoView({ behavior: 'smooth' });
+        UI.systemStatusSection.scrollIntoView({ behavior: (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) ? 'auto' : 'smooth' });
       }
     }
   });
@@ -2666,7 +2666,7 @@ checkAuthStatus();
 const heroStartBtn = document.getElementById('hero-start-btn');
 if (heroStartBtn) {
   heroStartBtn.addEventListener('click', () => {
-    document.getElementById('prompt-lab').scrollIntoView({ behavior: 'smooth' });
+    document.getElementById('prompt-lab').scrollIntoView({ behavior: (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) ? 'auto' : 'smooth' });
   });
 }
 
@@ -3155,7 +3155,7 @@ async function generateImage() {
         
         // 영상 만들기 선택 시
         btnVideo.onclick = () => {
-          document.getElementById('video-studio').scrollIntoView({ behavior: 'smooth' });
+          document.getElementById('video-studio').scrollIntoView({ behavior: (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) ? 'auto' : 'smooth' });
           setVideoImageRef(finalImageUrl, 'start');
           choicePanel.style.display = "none"; // 이동 후 숨김
         };
@@ -3475,7 +3475,7 @@ if (sendToStudioBtn) {
     const ratioSel = document.getElementById('imageRatioInput');
     if (ratioSel && [...ratioSel.options].some(o => o.value === '9:16') && ratioSel.value === '1:1') ratioSel.value = '9:16';
     const studio = document.getElementById('image-studio');
-    if (studio) studio.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (studio) studio.scrollIntoView({ behavior: (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) ? 'auto' : 'smooth', block: 'start' });
     input.style.transition = 'box-shadow 0.3s';
     input.style.boxShadow = '0 0 0 3px var(--skills-cyan)';
     setTimeout(() => { input.style.boxShadow = ''; }, 1500);

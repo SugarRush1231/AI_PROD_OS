@@ -20,6 +20,10 @@
   --grad-start: #f1f5f9;
   --grad-end: #64748b;
   --input-bg: rgba(0, 0, 0, 0.2);
+  /* 상태 글자색 (배경 대비 4.5:1 이상) */
+  --ok-fg: #10b981;
+  --warn-fg: #f59e0b;
+  --err-fg: #ff6b6b;
 }
 
 .light-mode {
@@ -41,6 +45,9 @@
   --skills-cyan: #2563eb;
   --skills-purple: #4f46e5;
   --input-bg: #ffffff;
+  --ok-fg: #047857;
+  --warn-fg: #b45309;
+  --err-fg: #c81e1e;
 }
 
 * {
@@ -2744,3 +2751,24 @@ html { scroll-behavior: smooth; scroll-padding-top: 80px; }
 .tts-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 12px; }
 .tts-grid .param-group { margin: 0; }
 @media (max-width: 480px) { .tts-grid { grid-template-columns: 1fr; } }
+
+/* ── 접근성 점검 반영 (ui-ux-pro-max 체크리스트) ── */
+/* 1) 다크 모드 보조 글자 대비: #64748b(3.6:1) → 4.5:1 이상 */
+:root:not(.light-mode) { --fg-muted: #8b9ab0; }
+/* 2) 클릭 영역 최소 24px */
+.nav-right a[href="/logout"] { display: inline-flex; align-items: center; min-height: 24px; padding: 4px 6px; margin: -4px -6px; }
+.lab-panel-toggle { min-height: 28px; padding: 2px 4px; margin: -2px -4px; }
+.lt-link { display: inline-flex; align-items: center; min-height: 24px; padding: 2px 6px; margin: -2px -6px; }
+.lt-advanced > summary { min-height: 28px; display: flex; align-items: center; gap: 6px; }
+.lt-advanced > summary::before { content: "▸"; transition: transform .15s; }
+.lt-advanced[open] > summary::before { transform: rotate(90deg); }
+.lt-advanced > summary::-webkit-details-marker { display: none; }
+.lt-advanced > summary { list-style: none; }
+footer a { display: inline-flex; align-items: center; min-height: 24px; }
+/* 4) '동작 줄이기' 설정 존중 */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+}
+/* 3) 흰 글자 버튼 배경 대비 보정 (3.0~3.7:1 → 4.5:1 이상, 색 계열 유지) */
+:root:not(.light-mode) .btn-video:not(:disabled) { background: #2563eb; }
+#btn-export-pdf { background: #4f46e5 !important; border-color: #4f46e5 !important; }

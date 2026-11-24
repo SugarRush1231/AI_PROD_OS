@@ -876,15 +876,19 @@
             <div class="output-header">
               <div class="label-mono">프롬프트 (최적화)</div>
               <div style="display: flex; gap: 8px;">
-                <select id="param-output-mode" class="lab-select" title="출력 형식"
-                  style="width: auto; height: 30px; padding: 0 8px; font-size: 0.72rem;">
-                  <option value="zimage" selected>이미지 생성용 (Z-Image 최적화)</option>
-                  <option value="spec">상세 설계서 (4문단 + 네거티브)</option>
-                </select>
                 <button class="btn-copy" id="json-btn">JSON 복사</button>
                 <button class="btn-copy" id="copy-btn">복사</button>
-                <button class="btn-copy" id="send-to-studio-btn" style="border-color: var(--skills-cyan); color: var(--skills-cyan);">이미지 생성 →</button>
               </div>
+            </div>
+            <div class="output-toolbar"
+              style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin: 10px 0 4px;">
+              <select id="param-output-mode" class="lab-select" title="출력 형식"
+                style="width: auto; max-width: 100%; height: 30px; padding: 0 8px; font-size: 0.72rem;">
+                <option value="zimage" selected>이미지 생성용 (Z-Image)</option>
+                <option value="spec">상세 설계서 (4문단)</option>
+              </select>
+              <button class="btn-copy" id="send-to-studio-btn"
+                style="border-color: var(--skills-cyan); color: var(--skills-cyan);">이미지 생성 →</button>
             </div>
             <div id="optimized-output" class="output-block"
               style="min-height: 200px; font-size: 0.85rem; line-height: 1.6; padding: 20px;">

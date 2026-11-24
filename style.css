@@ -2583,3 +2583,6 @@ footer {
   margin-right: 8px;
   box-shadow: 0 0 5px rgba(255, 255, 255, 0.2);
 }
+
+/* 그리드 칸이 내용물(버튼 줄) 때문에 넓어져 옆 칸을 찌그러뜨리지 않도록 */
+.lab-grid > * { min-width: 0; }

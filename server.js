@@ -179,14 +179,38 @@ const corsOptions = {
 };
 app.use(cors(corsOptions));
 app.use(express.json({ limit: '50mb' }));
-app.use(express.static(path.join(__dirname)));
+// 🔄 캐시 문제 방지: 빌드 환경에서 파일 수정 시각이 1980년으로 고정돼 브라우저가 옛 파일을 재사용하는 일이 있어
+//    HTML은 매번 새로 받게 하고(no-store), JS·CSS 주소에는 배포(서버 시작) 시각을 버전으로 붙인다
+const ASSET_VERSION = String(SERVER_START_TIME);
+let MAIN_HTML = null;
+const renderMainHtml = () => {
+    if (MAIN_HTML && process.env.NODE_ENV === 'production') return MAIN_HTML;
+    const raw = fs_sync.readFileSync(path.join(__dirname, 'workflow_web.html'), 'utf8');
+    MAIN_HTML = raw
+        .replace(/src="script\.js"/g, `src="script.js?v=${ASSET_VERSION}"`)
+        .replace(/href="style\.css(\?v=[^"]*)?"/g, `href="style.css?v=${ASSET_VERSION}"`)
+        .replace(/src="supertonic\/tts\.js"/g, `src="supertonic/tts.js?v=${ASSET_VERSION}"`);
+    return MAIN_HTML;
+};
+app.get(['/', '/index.html', '/workflow_web.html'], (req, res) => {
+    res.set('Cache-Control', 'no-store, max-age=0');
+    res.type('html').send(renderMainHtml());
+});
+
+app.use(express.static(path.join(__dirname), {
+    index: false,
+    etag: false,          // 수정 시각이 1980년 고정이라 크기만으로 비교 → 내용이 바뀌어도 304가 나는 문제 방지
+    lastModified: false,
+    setHeaders: (res, filePath) => {
+        if (filePath.endsWith('.html')) res.setHeader('Cache-Control', 'no-store, max-age=0');
+        else if (/\.(js|css)$/.test(filePath)) res.setHeader('Cache-Control', 'no-cache');   // 버전 주소 + 항상 재검증
+    }
+}));
 
 // --- ROUTES ---
 
 // 메인 페이지 서빙
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'workflow_web.html'));
-});
+
 
 /**
  * Whisper STT API (Audio to Subtitles)

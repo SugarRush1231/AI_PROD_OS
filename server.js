@@ -75,8 +75,8 @@ app.use(helmet({
         directives: {
             defaultSrc: ["'self'"],
             scriptSrc: ["'self'", "'unsafe-inline'", "blob:", "'wasm-unsafe-eval'", "https://cdn.jsdelivr.net"], // Supertonic(onnxruntime-web)
-            styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-            fontSrc: ["'self'", "https://fonts.gstatic.com"],
+            styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://cdn.jsdelivr.net"], // Pretendard
+            fontSrc: ["'self'", "https://fonts.gstatic.com", "https://cdn.jsdelivr.net"],
             imgSrc: ["'self'", "data:", "https://*", "https://lh3.googleusercontent.com"],
             mediaSrc: ["'self'", "data:", "blob:", "https://*"], // 비디오 재생 허용
             connectSrc: ["'self'", "https://text.pollinations.ai", "https://api.groq.com", "https:", "blob:", "data:"],

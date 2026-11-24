@@ -928,7 +928,120 @@ if (UI.paramAngle && UI.angleInput) {
   });
 }
 
+
+// ===== 드롭다운 확장 선택지의 영문 설명 (AI에게 구체적으로 전달) =====
+const OPTION_DESC = {
+  "k-drama": "Korean drama cinematography: soft warm grading, gentle backlight, romantic mood",
+  "film-35mm": "35mm analog film photo, natural grain, slightly faded colors",
+  "magazine": "high-end fashion magazine editorial photo, clean styling, crisp detail",
+  "product-ad": "premium commercial product advertisement photo, flawless lighting, sharp focus",
+  "y2k": "Y2K aesthetic, glossy flash photography, playful early-2000s colors",
+  "webtoon": "Korean webtoon digital illustration, clean line art, flat cel shading",
+  "watercolor": "soft watercolor painting, gentle color bleeding, paper texture",
+  "clay-3d": "cute 3D clay render, soft rounded shapes, pastel colors",
+  "pixel-art": "detailed pixel art, limited color palette, crisp pixels",
+  "walking": "walking naturally mid-stride",
+  "looking-back": "glancing back over the shoulder toward the viewer",
+  "hair-touch": "tucking hair behind the ear with one hand",
+  "chin-rest": "resting chin on one hand, elbow on a table",
+  "laughing": "laughing naturally, candid joyful moment",
+  "holding-cup": "holding a drink cup with both hands near the chest",
+  "using-phone": "looking down at a smartphone held in one hand",
+  "leaning-wall": "leaning casually against a wall",
+  "sitting-chair": "sitting relaxed on a chair",
+  "v-sign": "making a playful V-sign with fingers near the face",
+  "jumping": "jumping in mid-air",
+  "vlog-cam": "vlog-style self-filming angle, camera held slightly above at arm length (phone not visible)",
+  "through-window": "shot through a window glass with soft reflections",
+  "idol": "K-pop idol visual: flawless skin, defined features, polished styling",
+  "fresh": "fresh innocent look, minimal makeup, clear skin",
+  "chic": "chic cool expression, sharp eyeliner, confident gaze",
+  "mature": "elegant mature look, refined makeup",
+  "no-makeup": "effortless natural look, barely-there makeup",
+  "office-look": "smart office outfit: blouse or shirt with tailored trousers",
+  "athleisure": "athleisure: fitted sports top and leggings or joggers",
+  "knit-daily": "cozy oversized knit sweater with simple bottoms",
+  "dress": "simple elegant one-piece dress",
+  "denim": "denim jacket or jeans casual look",
+  "suit": "well-fitted modern suit",
+  "summer-linen": "light summer linen shirt and shorts or skirt",
+  "winter-coat": "long wool winter coat with a scarf",
+  "modern-hanbok": "modern minimal hanbok-inspired outfit",
+  "extreme-close-up": "extreme close-up on the eyes and face details",
+  "medium-close-up": "medium close-up from chest up",
+  "negative-space": "subject small on one side with generous empty space",
+  "frame-in-frame": "subject framed by a doorway, window or arch",
+  "leading-lines": "strong lines in the scene leading the eye to the subject",
+  "head-tilt": "tilting the head curiously",
+  "belly-up": "lying on its back showing the belly",
+  "eating": "eating a treat",
+  "looking-up": "looking up at the camera with big eyes",
+  "petals": "flower petals drifting through the air",
+  "bokeh": "soft bokeh light orbs in the background",
+  "light-rays": "visible rays of light streaming through the scene",
+  "leaf-shadow": "dappled leaf shadows cast across the surface",
+  "ice-frost": "fresh ice cubes and frost condensation",
+  "ripples": "gentle water ripples around the subject",
+  "golden-hour": "warm low golden-hour sunlight",
+  "rim-backlight": "strong backlight creating a glowing rim outline",
+  "moody-dark": "dark moody low-key lighting with deep shadows",
+  "pastel-soft": "soft even pastel-toned lighting",
+  "hard-flash": "direct on-camera flash with crisp shadows"
+};
+const optDesc = (v) => (v && OPTION_DESC[v]) ? OPTION_DESC[v] : v;
+
+// ===== 수평 회전 각도 → 8방향 (이미지 모델은 숫자 각도를 못 알아들어서 말로 변환) =====
+function angleToDirection(val) {
+  const n = ((parseInt(val, 10) || 0) % 360 + 360) % 360;
+  const dirs = [
+    { ko: '정면', en: 'front view, facing the camera directly' },
+    { ko: '앞 3/4 (왼쪽)', en: 'three-quarter front view, body turned toward the left of the frame' },
+    { ko: '옆모습 (왼쪽)', en: 'side profile view, facing the left edge of the frame' },
+    { ko: '뒤 3/4 (왼쪽)', en: 'three-quarter back view, turned away toward the left, face partly hidden' },
+    { ko: '뒷모습', en: 'back view, facing away from the camera, back of the head visible' },
+    { ko: '뒤 3/4 (오른쪽)', en: 'three-quarter back view, turned away toward the right, face partly hidden' },
+    { ko: '옆모습 (오른쪽)', en: 'side profile view, facing the right edge of the frame' },
+    { ko: '앞 3/4 (오른쪽)', en: 'three-quarter front view, body turned toward the right of the frame' }
+  ];
+  return dirs[Math.round(n / 45) % 8];
+}
+
 const BACKGROUND_REGISTRY = {
+  'han-river': "Han River park in Seoul at sunset, riverside grass and city bridges glowing in warm light.",
+  'seongsu-alley': "A trendy Seongsu-dong alley in Seoul with red-brick cafes and warm street lights.",
+  'hanok': "A traditional Korean hanok courtyard with wooden beams and tiled roofs.",
+  'cherry-blossom': "A street lined with blooming cherry blossom trees, soft pink petals.",
+  'rooftop-night': "A city rooftop at night with glittering skyline lights in the background.",
+  'subway': "A clean modern subway platform with soft fluorescent light.",
+  'office': "A bright modern office with desks, plants and large windows.",
+  'convenience-store': "In front of a Korean convenience store at night, glowing storefront light.",
+  'home-kitchen': "A cozy home kitchen with warm light and simple wooden cabinets.",
+  'bedroom': "A cozy bedroom with white bedding and morning sunlight through sheer curtains.",
+  'beach-sunset': "A calm beach at sunset with soft waves and an orange sky.",
+  'snowy-street': "A quiet street with gently falling snow and warm shop lights.",
+  'library': "A quiet bookstore or library with tall wooden bookshelves.",
+  'gym': "A modern gym with equipment softly blurred in the background.",
+  'white-seamless': "A plain seamless pure-white background, evenly lit, no props.",
+  'pastel-backdrop': "A plain seamless pastel-colored backdrop, evenly lit, no props.",
+  'snowy-field': "A snow-covered open field with soft winter light.",
+  'beach-dog': "A sandy beach with gentle waves.",
+  'sofa-blanket': "A soft sofa with a cozy knitted blanket in a warm living room.",
+  'flower-garden': "A colorful flower garden in soft daylight.",
+  'autumn-leaves': "A path covered in red and orange autumn leaves.",
+  'pet-cafe': "A bright pet cafe with wooden floors and toys.",
+  'white-backdrop': "A plain seamless pure-white background, evenly lit.",
+  'white-desk-sun': "A clean white desk with warm sunlight streaming from a window and soft shadows.",
+  'marble-vanity': "A white marble vanity countertop with a softly blurred mirror behind.",
+  'kitchen-counter': "A clean kitchen counter with natural light.",
+  'bathroom-shelf': "A minimal bathroom shelf with soft tiles and natural light.",
+  'cafe-wood-table': "A warm wooden cafe table with soft window light.",
+  'picnic': "A picnic blanket on green grass in sunlight.",
+  'water-surface': "A calm water surface with gentle reflections.",
+  'stone-podium': "A minimal natural stone podium with a soft seamless background.",
+  'gradient-studio': "A smooth color-gradient studio background.",
+  'hanok-interior': "A traditional Korean hanok interior with hanji paper doors and wooden floor.",
+  'night-city-window': "A window ledge overlooking a glittering night city.",
+
   'life4cut': (poses) => `A 2x2 grid collage (4-split photo booth style). Background: A clean, minimalist studio with a solid, soft pastel-colored background (e.g., muted pink, blue, or lavender) to keep the focus on the subject. Each of the four panels MUST show a different unique pose: Panel 1: ${poses[0]}; Panel 2: ${poses[1]}; Panel 3: ${poses[2]}; Panel 4: ${poses[3]}. Upper-body centric. High-quality Photo Booth aesthetic.`,
   'living-room': 'A cozy, modern indoor living room or room with natural soft lighting and elegant interior details.',
   'mountain-stars': 'A breathtaking vast mountain range at night under a brilliant galaxy of stars, with soft celestial glow and deep cinematic depth.',
@@ -1194,25 +1307,25 @@ async function applyEngineering() {
         const v = UI.paramStyle ? UI.paramStyle.value : 'none';
         if (v === 'none') return 'Natural photorealistic photo (infer the look from the core intent; no heavy stylization)';
         if (v === 'photo') return 'Candid real-life smartphone snapshot, true-to-life colors';
-        return v;
+        return optDesc(v);
       })(),
       angle: UI.paramAngle ? UI.paramAngle.value : '0',
       camAngle: selectedCamAngle,
       bg: selectedBg,
-      pose: UI.paramPose ? UI.paramPose.value : 'dynamic',
+      pose: optDesc(UI.paramPose ? UI.paramPose.value : 'dynamic'),
       pov: UI.paramPov ? UI.paramPov.value : 'standard',
-      face: UI.paramFace ? UI.paramFace.value : 'natural',
-      outfit: UI.paramOutfit ? UI.paramOutfit.value : 'reference',
+      face: optDesc(UI.paramFace ? UI.paramFace.value : 'natural'),
+      outfit: optDesc(UI.paramOutfit ? UI.paramOutfit.value : 'reference'),
       humanRef: UI.paramHumanRef ? UI.paramHumanRef.value : 'strict',
       dogBreed: UI.paramDogBreed ? UI.paramDogBreed.value : 'none',
       catBreed: UI.paramCatBreed ? UI.paramCatBreed.value : 'none',
-      animalPose: UI.paramAnimalPose ? UI.paramAnimalPose.value : 'none',
+      animalPose: optDesc(UI.paramAnimalPose ? UI.paramAnimalPose.value : 'none'),
       animalPov: UI.paramAnimalPov ? UI.paramAnimalPov.value : 'none',
-      sceneEffect: UI.paramSceneEffect ? UI.paramSceneEffect.value : 'none',
-      sceneLight: UI.paramSceneLight ? UI.paramSceneLight.value : 'commercial',
+      sceneEffect: optDesc(UI.paramSceneEffect ? UI.paramSceneEffect.value : 'none'),
+      sceneLight: optDesc(UI.paramSceneLight ? UI.paramSceneLight.value : 'commercial'),
       sceneRef: UI.paramSceneRef ? UI.paramSceneRef.value : 'strict',
-      humanShot: UI.paramHumanShot ? UI.paramHumanShot.value : 'none',
-      humanComp: UI.paramHumanComp ? UI.paramHumanComp.value : 'none',
+      humanShot: optDesc(UI.paramHumanShot ? UI.paramHumanShot.value : 'none'),
+      humanComp: optDesc(UI.paramHumanComp ? UI.paramHumanComp.value : 'none'),
       animalShot: UI.paramAnimalShot ? UI.paramAnimalShot.value : 'none',
       animalComp: UI.paramAnimalComp ? UI.paramAnimalComp.value : 'none',
       sceneShot: UI.paramSceneShot ? UI.paramSceneShot.value : 'none',
@@ -1282,7 +1395,7 @@ async function applyEngineering() {
       ? 'Mode: First-Person Selfie. It looks like a photo taken with an outstretched arm. Intimate connection.'
       : config.pov === 'selfie'
         ? 'Mode: Mirror Selfie or Handheld Selfie. The subject is holding a smartphone or camera visibly in the frame, taking a picture (e.g., looking into a mirror).'
-        : `Mode: Standard third-person view${config.pov && config.pov !== 'standard' ? ` (${config.pov})` : ''}. Not a selfie: no arms reaching toward the lens. Do not describe cameras, tripods, lights or any filming equipment.`;
+        : `Mode: Standard third-person view${config.pov && config.pov !== 'standard' ? ` (${optDesc(config.pov)})` : ''}. Not a selfie: no arms reaching toward the lens. Do not describe cameras, tripods, lights or any filming equipment.`;
 
     let poseDescription = config.pose || 'none';
     let outfitText = config.outfit || 'none';
@@ -1454,14 +1567,8 @@ async function applyEngineering() {
 
     // --- 2. ASSEMBLE FINAL PROMPT INTENT (TYPE-AWARE Natural Language Format) ---
     const getAngleText = (angleStr) => {
-      const num = parseInt(angleStr, 10);
-      if (num >= 0 && num <= 15) return `${num} degrees (Front View, straight on)`;
-      if (num >= 16 && num <= 60) return `${num} degrees (Three-Quarter View)`;
-      if (num >= 61 && num <= 120) return `${num} degrees (Side Profile)`;
-      if (num >= 121 && num <= 240) return `${num} degrees (Back View, from behind)`;
-      if (num >= 241 && num <= 344) return `${num} degrees (Reverse Side Profile, moving around the subject)`;
-      if (num >= 345 && num <= 360) return `${num} degrees (Front View, straight on)`;
-      return `${num} degrees`;
+      const d = angleToDirection(angleStr);
+      return `${d.en} (${d.ko})`;
     };
     if (config.type === 'animal') {
       enrichedIntent = `
@@ -2473,13 +2580,7 @@ window.updateAngleDescription = function (val) {
   if (!descEl) return;
   const num = parseInt(val, 10);
 
-  let title = "Front View (정면)";
-  if (num >= 0 && num <= 15) title = "Front View (정면)";
-  else if (num >= 16 && num <= 60) title = "Three-Quarter View (쿼터)";
-  else if (num >= 61 && num <= 120) title = "Side Profile (측면)";
-  else if (num >= 121 && num <= 240) title = "Back View (후면)";
-  else if (num >= 241 && num <= 344) title = "Reverse Side (반대측면)";
-  else if (num >= 345 && num <= 360) title = "Front View (정면)";
+  const title = angleToDirection(num).ko;
 
   const htmlContent = title;
 
@@ -3266,9 +3367,13 @@ const AP = {
   async designScenes(goal, platform, count, storyboard, shotlist, linkMode = 'cut') {
     const systemPrompt = `You are a short-form video director. Turn the plan into exactly ${count} vertical (9:16) scenes for ${platform}.
 Return ONLY valid JSON, no markdown fences, in this shape:
-{"character":"one-sentence visual description of the main subject (age, look, hair, outfit)","scenes":[{"title":"short Korean title","image_prompt":"English, one paragraph, max 600 characters","motion_prompt":"English, max 200 characters","narration":"Korean voice-over line","caption":"Korean on-screen text"}]}
+{"character":"one-sentence visual description of the main person/animal, or empty string if none","product":"one-sentence exact visual description of the hero product (shape, material, color, cap, label), or empty string if none","scenes":[{"title":"short Korean title","image_prompt":"English, one paragraph, max 600 characters","motion_prompt":"English, max 200 characters","narration":"Korean voice-over line","caption":"Korean on-screen text"}]}
 RULES:
-- CHARACTER CONSISTENCY: copy the exact "character" sentence verbatim into every image_prompt so the same person/object appears in all scenes.
+- CHARACTER CONSISTENCY: copy the exact "character" sentence verbatim into every image_prompt so the same person appears in all scenes.
+- PRODUCT LOCK: if there is a product, copy the exact "product" sentence verbatim into EVERY image_prompt and motion_prompt that shows it. The product must look identical in every scene (same bottle shape, cap, color, label). Never swap it for a generic container.
+- HOOK (scene 1, first second): open with ONE of these — an extreme close-up of the product/subject with striking light, an unexpected motion, or a bold question/number. No slow establishing shots, no subject idly sitting or reading.
+- Scene 1 caption must itself be a hook: a short question, bold claim or number (e.g. "이 향, 맡아봤어?", "단 1번으로 충분"). Never a soft description.
+- caption and narration must say DIFFERENT things: caption = short punchy copy, narration = the spoken line. Never repeat the same words.
 - image_prompt: photorealistic still frame, subject + action, setting, lighting, camera shot, vertical composition. Plain text, no negative prompts, no buzzwords like 8k or masterpiece.
 - NO TEXT IN IMAGES: text overlays, captions, buttons, "swipe up"/link icons, logos and brand names from the plan are added later in editing — never describe them in image_prompt or motion_prompt.
 - PHYSICAL ACCURACY: describe exactly what touches what and in which direction (e.g. "sprays the perfume onto her inner wrist, mist drifting away from her face"). Products must be used the way they are really used.
@@ -3283,7 +3388,15 @@ RULES:
     const jsonText = raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1);
     const parsed = JSON.parse(jsonText);
     if (!Array.isArray(parsed.scenes) || !parsed.scenes.length) throw new Error('장면 설계 결과가 비어 있습니다.');
-    return parsed.scenes.slice(0, count);
+    // 🔒 일관성 강제: AI가 규칙을 빠뜨려도 제품·인물 묘사를 모든 장면 프롬프트에 넣는다
+    const lock = (text, phrase) => (phrase && text && !text.includes(phrase.slice(0, 40))) ? `${phrase} ${text}` : text;
+    const scenes = parsed.scenes.slice(0, count).map(sc => ({
+      ...sc,
+      image_prompt: lock(lock(sc.image_prompt, parsed.product), parsed.character),
+      motion_prompt: lock(sc.motion_prompt, parsed.product)
+    }));
+    if (parsed.product) addLog(`🔒 제품 고정: ${parsed.product}`, 'secondary');
+    return scenes;
   },
 
   renderScenes(scenes) {
@@ -3430,7 +3543,18 @@ RULES:
       ctx.drawImage(v, (W - dw) / 2, (H - dh) / 2, dw, dh);
     };
     // ✍️ 타이포 모션 + 하단 자막 (글꼴로 직접 그려서 글자 깨짐 없음)
-    const FONT = '"Pretendard", "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif';
+    const FONT = '"Pretendard Variable", "Pretendard", "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif';
+    // 캔버스는 글꼴이 로드되기 전 글자를 기본 글꼴로 그리므로, 실제 쓰일 글자에 맞춰 Pretendard를 먼저 불러온다
+    try {
+      const sample = overlays.map(o => `${o.caption || ''}${o.subtitle || ''}`).join('') || '가';
+      await Promise.race([
+        Promise.all([
+          document.fonts.load('900 64px "Pretendard Variable"', sample),
+          document.fonts.load('700 32px "Pretendard Variable"', sample)
+        ]),
+        AP.sleep(5000)
+      ]);
+    } catch (e) { }
     const S = W / 720;
     const clamp = (x) => Math.max(0, Math.min(1, x));
     const easeOutBack = (p) => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(p - 1, 3) + c1 * Math.pow(p - 1, 2); };
@@ -3465,7 +3589,9 @@ RULES:
         }
         let x = W / 2 - total / 2;
         chars.forEach((c, k) => {
-          const p = clamp((t - (0.25 + k * 0.06)) / 0.35);   // 한 글자씩 톡톡
+          const p = i === 0
+            ? clamp((t - k * 0.035) / 0.22)                 // 첫 장면(훅): 0초부터 빠르게
+            : clamp((t - (0.25 + k * 0.06)) / 0.35);        // 한 글자씩 톡톡
           const e = easeOutBack(p);
           ctx.save();
           ctx.globalAlpha = p * out;

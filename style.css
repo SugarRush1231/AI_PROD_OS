@@ -2765,9 +2765,12 @@ html { scroll-behavior: smooth; scroll-padding-top: 80px; }
 .lt-advanced > summary::-webkit-details-marker { display: none; }
 .lt-advanced > summary { list-style: none; }
 footer a { display: inline-flex; align-items: center; min-height: 24px; }
-/* 4) '동작 줄이기' 설정 존중 */
+/* 4) '동작 줄이기' 설정: 화면 전환·부드러운 스크롤만 줄이고,
+      모델 목록 흐름·파이프라인 점 같은 장식 애니메이션은 느리게 유지 (멈추지 않음) */
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { transition-duration: 0.01ms !important; }
+  .registry-grid { animation-duration: 80s; }
 }
 /* 3) 흰 글자 버튼 배경 대비 보정 (3.0~3.7:1 → 4.5:1 이상, 색 계열 유지) */
 :root:not(.light-mode) .btn-video:not(:disabled) { background: #2563eb; }

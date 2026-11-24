@@ -57,4 +57,5 @@ npm start   # http://localhost:3000
 
 - [Supertonic 3](https://huggingface.co/supertone-oss-archive/supertonic-3) (Supertone, 한국어 포함 31개 언어)를 브라우저에서 직접 실행 — WebGPU 우선, 미지원 시 WebAssembly(CPU)
 - 장면별 대본 → 음성 생성 → 앞뒤 무음 제거 → 영상과 동기 재생
+- 모델 출처 이중화: 공식 아카이브 → 자체 미러([kimbs318/supertonic-3](https://huggingface.co/kimbs318/supertonic-3)) → 공개 미러 순으로 자동 전환 (파일 해시 동일 확인)
 - 모델 라이선스(BigScience OpenRAIL-M)에 따라 **AI 음성임을 고지**: 파이프라인이 제목/태그 결과 끝에 `목소리: AI 음성`을 자동으로 붙임

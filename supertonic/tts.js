@@ -6,8 +6,14 @@
  */
 import { loadTextToSpeech, loadVoiceStyle, writeWavFile } from './helper.js';
 
-const MODEL_BASE = globalThis.SUPERTONIC_BASE ||
-  'https://huggingface.co/supertone-oss-archive/supertonic-3/resolve/aafc6e32416a594460b32413efc49d7fe4ce6d46';
+// 모델 출처: 앞에서부터 시도하고 실패하면 다음으로 (원본 아카이브가 사라져도 계속 동작)
+// 세 곳 모두 같은 파일(SHA-256 일치 확인). 라이선스: BigScience OpenRAIL-M
+const MODEL_SOURCES = globalThis.SUPERTONIC_BASE ? [globalThis.SUPERTONIC_BASE] : [
+  'https://huggingface.co/supertone-oss-archive/supertonic-3/resolve/aafc6e32416a594460b32413efc49d7fe4ce6d46', // 공식 아카이브
+  'https://huggingface.co/kimbs318/supertonic-3/resolve/main',                                                  // 자체 미러
+  'https://huggingface.co/lnkiai/supertonic-3-mirror/resolve/main'                                              // 공개 미러
+];
+const MODEL_BASE = 'st://model';   // 가상 경로: 실제 주소는 MODEL_SOURCES 중 살아 있는 곳
 const ORT_BASE = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/';
 const CACHE_NAME = 'supertonic3-v1';
 
@@ -15,16 +21,33 @@ const state = { tts: null, loading: null, styles: {}, backend: null, listeners: 
 
 function emit(msg, pct) { state.listeners.forEach(fn => { try { fn(msg, pct); } catch (e) { } }); }
 
-// 진행률 표시 + Cache API 저장
+// 가상 경로(st://model/...) → 실제 출처 순서대로 시도
+async function fetchFromSources(url) {
+  if (!url.startsWith(MODEL_BASE)) return fetch(url);
+  const rel = url.slice(MODEL_BASE.length);
+  let lastErr = null;
+  for (const base of MODEL_SOURCES) {
+    try {
+      const res = await fetch(base + rel);
+      if (res.ok) return res;
+      lastErr = new Error(`${res.status} @ ${base}`);
+    } catch (e) { lastErr = e; }
+    console.warn('[Supertonic] source failed, trying next:', base, lastErr && lastErr.message);
+  }
+  throw new Error(`모델 다운로드 실패 (모든 출처): ${lastErr && lastErr.message}`);
+}
+globalThis.__stFetchResp = fetchFromSources;
+
+// 진행률 표시 + Cache API 저장 (캐시 키는 가상 경로라 출처가 바뀌어도 재다운로드 없음)
 async function cachedFetch(url) {
   let cache = null;
+  const key = url.startsWith(MODEL_BASE) ? `https://supertonic.cache${url.slice(MODEL_BASE.length)}` : url;
   try { cache = await caches.open(CACHE_NAME); } catch (e) { }
   if (cache) {
-    const hit = await cache.match(url);
+    const hit = await cache.match(key);
     if (hit) return hit.arrayBuffer();
   }
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`모델 다운로드 실패 (${res.status})`);
+  const res = await fetchFromSources(url);
   const total = Number(res.headers.get('content-length')) || 0;
   const name = url.split('/').pop();
   let buf;
@@ -43,7 +66,7 @@ async function cachedFetch(url) {
   } else {
     buf = await res.arrayBuffer();
   }
-  if (cache) { try { await cache.put(url, new Response(buf.slice(0))); } catch (e) { } }
+  if (cache) { try { await cache.put(key, new Response(buf.slice(0))); } catch (e) { } }
   return buf;
 }
 globalThis.__stFetch = cachedFetch;

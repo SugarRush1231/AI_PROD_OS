@@ -367,7 +367,7 @@ export async function loadVoiceStyle(voiceStylePaths, verbose = false) {
     const bsz = voiceStylePaths.length;
     
     // Read first file to get dimensions
-    const firstResponse = await fetch(voiceStylePaths[0]);
+    const firstResponse = await (globalThis.__stFetchResp || fetch)(voiceStylePaths[0]);
     const firstStyle = await firstResponse.json();
     
     const ttlDims = firstStyle.style_ttl.dims;
@@ -386,7 +386,7 @@ export async function loadVoiceStyle(voiceStylePaths, verbose = false) {
     
     // Fill in the data
     for (let i = 0; i < bsz; i++) {
-        const response = await fetch(voiceStylePaths[i]);
+        const response = await (globalThis.__stFetchResp || fetch)(voiceStylePaths[i]);
         const voiceStyle = await response.json();
         
         // Flatten TTL data
@@ -417,7 +417,7 @@ export async function loadVoiceStyle(voiceStylePaths, verbose = false) {
  * Load configuration from JSON
  */
 export async function loadCfgs(onnxDir) {
-    const response = await fetch(`${onnxDir}/tts.json`);
+    const response = await (globalThis.__stFetchResp || fetch)(`${onnxDir}/tts.json`);
     const cfgs = await response.json();
     return cfgs;
 }
@@ -426,7 +426,7 @@ export async function loadCfgs(onnxDir) {
  * Load text processor
  */
 export async function loadTextProcessor(onnxDir) {
-    const response = await fetch(`${onnxDir}/unicode_indexer.json`);
+    const response = await (globalThis.__stFetchResp || fetch)(`${onnxDir}/unicode_indexer.json`);
     const indexer = await response.json();
     return new UnicodeProcessor(indexer);
 }

@@ -1,0 +1,9 @@
+lee-perry-smith-head.glb
+------------------------
+"Infinite, 3D Head Scan" by Lee Perry-Smith (Infinite-Realities, http://www.ir-ltd.net/)
+Licensed under the Creative Commons Attribution 3.0 Unported License
+(https://creativecommons.org/licenses/by/3.0/). Based on a work at www.triplegangers.com.
+
+The .glb file is the version distributed with the three.js examples
+(examples/models/gltf/LeePerrySmith/LeePerrySmith.glb, three.js r170). Geometry only, no textures.
+In AI_PROD_OS it is rendered as an untextured matte plaster-like bust in the lighting preview.

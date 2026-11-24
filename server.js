@@ -307,8 +307,9 @@ app.post('/api/engineer', ensureAuthenticated, textAiLimiter, async (req, res, n
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${key}`
             };
-            aiNodes.push({ url: 'https://api.groq.com/openai/v1/chat/completions', model: 'llama-3.3-70b-versatile', headers });
-            aiNodes.push({ url: 'https://api.groq.com/openai/v1/chat/completions', model: 'llama-3.1-8b-instant', headers });
+            // Groq가 2026-08-16에 Llama 3.x를 종료 → 권장 대체 모델(gpt-oss)로 교체
+            aiNodes.push({ url: 'https://api.groq.com/openai/v1/chat/completions', model: 'openai/gpt-oss-120b', headers });
+            aiNodes.push({ url: 'https://api.groq.com/openai/v1/chat/completions', model: 'openai/gpt-oss-20b', headers });
         });
 
         for (let i = 0; i < aiNodes.length; i++) {
@@ -332,21 +333,32 @@ app.post('/api/engineer', ensureAuthenticated, textAiLimiter, async (req, res, n
                 // 2. 무한 반복/복붙 방지 (Frequency & Presence Penalty) - 앵무새처럼 루프도는 현상 하드웨어적 차단
                 if (node.url.includes('groq.com')) {
                     requestBody.temperature = 0.7;
-                    requestBody.max_tokens = 4096;
-                    requestBody.frequency_penalty = 0.2; // 1.2는 기형적인 문장을 유발하므로, 0.2 안정값으로 롤백하여 자연스러운 문맥 보장
-                    requestBody.presence_penalty = 0.2;  // 마찬가지로 0.2로 안정화하여 강박적인 화제 전환(조현병 현상) 방지
+                    requestBody.max_tokens = 8192;          // 추론 토큰 포함 여유 확보
+                    requestBody.reasoning_effort = 'low';    // gpt-oss: 짧게 생각하고 빠르게 답변
+                    requestBody.include_reasoning = false;   // 응답에 추론 과정 제외 (본문만)
                 }
                 
-                const aiResponse = await fetch(node.url, {
+                let aiResponse = await fetch(node.url, {
                     method: 'POST',
                     headers: node.headers,
                     body: JSON.stringify(requestBody)
                 });
+
+                // 선택 파라미터를 지원하지 않는 경우(400) 기본 파라미터로 한 번 더 시도
+                if (aiResponse.status === 400) {
+                    delete requestBody.reasoning_effort;
+                    delete requestBody.include_reasoning;
+                    aiResponse = await fetch(node.url, {
+                        method: 'POST',
+                        headers: node.headers,
+                        body: JSON.stringify(requestBody)
+                    });
+                }
                 
                 lastStatus = aiResponse.status;
 
                 // Rate Limit 방어: 429 에러 시 멍청한 모델로 점프하지 않고, 그 다음 줄(70B 형제)로 자연스레 넘어가도록 수정
-                if (lastStatus === 429 && node.model === 'llama-3.3-70b-versatile') {
+                if (lastStatus === 429 && node.model === 'openai/gpt-oss-120b') {
                     console.warn(`[AI_RATE_LIMIT] 429 block hit. Automatically routing to the next 70B fallback model in the list...`);
                 }
 

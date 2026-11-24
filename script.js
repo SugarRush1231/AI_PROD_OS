@@ -3705,3 +3705,22 @@ function renderLabParamSummary() {
   box.style.display = chips.length ? 'flex' : 'none';
 }
 if (UI.engineerBtn) UI.engineerBtn.addEventListener('click', renderLabParamSummary);
+
+
+// ===== 🎙 내레이션 목소리 미리듣기 (미리 만들어 둔 Supertonic 샘플, 모델 다운로드 없이 즉시 재생) =====
+(() => {
+  const btn = document.getElementById('ap-voice-preview');
+  const sel = document.getElementById('ap-voice');
+  if (!btn || !sel) return;
+  const audio = new Audio();
+  const sync = () => { btn.disabled = sel.value === 'none'; btn.style.opacity = btn.disabled ? '0.4' : '1'; };
+  audio.onended = () => { btn.innerText = '▶'; };
+  btn.addEventListener('click', () => {
+    if (sel.value === 'none') return;
+    if (!audio.paused) { audio.pause(); btn.innerText = '▶'; return; }
+    audio.src = `supertonic/samples/${sel.value}.mp3`;
+    audio.play().then(() => { btn.innerText = '■'; }).catch(() => { btn.innerText = '▶'; });
+  });
+  sel.addEventListener('change', () => { audio.pause(); btn.innerText = '▶'; sync(); });
+  sync();
+})();

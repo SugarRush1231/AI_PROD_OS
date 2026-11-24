@@ -1163,21 +1163,35 @@
           <div class="param-group" style="min-width: 140px;">
             <label style="display:block; font-size: 0.75rem; color: var(--fg-muted); margin-bottom: 6px;">장면 수</label>
             <select id="ap-scenes" class="lab-select">
-              <option value="1" selected>1장면</option>
-              <option value="2">2장면</option>
-              <option value="3">3장면</option>
-              <option value="4">4장면</option>
+              <option value="1" selected>1</option>
+              <option value="2">2</option>
+              <option value="3">3</option>
+              <option value="4">4</option>
             </select>
           </div>
           <div class="param-group" style="min-width: 130px;">
             <label style="display:block; font-size: 0.75rem; color: var(--fg-muted); margin-bottom: 6px;">내레이션</label>
-            <select id="ap-voice" class="lab-select">
-              <option value="F1" selected>여성 1</option>
-              <option value="F2">여성 2</option>
-              <option value="M1">남성 1</option>
-              <option value="M2">남성 2</option>
-              <option value="none">내레이션 없음</option>
-            </select>
+            <div style="display: flex; gap: 6px; align-items: center;">
+              <select id="ap-voice" class="lab-select">
+                <optgroup label="여성">
+                  <option value="F1" selected>여성 1 (차분한 저음)</option>
+                  <option value="F2">여성 2 (밝고 발랄)</option>
+                  <option value="F3">여성 3 (아나운서)</option>
+                  <option value="F4">여성 4 (또렷하고 힘 있는)</option>
+                  <option value="F5">여성 5 (부드럽고 다정한)</option>
+                </optgroup>
+                <optgroup label="남성">
+                  <option value="M1">남성 1 (활기차고 경쾌)</option>
+                  <option value="M2">남성 2 (깊고 진중한)</option>
+                  <option value="M3">남성 3 (신뢰감 있는 발표)</option>
+                  <option value="M4">남성 4 (부드럽고 친근한)</option>
+                  <option value="M5">남성 5 (따뜻한 이야기꾼)</option>
+                </optgroup>
+                <option value="none">내레이션 없음</option>
+              </select>
+              <button type="button" id="ap-voice-preview" class="btn-copy" title="목소리 미리듣기"
+                style="height: 36px; min-width: 40px; padding: 0 10px;">▶</button>
+            </div>
           </div>
           <div class="param-group" style="min-width: 150px;">
             <label style="display:block; font-size: 0.75rem; color: var(--fg-muted); margin-bottom: 6px;">영상 연결</label>

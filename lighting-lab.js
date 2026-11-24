@@ -584,7 +584,7 @@
       try {
         this.THREE = window.__THREE_OVERRIDE__ || await import(/* webpackIgnore: true */ THREE_URL);
         this.build();
-        this.status('', false);
+        if (!this._headPending) this.status('', false);
       } catch (err) {
         console.warn('[LightingLab] 3D preview unavailable:', err);
         this.teardown();
@@ -620,16 +620,29 @@
       bust.position.y = -0.02;
       scene.add(bust);
       this.bust = bust; this.plaster = mat;
-      // 실제 머리 스캔(CC BY 3.0, Lee Perry-Smith)으로 교체 — 실패하면 위 절차적 흉상 유지
+      // 석고 머리 모델을 받을 때까지 '불러오는 중'만 표시 → 도착하면 바로 석고상.
+      // 실패하거나 5초가 넘으면 그때만 절차적 흉상으로 대체
+      const proc = bust.children.slice(0, 7);
+      proc.forEach(m => { m.visible = false; });
+      this._headPending = true;
+      this.status('3D 모델 불러오는 중…', false);
+      const fallback = () => {
+        if (!this._headPending || !this.scene) return;
+        this._headPending = false;
+        proc.forEach(m => { m.visible = true; });
+        this.status('', false); this.request();
+      };
+      const timer = setTimeout(fallback, 5000);
       this.loadHead(T, mat).then(head => {
         if (!head || !this.scene) return;
-        bust.children.slice(0, 7).forEach(m => { m.visible = false; }); // 절차적 흉상 숨김
-        // 예시 사진처럼 원통 받침대 위에 올림
+        clearTimeout(timer);
+        this._headPending = false;
+        proc.forEach(m => { m.visible = false; });
         const ped = new T.Mesh(new T.CylinderGeometry(0.085, 0.085, 0.045, 48), mat);
         ped.position.set(0, -0.0825, 0); ped.castShadow = true; ped.receiveShadow = true;
-        bust.add(ped);
-        bust.add(head); this.request();
-      }).catch(err => console.warn('[LightingLab] head scan not loaded, using procedural bust:', err));
+        bust.add(ped, head);
+        this.status('', false); this.request();
+      }).catch(err => { console.warn('[LightingLab] head scan not loaded, using procedural bust:', err); clearTimeout(timer); fallback(); });
 
       const floor = new T.Mesh(new T.CircleGeometry(0.6, 48), new T.ShadowMaterial({ opacity: 0.25 }));
       floor.rotation.x = -Math.PI / 2; floor.position.y = -0.125; floor.receiveShadow = true; scene.add(floor);

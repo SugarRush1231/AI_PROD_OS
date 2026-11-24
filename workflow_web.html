@@ -1008,7 +1008,7 @@
       </div>
     </section>
 
-    <!-- ===== AI VIDEO STUDIO (Kie Seedance 1.0 Lite) ===== -->
+    <!-- ===== AI VIDEO STUDIO (Kie Grok Imagine) ===== -->
     <section class="section" id="video-studio" style="margin-top: 60px;">
       <div class="section-header">
         <h2 style="margin: 0; color: var(--fg); font-weight: 700; display: flex; align-items: center; gap: 10px;">
@@ -1041,7 +1041,7 @@
                 <label style="display: block; font-size: 0.75rem; color: var(--fg-muted); margin-bottom: 6px;">영상 길이
                   (Duration)</label>
                 <select id="videoDurationInput" class="lab-select" style="width: 100%; height: 36px;">
-                  <option value="5">5초 (Standard)</option>
+                  <option value="6">6초 (Standard)</option>
                   <option value="10">10초 (Extended)</option>
                 </select>
               </div>
@@ -1049,8 +1049,8 @@
                 <label style="display: block; font-size: 0.75rem; color: var(--fg-muted); margin-bottom: 6px;">해상도
                   (Resolution)</label>
                 <select id="videoModeInput" class="lab-select" style="width: 100%; height: 36px;">
-                  <option value="720p" selected>720p (기본)</option>
-                  <option value="480p">480p (빠름)</option>
+                  <option value="480p" selected>480p (기본)</option>
+                  <option value="720p">720p (선명)</option>
                 </select>
               </div>
             </div>
@@ -1203,6 +1203,9 @@
           <label style="display:flex; align-items:center; gap:6px; font-size: 0.8rem; color: var(--fg-muted); padding-bottom: 8px;">
             <input type="checkbox" id="ap-make-video" checked> 영상까지 생성
           </label>
+          <label style="display:flex; align-items:center; gap:6px; font-size: 0.8rem; color: var(--fg-muted); padding-bottom: 8px;">
+            <input type="checkbox" id="ap-typo" checked> 타이포·자막
+          </label>
           <button id="ap-run-btn" class="btn-skills" style="flex: 1; min-width: 220px; height: 44px; font-size: 1rem;">▶ 전체 자동 제작</button>
         </div>
 
@@ -1218,6 +1221,12 @@
           <div class="ap-step" data-step="merge">⑨ 완성본 합치기</div>
         </div>
 
+        <div id="ap-progress" style="display: none; margin-top: 12px;">
+          <div style="height: 8px; border-radius: 999px; background: var(--input-bg); border: 1px solid var(--border); overflow: hidden;">
+            <div id="ap-progress-bar" style="height: 100%; width: 0%; background: linear-gradient(90deg, var(--skills-cyan), var(--skills-purple)); transition: width 0.4s ease;"></div>
+          </div>
+          <div id="ap-progress-text" style="margin-top: 6px; font-size: 0.75rem; color: var(--fg-muted);"></div>
+        </div>
         <div id="ap-voice-status" style="display: none; margin-top: 10px; font-size: 0.75rem; color: var(--fg-muted);"></div>
 
         <div id="ap-scene-grid"

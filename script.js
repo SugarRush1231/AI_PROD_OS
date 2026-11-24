@@ -2874,7 +2874,7 @@ if (imageGenBtn) {
 }
 
 /* ==========================================================================
-   AI VIDEO STUDIO LOGIC (Kie Seedance 1.0 Lite)
+   AI VIDEO STUDIO LOGIC (Kie Grok Imagine)
    ========================================================================== */
 
 let videoRefStartImage = null;
@@ -2992,7 +2992,7 @@ function setupVideoDragDrop(boxId, type) {
 setupVideoDragDrop('video-start-box', 'start');
 setupVideoDragDrop('video-end-box', 'end');
 
-// AI 비디오 생성 함수 (Kie Seedance 1.0 Lite · 작업 생성 → 상태 폴링)
+// AI 비디오 생성 함수 (Kie Grok Imagine · 작업 생성 → 상태 폴링)
 async function generateVideo() {
   const btn = document.getElementById('generate-video-btn');
   const promptInput = document.getElementById('videoPromptInput');
@@ -3051,7 +3051,7 @@ async function generateVideo() {
   const startImage = imageUrls[0] || null;
 
   try {
-    // 1) 작업 생성 (서버가 Kie Seedance Lite에 요청 → taskId 즉시 반환)
+    // 1) 작업 생성 (서버가 Kie Grok Imagine에 요청 → taskId 즉시 반환)
     const createRes = await fetch('/api/video/create', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -3179,7 +3179,7 @@ if (sendToStudioBtn) {
 /* =====================================================================
    🎯 ONE-CLICK PIPELINE
    목표 1회 입력 → 컨셉 → 스토리보드 → 숏리스트 → 장면 설계(캐릭터 일관성)
-   → 장면 이미지(Kie z-image) → 장면 영상(Kie Seedance Lite, 병렬) → BGM·SEO
+   → 장면 이미지(Kie z-image) → 장면 영상(Kie Grok Imagine, 병렬) → BGM·SEO → 타이포·자막 합성
    n8n 없이 브라우저가 단계를 오케스트레이션하고, 서버는 각 API를 대행한다.
    ===================================================================== */
 const AP = {
@@ -3190,6 +3190,37 @@ const AP = {
     if (!el) return;
     el.classList.remove('running', 'done', 'failed', 'skipped');
     if (state) el.classList.add(state);
+    AP.updateProgress();
+  },
+
+  // 전체 진행 바 + 경과 시간
+  updateProgress() {
+    const steps = [...document.querySelectorAll('.ap-step')];
+    const bar = document.getElementById('ap-progress-bar');
+    const txt = document.getElementById('ap-progress-text');
+    if (!steps.length || !bar) return;
+    const finished = steps.filter(s => s.classList.contains('done') || s.classList.contains('skipped') || s.classList.contains('failed')).length;
+    const running = steps.filter(s => s.classList.contains('running')).map(s => s.innerText.replace(/^[①-⑳]\s*/, '').replace(' ✓', ''));
+    const pct = Math.round((finished / steps.length) * 100);
+    bar.style.width = `${pct}%`;
+    if (txt) {
+      const sec = AP.startedAt ? Math.floor((Date.now() - AP.startedAt) / 1000) : 0;
+      const t = `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
+      txt.innerText = `${pct}% · 경과 ${t}${running.length ? ` · 진행 중: ${running.join(', ')}` : ''}`;
+    }
+  },
+
+  // 장면 카드 상태에 경과 시간 표시
+  startSceneTimer(i, label) {
+    const t0 = Date.now();
+    const id = setInterval(() => {
+      const st = document.getElementById(`ap-state-${i}`);
+      if (!st || !st.dataset.timing) return clearInterval(id);
+      const s = Math.floor((Date.now() - t0) / 1000);
+      st.innerText = `${st.dataset.timing} ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+    }, 1000);
+    const st = document.getElementById(`ap-state-${i}`);
+    if (st) { st.dataset.timing = label; st.innerText = label; }
   },
 
   async engineer(intent, systemPrompt) {
@@ -3235,11 +3266,15 @@ const AP = {
   async designScenes(goal, platform, count, storyboard, shotlist, linkMode = 'cut') {
     const systemPrompt = `You are a short-form video director. Turn the plan into exactly ${count} vertical (9:16) scenes for ${platform}.
 Return ONLY valid JSON, no markdown fences, in this shape:
-{"character":"one-sentence visual description of the main subject (age, look, hair, outfit)","scenes":[{"title":"short Korean title","image_prompt":"English, one paragraph, max 600 characters","motion_prompt":"English, max 200 characters","narration":"Korean voice-over line"}]}
+{"character":"one-sentence visual description of the main subject (age, look, hair, outfit)","scenes":[{"title":"short Korean title","image_prompt":"English, one paragraph, max 600 characters","motion_prompt":"English, max 200 characters","narration":"Korean voice-over line","caption":"Korean on-screen text"}]}
 RULES:
 - CHARACTER CONSISTENCY: copy the exact "character" sentence verbatim into every image_prompt so the same person/object appears in all scenes.
 - image_prompt: photorealistic still frame, subject + action, setting, lighting, camera shot, vertical composition. Plain text, no negative prompts, no buzzwords like 8k or masterpiece.
+- NO TEXT IN IMAGES: text overlays, captions, buttons, "swipe up"/link icons, logos and brand names from the plan are added later in editing — never describe them in image_prompt or motion_prompt.
+- PHYSICAL ACCURACY: describe exactly what touches what and in which direction (e.g. "sprays the perfume onto her inner wrist, mist drifting away from her face"). Products must be used the way they are really used.
 - motion_prompt: what moves in 5 seconds (subject action + camera movement), simple and physically plausible.
+- caption: punchy Korean on-screen typography for that scene, max 12 characters, no emoji. The LAST scene's caption is the call-to-action (e.g. "지금 바로 만나보세요").
+- motion_prompt must not contain spoken dialogue or quoted speech (the video model would voice it).
 - narration: natural spoken Korean (구어체) voice-over for that scene, readable in about 4 seconds (max 30 Korean characters). The lines must flow as one story across scenes; the last line delivers the call-to-action.
 - Scene 1 must be a strong visual hook; the last scene should support the call-to-action. If there is only one scene, it must deliver both the hook and the call-to-action.${linkMode === 'extend' ? `
 - CONTINUOUS ONE-SHOT MODE: all scenes are consecutive moments of ONE unbroken camera shot in the SAME location. Each motion_prompt must start exactly where the previous one ended (same framing, lighting and outfit) and describe only what happens next. Only scene 1's image_prompt will be rendered as a still.` : ''}`;
@@ -3259,6 +3294,7 @@ RULES:
       card.className = 'ap-scene';
       card.innerHTML = `<div class="ap-media" id="ap-media-${i}">대기 중</div>
         <div style="font-weight:600; color: var(--fg);">#${i + 1} ${sc.title || ''}</div>
+        ${sc.caption ? `<div style="margin-top:4px; color: var(--skills-cyan); font-weight:700;">✍️ ${sc.caption}</div>` : ''}
         ${sc.narration ? `<div style="margin-top:4px; color: var(--fg);">🎙 ${sc.narration}</div>` : ''}
         <div id="ap-voice-${i}" style="margin-top:4px;"></div>
         <div id="ap-state-${i}" style="margin-top:4px;">준비</div>`;
@@ -3270,7 +3306,10 @@ RULES:
     const media = document.getElementById(`ap-media-${i}`);
     const st = document.getElementById(`ap-state-${i}`);
     if (html !== null && media) media.innerHTML = html;
-    if (state && st) st.innerText = state;
+    if (state && st) {
+      if (/렌더링 중|재시도 중/.test(state)) { AP.startSceneTimer(i, state.replace(/\s*\(1~3분\)/, '')); }
+      else { delete st.dataset.timing; st.innerText = state; }
+    }
   },
 
   async makeImage(prompt) {
@@ -3313,12 +3352,12 @@ RULES:
     return url;
   },
 
-  // 실패 시 자동 재시도: 이미지→영상 480p → 이미지→영상 720p → 텍스트→영상 720p
+  // 실패 시 자동 재시도: 이미지→영상 → 텍스트→영상 (시도당 최대 6분)
   async makeVideo(motionPrompt, imageUrl, onRetry, fallbackPrompt) {
+    // Grok Imagine 480p(최저가): 이미지→영상 실패 시 텍스트→영상
     const attempts = [
       { resolution: '480p', image: imageUrl, prompt: motionPrompt },
-      { resolution: '720p', image: imageUrl, prompt: motionPrompt },
-      { resolution: '720p', image: null, prompt: `${fallbackPrompt || ''} ${motionPrompt}`.trim() }
+      { resolution: '480p', image: null, prompt: `${fallbackPrompt || ''} ${motionPrompt}`.trim() }
     ];
     let lastErr = null;
     for (let a = 0; a < attempts.length; a++) {
@@ -3328,11 +3367,11 @@ RULES:
         const res = await fetch('/api/video/create', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ prompt: at.prompt, image: at.image, duration: '5', resolution: at.resolution, aspect_ratio: '9:16' })
+          body: JSON.stringify({ prompt: at.prompt, image: at.image, duration: '6', resolution: at.resolution, aspect_ratio: '9:16' })
         });
         const created = await res.json();
         if (!res.ok) throw new Error(created.error || '영상 작업 생성 실패');
-        return await AP.pollTask(created.taskId, 12 * 60 * 1000);
+        return await AP.pollTask(created.taskId, 6 * 60 * 1000);
       } catch (e) {
         lastErr = e;
         addLog(`!! 영상 시도 ${a + 1} 실패 (${at.image ? '이미지→영상' : '텍스트→영상'} ${at.resolution}): ${e.message}`, 'error');
@@ -3371,7 +3410,7 @@ RULES:
   },
 
   // 클립을 순서대로 재생하며 화면+내레이션을 녹화해 파일 하나로 만든다 (브라우저 내장 MediaRecorder)
-  async mergeClips(clips, voices = []) {
+  async mergeClips(clips, voices = [], overlays = []) {
     if (typeof MediaRecorder === 'undefined') throw new Error('이 브라우저는 녹화를 지원하지 않습니다.');
     const vids = [];
     for (const u of clips) vids.push(await AP.loadVideo(u));
@@ -3390,7 +3429,73 @@ RULES:
       const sc = Math.max(W / vw, H / vh), dw = vw * sc, dh = vh * sc;
       ctx.drawImage(v, (W - dw) / 2, (H - dh) / 2, dw, dh);
     };
+    // ✍️ 타이포 모션 + 하단 자막 (글꼴로 직접 그려서 글자 깨짐 없음)
+    const FONT = '"Pretendard", "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif';
+    const S = W / 720;
+    const clamp = (x) => Math.max(0, Math.min(1, x));
+    const easeOutBack = (p) => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(p - 1, 3) + c1 * Math.pow(p - 1, 2); };
+    const wrapLines = (text, maxW) => {
+      const words = String(text).split(' '); const lines = []; let line = '';
+      words.forEach(w => { const t = line ? `${line} ${w}` : w; if (ctx.measureText(t).width > maxW && line) { lines.push(line); line = w; } else line = t; });
+      if (line) lines.push(line);
+      return lines.slice(0, 2);
+    };
+    const drawOverlay = (i, t, dur) => {
+      const o = overlays[i];
+      if (!o) return;
+      const out = clamp(((dur || 6) - t) / 0.35);
+      ctx.save();
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      if (o.caption) {
+        const chars = [...String(o.caption)];
+        let size = Math.round(68 * S);
+        ctx.font = `900 ${size}px ${FONT}`;
+        let widths = chars.map(c => ctx.measureText(c).width);
+        let total = widths.reduce((a, b) => a + b, 0);
+        if (total > W * 0.86) { size = Math.floor(size * (W * 0.86) / total); ctx.font = `900 ${size}px ${FONT}`; widths = chars.map(c => ctx.measureText(c).width); total = widths.reduce((a, b) => a + b, 0); }
+        const y = o.isLast ? H * 0.68 : H * 0.2;
+        if (o.isLast) {                                   // CTA: 금색 박스
+          const a = clamp((t - 0.2) / 0.4) * out;
+          ctx.globalAlpha = a;
+          ctx.fillStyle = 'rgba(214, 178, 94, 0.95)';
+          const bw = total + 60 * S, bh = size + 36 * S;
+          ctx.beginPath();
+          if (ctx.roundRect) ctx.roundRect(W / 2 - bw / 2, y - bh / 2, bw, bh, bh / 2); else ctx.rect(W / 2 - bw / 2, y - bh / 2, bw, bh);
+          ctx.fill();
+        }
+        let x = W / 2 - total / 2;
+        chars.forEach((c, k) => {
+          const p = clamp((t - (0.25 + k * 0.06)) / 0.35);   // 한 글자씩 톡톡
+          const e = easeOutBack(p);
+          ctx.save();
+          ctx.globalAlpha = p * out;
+          ctx.translate(x + widths[k] / 2, y + (1 - e) * 28 * S);
+          ctx.scale(0.6 + 0.4 * e, 0.6 + 0.4 * e);
+          if (!o.isLast) { ctx.lineWidth = 9 * S; ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineJoin = 'round'; ctx.strokeText(c, 0, 0); }
+          ctx.fillStyle = o.isLast ? '#1d1608' : '#ffffff';
+          ctx.fillText(c, 0, 0);
+          ctx.restore();
+          x += widths[k];
+        });
+      }
+      if (o.subtitle) {                                      // 하단 자막
+        const fs = Math.round(34 * S);
+        ctx.font = `700 ${fs}px ${FONT}`;
+        const lines = wrapLines(o.subtitle, W * 0.84);
+        ctx.globalAlpha = clamp((t - 0.1) / 0.3) * out;
+        lines.forEach((ln, k) => {
+          const ly = H * 0.86 + (k - (lines.length - 1) / 2) * fs * 1.3;
+          ctx.lineWidth = 7 * S; ctx.strokeStyle = 'rgba(0,0,0,0.75)'; ctx.lineJoin = 'round';
+          ctx.strokeText(ln, W / 2, ly);
+          ctx.fillStyle = '#ffffff';
+          ctx.fillText(ln, W / 2, ly);
+        });
+      }
+      ctx.restore();
+    };
+
     drawFrame(vids[0]);
+    drawOverlay(0, 0, vids[0].duration);
     const canvasStream = canvas.captureStream(0);           // 프레임을 직접 밀어 넣는 방식 (끊김 방지)
     const vTrack = canvasStream.getVideoTracks()[0];
     const push = () => { if (vTrack.requestFrame) vTrack.requestFrame(); };
@@ -3410,9 +3515,9 @@ RULES:
       await v.play();
       await new Promise((res) => {
         let done = false;
-        const finish = () => { if (!done) { done = true; drawFrame(v); push(); res(); } };
+        const finish = () => { if (!done) { done = true; drawFrame(v); drawOverlay(i, v.duration, v.duration); push(); res(); } };
         v.onended = finish;
-        const tick = () => { if (done) return; drawFrame(v); push(); if (v.ended) return finish(); schedule(); };
+        const tick = () => { if (done) return; drawFrame(v); drawOverlay(i, v.currentTime, v.duration); push(); if (v.ended) return finish(); schedule(); };
         const schedule = () => (v.requestVideoFrameCallback ? v.requestVideoFrameCallback(tick) : requestAnimationFrame(tick));
         tick();
         setTimeout(finish, ((v.duration || 5) + 3) * 1000); // 안전장치
@@ -3491,13 +3596,16 @@ RULES:
     btn.innerText = '⏳ 자동 제작 중...';
     const steps = document.getElementById('ap-steps');
     steps.style.display = 'grid';
+    AP.startedAt = Date.now();
+    const pw = document.getElementById('ap-progress'); if (pw) pw.style.display = 'block';
+    clearInterval(AP._tick); AP._tick = setInterval(() => AP.updateProgress(), 1000);
     ['concept', 'storyboard', 'shotlist', 'scenes', 'images', 'voice', 'videos', 'merge', 'release'].forEach(k => AP.setStep(k, null));
     const dl = document.getElementById('ap-download'); if (dl) dl.style.display = 'none';
     document.getElementById('ap-final').style.display = 'none';
     document.getElementById('ap-scene-grid').innerHTML = '';
     updateStatusUI('vps', 'processing', '원클릭 파이프라인 실행 중...');
     addLog(`▶ 원클릭 파이프라인 시작 (${platform}, ${count}장면)`, 'success');
-    const goalWithPlatform = `${goal}\n(플랫폼: ${platform}, 세로 9:16, 장면 ${count}개 · 장면당 5초)`;
+    const goalWithPlatform = `${goal}\n(플랫폼: ${platform}, 세로 9:16, 장면 ${count}개 · 장면당 6초)`;
     // 기존 탭의 플랫폼/스타일 설정을 파이프라인 목표에 맞춰 자동 정렬
     const pv = platformSel.value;
     const setSel = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
@@ -3555,7 +3663,7 @@ RULES:
             }
           }
           if (unsub) unsub();
-          if (vStatus) vStatus.innerText = '🎙 내레이션 완료 · AI 음성(Supertonic)';
+          if (vStatus) vStatus.innerText = '🎙 내레이션 완료 · AI 음성';
           return rs;
         })().then(rs => {
           const urls = rs.map(r => (r.status === 'fulfilled' ? r.value : null));
@@ -3584,7 +3692,7 @@ RULES:
           continue;
         }
         AP.setScene(i, '<span class="spinner"></span>', '이미지 생성 중');
-        const img = await AP.makeImage(scenes[i].image_prompt);
+        const img = await AP.makeImage(`${scenes[i].image_prompt} Clean photographic frame with no text, letters, logos or graphic overlays.`);
         images.push(img.url);
         AP.setScene(i, `<img src="${img.url}" alt="scene ${i + 1}">`, '이미지 완료');
       }
@@ -3612,7 +3720,7 @@ RULES:
                 AP.setScene(i, null, '영상 렌더링 중 (1~3분)');
               }
               const url = await AP.makeVideo(sc.motion_prompt || sc.image_prompt, startImage,
-                (n) => AP.setScene(i, null, `영상 재시도 ${n}/2 중...`), sc.image_prompt);
+                (n) => AP.setScene(i, null, `영상 재시도 중 (텍스트→영상)...`), sc.image_prompt);
               AP.setScene(i, `<video src="${url}" muted loop autoplay playsinline></video>`, '영상 완료');
               prevUrl = url;
               results.push({ status: 'fulfilled', value: url });
@@ -3626,7 +3734,7 @@ RULES:
             await AP.sleep(i * 1500); // 동시 생성 요청 분산
             AP.setScene(i, null, '영상 렌더링 중 (1~3분)');
             const url = await AP.makeVideo(sc.motion_prompt || sc.image_prompt, images[i],
-              (n) => AP.setScene(i, null, `영상 재시도 ${n}/2 중...`), sc.image_prompt);
+              (n) => AP.setScene(i, null, `영상 재시도 중 (텍스트→영상)...`), sc.image_prompt);
             AP.setScene(i, `<video src="${url}" muted loop autoplay playsinline></video>`, '영상 완료');
             return url;
           }));
@@ -3644,7 +3752,13 @@ RULES:
           document.getElementById('ap-final').style.display = 'block';
           if (note) note.innerText = '🎬 완성본 만드는 중... 영상 길이만큼 걸려요. 이 탭을 띄워 둔 채로 기다려 주세요.';
           try {
-            const merged = await AP.mergeClips(clips, clipVoices);
+            const typoOn = document.getElementById('ap-typo')?.checked !== false;
+            const overlays = typoOn ? okIdx.map(i => ({
+              caption: scenes[i].caption || '',
+              subtitle: voiceOpt !== 'none' ? (scenes[i].narration || '') : '',
+              isLast: i === scenes.length - 1
+            })) : [];
+            const merged = await AP.mergeClips(clips, clipVoices, overlays);
             AP.showMerged(merged, clips.length);
             AP.setStep('merge', 'done');
           } catch (e) {
@@ -3676,6 +3790,7 @@ RULES:
       addLog(`!! PIPELINE_FAULT [${current}]: ${err.message}`, 'error');
       alert(`파이프라인이 "${current}" 단계에서 멈췄습니다.\n${err.message}`);
     } finally {
+      clearInterval(AP._tick); AP.updateProgress();
       btn.disabled = false;
       btn.innerText = orgText;
     }

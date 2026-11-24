@@ -601,7 +601,7 @@ app.post('/api/generate-image', ensureAuthenticated, strictAiLimiter, async (req
 
 
 // --- 🎬 영상 생성 (n8n 없이 직접 비동기 처리): 작업 생성 → 브라우저가 상태 폴링 ---
-// 모델: Kie bytedance/v1-lite (Seedance 1.0 Lite, 최저가). 시작 이미지가 있으면 image-to-video, 없으면 text-to-video
+// 모델: Kie Grok Imagine. 시작 이미지가 있으면 image-to-video, 없으면 text-to-video
 const videoStatusLimiter = rateLimit({
     windowMs: 1 * 60 * 1000,
     max: 30,
@@ -630,22 +630,20 @@ app.post('/api/video/create', ensurePaidAccess, strictAiLimiter, async (req, res
         const { prompt, image, duration, resolution, aspect_ratio } = req.body;
         if (!prompt || typeof prompt !== 'string') return res.status(400).json({ error: '영상 프롬프트가 필요합니다.' });
 
-        // Kie 문서 예시와 동일한 필드 구성
+        // 🎬 Grok Imagine (Kie): Seedance Lite가 계속 Internal Error라 교체. 480p·6초 기본(최저가)
+        let model = 'grok-imagine/text-to-video';
         const input = {
             prompt: prompt.slice(0, 2000),
-            resolution: ['480p', '720p', '1080p'].includes(resolution) ? resolution : '720p',
-            duration: String(duration) === '10' ? '10' : '5',
-            camera_fixed: false,
-            seed: -1,
-            enable_safety_checker: true
+            mode: 'normal',
+            duration: String(duration) === '10' ? '10' : '6',
+            resolution: resolution === '720p' ? '720p' : '480p'
         };
-
-        let model = 'bytedance/v1-lite-text-to-video';
         if (image && typeof image === 'string') {
-            input.image_url = image.startsWith('http') ? image : await uploadImageToKie(apiKey, image);
-            model = 'bytedance/v1-lite-image-to-video';
+            const url = image.startsWith('http') ? image : await uploadImageToKie(apiKey, image);
+            input.image_urls = [url];               // 단일 이미지: 영상 비율은 이미지 비율을 따름
+            model = 'grok-imagine/image-to-video';
         } else {
-            input.aspect_ratio = ['16:9', '9:16', '1:1', '4:3', '3:4'].includes(aspect_ratio) ? aspect_ratio : '9:16';
+            input.aspect_ratio = ['16:9', '9:16', '1:1', '2:3', '3:2'].includes(aspect_ratio) ? aspect_ratio : '9:16';
         }
 
         const createRes = await fetch('https://api.kie.ai/api/v1/jobs/createTask', {

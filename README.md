@@ -10,7 +10,7 @@
 | **One-Click Pipeline** | 목표를 한 번 입력하면 컨셉 → 스토리보드 → 숏리스트 → 장면 설계 → 장면 이미지 → 내레이션(TTS) → 장면 영상 → BGM·제목/태그까지 자동 실행. 앞 단계 결과를 다음 단계 맥락으로 넘겨 톤을 유지하고, 주인공 묘사를 모든 장면에 고정해 캐릭터 일관성을 확보 |
 | **Prompt Architecture Lab** | 피사체·포즈·샷·구도·조명 등 구조화된 파라미터로 프롬프트를 설계. 이미지 생성용(단일 문단) / 상세 설계서 출력, 결과를 이미지 스튜디오로 바로 전달 |
 | **AI Image Studio** | 텍스트 → 이미지 (9:16 등 비율 지원) |
-| **완성본 합치기** | 장면 클립 + 내레이션을 브라우저 내장 녹화(MediaRecorder)로 영상 파일 하나로 합쳐 다운로드. 컷 전환 / 이어지는 원테이크(앞 클립의 마지막 프레임 → 다음 클립 시작) 선택 |
+| **완성본 합치기** | 장면 클립 + 내레이션 + 타이포 모션(장면 문구·CTA)·하단 자막을 브라우저 내장 녹화(MediaRecorder)로 영상 파일 하나로 합쳐 다운로드. 컷 전환 / 이어지는 원테이크(앞 클립의 마지막 프레임 → 다음 클립 시작) 선택 |
 | **AI Video Studio** | 이미지 → 영상 / 텍스트 → 영상, 비동기 작업 생성 후 상태 폴링 |
 | **Video Production Studio** | 컨셉 기획서·스토리보드·숏리스트·BGM·자막(STT)·SEO 생성, 통합 기획서 내보내기 |
 
@@ -27,7 +27,7 @@ Express API (server.js) ── Google OAuth · Rate limit · Helmet CSP
    ├─ /api/engineer        → LLM (Groq Llama, 다중 노드 폴백)
    ├─ /api/whisper         → STT (Groq Whisper)
    ├─ /api/generate-image  → 이미지 API (1순위) → 무료 엔진 폴백
-   ├─ /api/video/create    → 영상 작업 생성 (taskId 즉시 반환)
+   ├─ /api/video/create    → 영상 작업 생성 (Grok Imagine, taskId 즉시 반환)
    ├─ /api/task/status     → 영상 작업 상태 조회 (브라우저 폴링)
    └─ /api/presets 등      → PostgreSQL (사용자 프리셋·설정)
 ```

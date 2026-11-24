@@ -2645,7 +2645,7 @@ async function generateN8NImage() {
     if (progress < 90) {
       progress += (90 - progress) * 0.05; // 로그 곡선으로 부드럽게 상승
       if (bar) bar.style.width = `${progress}%`;
-      if (progress > 30 && statusTxt) statusTxt.innerText = "🤖 n8n 워크플로우 가동 (Cloud AI 호출 중)...";
+      if (progress > 30 && statusTxt) statusTxt.innerText = "🤖 AI 이미지 모델 호출 중...";
       if (progress > 60 && statusTxt) statusTxt.innerText = "🎨 AI 모델 연산 중... 거의 다 되었습니다!";
       if (progress > 85 && statusTxt) statusTxt.innerText = "📦 결과 이미지 수신 대기 중...";
     }
@@ -2703,7 +2703,7 @@ async function generateN8NImage() {
     const findImageInObject = (obj) => {
       if (!obj) return null;
       if (typeof obj === 'string' && (obj.startsWith('http://') || obj.startsWith('https://'))) {
-        if (obj.match(/\.(jpeg|jpg|gif|png|webp)/i) || obj.includes('kie.ai/') || obj.includes('redpandaai.co')) return obj;
+        if (obj.match(/\.(jpeg|jpg|gif|png|webp)/i) || obj.includes('kie.ai/') || obj.includes('redpandaai.co') || obj.includes('pollinations.ai/')) return obj;
       }
       if (typeof obj === 'object') {
         const specialKeys = ['param', 'resultJson', 'data'];

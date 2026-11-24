@@ -65,7 +65,7 @@ app.use(helmet({
             fontSrc: ["'self'", "https://fonts.gstatic.com"],
             imgSrc: ["'self'", "data:", "https://*", "https://lh3.googleusercontent.com"],
             mediaSrc: ["'self'", "data:", "blob:", "https://*"], // 비디오 재생 허용
-            connectSrc: ["'self'", "https://text.pollinations.ai", "https://api.groq.com", "https:", "http://202.182.97.39:5678"],
+            connectSrc: ["'self'", "https://text.pollinations.ai", "https://api.groq.com", "https:"],
             upgradeInsecureRequests: null,
         },
     },
@@ -300,8 +300,6 @@ app.post('/api/engineer', ensureAuthenticated, strictAiLimiter, async (req, res,
                 'Authorization': `Bearer ${key}`
             };
             aiNodes.push({ url: 'https://api.groq.com/openai/v1/chat/completions', model: 'llama-3.3-70b-versatile', headers });
-            aiNodes.push({ url: 'https://api.groq.com/openai/v1/chat/completions', model: 'llama-3.1-70b-versatile', headers });
-            aiNodes.push({ url: 'https://api.groq.com/openai/v1/chat/completions', model: 'llama3-70b-8192', headers });
             aiNodes.push({ url: 'https://api.groq.com/openai/v1/chat/completions', model: 'llama-3.1-8b-instant', headers });
         });
 
@@ -496,70 +494,29 @@ app.post('/api/engineer', ensureAuthenticated, strictAiLimiter, async (req, res,
  */
 app.post('/api/generate-image', ensureAuthenticated, strictAiLimiter, async (req, res, next) => {
     try {
-        const { prompt, aspect_ratio, image } = req.body;
+        const { prompt, aspect_ratio } = req.body;
         if (!prompt) return res.status(400).json({ error: '프롬프트가 필요합니다.' });
-        // ✅ n8n 실운용을 위해 production 웹훅 주소로 변경
-        const n8nWebhookUrl = "http://202.182.97.39:5678/webhook/generate-image";
 
-        // 🖼️ URL 기반 이미지가 들어오면 n8n 호환성을 위해 서버사이드에서 Base64로 자동 변환 (투명한 프록시)
-        const convertToB64 = async (url) => {
-            if (!url || typeof url !== 'string' || !url.startsWith('http')) return url;
-            try {
-                const imgRes = await fetch(url);
-                if (imgRes.ok) {
-                    const buffer = await imgRes.arrayBuffer();
-                    return Buffer.from(buffer).toString('base64');
-                }
-            } catch (err) {
-                console.warn("[SERVER_PROXY] Conversion failed for:", url, err.message);
-            }
-            return url;
+        // 🎬 영상 생성: n8n 서버 종료로 현재 비활성 (비용 절감)
+        const isVideo = req.body.generate_video || req.body.is_video || req.body.video;
+        if (isVideo) {
+            return res.status(503).json({ error: '영상 생성은 현재 비활성 상태입니다. (n8n 서버 종료 · 비용 절감)' });
+        }
+
+        // 🖼️ 이미지 생성: n8n 대신 Pollinations(무료, 키 불필요)로 직접 생성
+        const sizeMap = {
+            '1:1': [1024, 1024], '16:9': [1344, 768], '9:16': [768, 1344],
+            '3:4': [896, 1152], '4:3': [1152, 896], '21:9': [1536, 640]
         };
+        const [width, height] = sizeMap[aspect_ratio] || [1024, 1024];
+        const seed = Math.floor(Math.random() * 1e9);
+        const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(String(prompt).slice(0, 1500))}`
+            + `?width=${width}&height=${height}&seed=${seed}&model=flux&nologo=true`;
 
-        // 개별 필드 변환
-        if (req.body.image) req.body.image = await convertToB64(req.body.image);
-        if (req.body.start_image) req.body.start_image = await convertToB64(req.body.start_image);
-        if (req.body.end_image) req.body.end_image = await convertToB64(req.body.end_image);
-        
-        // 배열 필드(image_urls) 전체 변환
-        if (req.body.image_urls && Array.isArray(req.body.image_urls)) {
-            console.log("[SERVER_PROXY] Converting image_urls array items...");
-            for (let i = 0; i < req.body.image_urls.length; i++) {
-                req.body.image_urls[i] = await convertToB64(req.body.image_urls[i]);
-            }
-        }
-
-        const response = await fetch(n8nWebhookUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                ...req.body, // 평탄한 필드 (비디오 로직 등 최신용)
-                body: req.body // 중첩된 필드 (기존 n8n 이미지 노드 호환용)
-            })
-        });
-
-        const textData = await response.text();
-        let parsedData;
-        try {
-            parsedData = JSON.parse(textData);
-        } catch (e) {
-            parsedData = { error: "n8n 서버 응답이 올바른 JSON이 아닙니다.", raw: textData };
-        }
-
-        // n8n 자체가 에러(404 등)를 뱉었을 경우 처리
-        if (!response.ok || (parsedData.code && parsedData.code >= 400)) {
-            console.error("[N8N_ERROR]", parsedData);
-            return res.status(response.status || 500).json({ 
-                error: parsedData.message || parsedData.hint || "n8n 워크플로우 활성화 상태를 확인해주세요.",
-                details: parsedData
-            });
-        }
-
-        res.status(200).json({ data: parsedData });
-
+        res.status(200).json({ data: { url, provider: 'pollinations' } });
     } catch (error) {
-        console.error('[N8N_PROXY_ERROR]', error.message);
-        res.status(500).json({ error: 'n8n 서버와 연결하지 못했습니다.' });
+        console.error('[IMAGE_GEN_ERROR]', error.message);
+        res.status(500).json({ error: '이미지 생성 요청에 실패했습니다.' });
     }
 });
 

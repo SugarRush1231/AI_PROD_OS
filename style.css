@@ -2729,8 +2729,13 @@ html { scroll-behavior: smooth; scroll-padding-top: 80px; }
 .output-header > div:last-child { flex-wrap: wrap; }
 .output-header .btn-copy { white-space: nowrap; }
 .lab-output .output-toolbar select { max-width: 100%; }
+/* 생성 버튼: 화면 전체로 늘이지 않고 05 레이어 위·06 출력 옆에 (주요 동작은 결과 가까이) */
+#lab-actions #engineer-btn { height: 48px; }
 @media (max-width: 1400px) and (min-width: 1025px) {
-  .lab-right > .lab-actions { grid-column: 1 / -1; }
+  .lab-right { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); grid-template-rows: auto 1fr; }
+  .lab-right > .lab-actions { grid-column: 1; grid-row: 1; }
+  .lab-right > .lab-visualizer { grid-column: 1; grid-row: 2; }
+  .lab-right > .lab-output { grid-column: 2; grid-row: 1 / span 2; }
 }
 .ap-title { display: flex; align-items: baseline; flex-wrap: wrap; gap: 10px; }
 .ap-title h3 { margin: 0; font-size: 1.25rem; font-weight: 700; letter-spacing: -0.01em; color: var(--fg); }

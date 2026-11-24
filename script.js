@@ -3156,7 +3156,7 @@ async function generateImage() {
         // 영상 만들기 선택 시
         btnVideo.onclick = () => {
           document.getElementById('video-studio').scrollIntoView({ behavior: (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) ? 'auto' : 'smooth' });
-          setVideoImageRef(finalImageUrl, 'start');
+          setVideoImageRef(finalImageUrl);
           choicePanel.style.display = "none"; // 이동 후 숨김
         };
 
@@ -3187,120 +3187,64 @@ if (imageGenBtn) {
    AI VIDEO STUDIO LOGIC (Kie Grok Imagine)
    ========================================================================== */
 
-let videoRefStartImage = null;
-let videoRefEndImage = null;
-
-// 비디오 생성을 위한 이미지 참조 설정 (type: 'start' or 'end')
-function setVideoImageRef(url, type = 'start') {
-  const previewImg = document.getElementById(`video-${type}-preview`);
-  const placeholder = document.getElementById(`${type}-placeholder`);
-  const clearBtn = document.getElementById(`clear-${type}-ref`);
-  
-  if (type === 'start') videoRefStartImage = url;
-  else videoRefEndImage = url;
-
-  if (previewImg && placeholder && clearBtn) {
-    previewImg.src = url;
-    previewImg.style.display = "block";
-    placeholder.style.display = "none";
-    clearBtn.style.display = "flex";
+// 🎬 영상 참고 이미지 (Grok Imagine: 최대 7장, 프롬프트에서 @image1… 로 지칭 가능)
+const VIDEO_REF_MAX = 7;
+let videoRefImages = [];
+function renderVideoRefs() {
+  const grid = document.getElementById('video-ref-grid');
+  if (!grid) return;
+  grid.innerHTML = '';
+  videoRefImages.forEach((src, i) => {
+    const tile = document.createElement('div');
+    tile.className = 'vref-tile';
+    const img = document.createElement('img'); img.src = src; img.alt = `참고 이미지 ${i + 1}`;
+    img.addEventListener('click', () => openImageViewer(src));
+    const tag = document.createElement('span'); tag.className = 'vref-tag'; tag.textContent = `@image${i + 1}`;
+    const del = document.createElement('button'); del.type = 'button'; del.className = 'vref-del'; del.setAttribute('aria-label', `참고 이미지 ${i + 1} 빼기`); del.textContent = '×';
+    del.addEventListener('click', (e) => { e.stopPropagation(); videoRefImages.splice(i, 1); renderVideoRefs(); });
+    tile.append(img, tag, del);
+    grid.appendChild(tile);
+  });
+  if (videoRefImages.length < VIDEO_REF_MAX) {
+    const add = document.createElement('button');
+    add.type = 'button'; add.className = 'vref-add';
+    add.innerHTML = `<span>＋</span><small>${videoRefImages.length ? '추가' : '클릭 또는 드래그'}<br>${videoRefImages.length}/${VIDEO_REF_MAX}</small>`;
+    add.addEventListener('click', () => document.getElementById('video-ref-file')?.click());
+    grid.appendChild(add);
   }
 }
-
-// 이미지 참조 해제 함수
-function clearVideoFrame(type) {
-  if (type === 'start') videoRefStartImage = null;
-  else videoRefEndImage = null;
-
-  const previewImg = document.getElementById(`video-${type}-preview`);
-  const placeholder = document.getElementById(`${type}-placeholder`);
-  const clearBtn = document.getElementById(`clear-${type}-ref`);
-
-  if (previewImg && placeholder && clearBtn) {
-    previewImg.src = "";
-    previewImg.style.display = "none";
-    placeholder.style.display = "block";
-    clearBtn.style.display = "none";
+function addVideoRefs(srcs) {
+  const room = VIDEO_REF_MAX - videoRefImages.length;
+  if (room <= 0) { alert(`참고 이미지는 최대 ${VIDEO_REF_MAX}장입니다.`); return; }
+  srcs.slice(0, room).forEach(s => { if (s && !videoRefImages.includes(s)) videoRefImages.push(s); });
+  if (srcs.length > room) alert(`최대 ${VIDEO_REF_MAX}장까지라 ${srcs.length - room}장은 넣지 않았습니다.`);
+  renderVideoRefs();
+}
+// 이미지 스튜디오 → 영상으로 보내기: 첫 번째 참고 이미지로 넣음
+function setVideoImageRef(url) {
+  if (!url) return;
+  videoRefImages = [url, ...videoRefImages.filter(s => s !== url)].slice(0, VIDEO_REF_MAX);
+  renderVideoRefs();
+}
+function readVideoRefFiles(files) {
+  const list = Array.from(files || []).filter(f => /^image\/(jpeg|png|webp)$/.test(f.type));
+  const tooBig = list.filter(f => f.size > 10 * 1024 * 1024);
+  if (tooBig.length) alert(`10MB가 넘는 파일 ${tooBig.length}개는 제외했습니다.`);
+  const ok = list.filter(f => f.size <= 10 * 1024 * 1024);
+  Promise.all(ok.map(f => new Promise(res => { const r = new FileReader(); r.onload = e => res(e.target.result); r.onerror = () => res(null); r.readAsDataURL(f); })))
+    .then(srcs => addVideoRefs(srcs.filter(Boolean)));
+}
+(() => {
+  const input = document.getElementById('video-ref-file');
+  const grid = document.getElementById('video-ref-grid');
+  if (input) input.addEventListener('change', (e) => { readVideoRefFiles(e.target.files); e.target.value = ''; });
+  if (grid) {
+    ['dragenter', 'dragover'].forEach(ev => grid.addEventListener(ev, (e) => { e.preventDefault(); grid.classList.add('is-drag'); }));
+    ['dragleave', 'drop'].forEach(ev => grid.addEventListener(ev, (e) => { e.preventDefault(); grid.classList.remove('is-drag'); }));
+    grid.addEventListener('drop', (e) => readVideoRefFiles(e.dataTransfer && e.dataTransfer.files));
   }
-}
-
-// 해제 버튼 리스너 연결
-const clearStartBtn = document.getElementById('clear-start-ref');
-if (clearStartBtn) clearStartBtn.addEventListener('click', (e) => { e.stopPropagation(); clearVideoFrame('start'); });
-const clearEndBtn = document.getElementById('clear-end-ref');
-if (clearEndBtn) clearEndBtn.addEventListener('click', (e) => { e.stopPropagation(); clearVideoFrame('end'); });
-
-// 파일 업로드 처리 함수
-function handleVideoFrameUpload(input, type) {
-  const file = input.files[0];
-  if (!file) return;
-
-  if (file.size > 10 * 1024 * 1024) {
-    alert("파일 크기는 10MB 이하만 가능합니다.");
-    return;
-  }
-
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    setVideoImageRef(e.target.result, type);
-  };
-  reader.readAsDataURL(file);
-}
-
-// 파일 입력 리스너 연결
-const startFileInput = document.getElementById('video-start-file');
-if (startFileInput) startFileInput.addEventListener('change', (e) => handleVideoFrameUpload(e.target, 'start'));
-const endFileInput = document.getElementById('video-end-file');
-if (endFileInput) endFileInput.addEventListener('change', (e) => handleVideoFrameUpload(e.target, 'end'));
-
-// 드래그 앤 드롭 기능 추가
-function setupVideoDragDrop(boxId, type) {
-  const box = document.getElementById(boxId);
-  if (!box) return;
-
-  ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-    box.addEventListener(eventName, (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-    }, false);
-  });
-
-  ['dragenter', 'dragover'].forEach(eventName => {
-    box.addEventListener(eventName, () => {
-      box.style.borderColor = 'var(--skills-purple)';
-      box.style.background = 'rgba(147, 112, 219, 0.05)';
-    }, false);
-  });
-
-  ['dragleave', 'drop'].forEach(eventName => {
-    box.addEventListener(eventName, () => {
-      box.style.borderColor = 'var(--border-strong)';
-      box.style.background = 'rgba(0,0,0,0.2)';
-    }, false);
-  });
-
-  box.addEventListener('drop', (e) => {
-    const dt = e.dataTransfer;
-    const files = dt.files;
-    if (files && files[0]) {
-      handleVideoFrameUpload({ files }, type);
-    }
-  }, false);
-
-  // 클릭 이벤트 추가 (이미지 있으면 확대, 없으면 업로드)
-  box.addEventListener('click', () => {
-    const currentImg = (type === 'start') ? videoRefStartImage : videoRefEndImage;
-    if (currentImg) {
-      openImageViewer(currentImg);
-    } else {
-      const fileInput = document.getElementById(`video-${type}-file`);
-      if (fileInput) fileInput.click();
-    }
-  });
-}
-
-setupVideoDragDrop('video-start-box', 'start');
-setupVideoDragDrop('video-end-box', 'end');
+  renderVideoRefs();
+})();
 
 // AI 비디오 생성 함수 (Kie Grok Imagine · 작업 생성 → 상태 폴링)
 async function generateVideo() {
@@ -3354,11 +3298,7 @@ async function generateVideo() {
     return;
   }
 
-  const imageUrls = [];
-  if (videoRefStartImage) imageUrls.push(videoRefStartImage);
-  if (videoRefEndImage) imageUrls.push(videoRefEndImage);
-
-  const startImage = imageUrls[0] || null;
+  const refImages = videoRefImages.slice(0, VIDEO_REF_MAX);
 
   try {
     // 1) 작업 생성 (서버가 Kie Grok Imagine에 요청 → taskId 즉시 반환)
@@ -3367,7 +3307,7 @@ async function generateVideo() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         prompt: videoPrompt,
-        image: startImage,
+        images: refImages,
         duration: durationInput.value,
         resolution: modeInput.value
       })

@@ -1485,50 +1485,10 @@
             </div>
 
             <div class="video-frame-settings" style="margin-top: 16px;">
-              <div class="label-mono" style="font-size: 0.7rem; color: var(--fg-dim); margin-bottom: 12px;">FRAME
-                SEQUENCE (START & END)</div>
-
-              <div style="display: grid; grid-template-columns: 1fr; gap: 20px;">
-                <!-- Start Frame -->
-                <div class="frame-slot">
-                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                    <span style="font-size: 0.75rem; font-weight: 600; color: var(--fg-dim);">Start Frame</span>
-                    <!-- <button class="btn-skills secondary" onclick="document.getElementById('video-start-file').click()"
-                      style="padding: 2px 8px; height: 24px; font-size: 0.65rem;">첨부</button> -->
-                    <input type="file" id="video-start-file" accept="image/*" style="display: none;">
-                  </div>
-                  <div id="video-start-box" class="visualizer-output"
-                    style="height: 120px; background: rgba(0,0,0,0.2); border: 1px dashed var(--border-strong); border-radius: 8px; display: flex; align-items: center; justify-content: center; position: relative; cursor: pointer;">
-                    <span id="start-placeholder"
-                      style="font-size: 0.65rem; color: var(--fg-muted); text-align: center; pointer-events: none;">드래그
-                      앤 드롭 또는 클릭<br>시작 이미지 (선택)</span>
-                    <img id="video-start-preview" src=""
-                      style="display: none; width: 100%; height: 100%; object-fit: contain; border-radius: 6px; pointer-events: none; background: rgba(0,0,0,0.4);">
-                    <button id="clear-start-ref"
-                      style="position: absolute; top: 4px; right: 4px; background: rgba(255,0,0,0.6); color: white; border: none; border-radius: 4px; width: 18px; height: 18px; font-size: 10px; display: none; z-index: 10; cursor: pointer;">✕</button>
-                  </div>
-                </div>
-
-                <!-- End Frame -->
-                <div class="frame-slot" style="display: none;">
-                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                    <span style="font-size: 0.75rem; font-weight: 600; color: var(--fg-dim);">End Frame</span>
-                    <!-- <button class="btn-skills secondary" onclick="document.getElementById('video-end-file').click()"
-                      style="padding: 2px 8px; height: 24px; font-size: 0.65rem;">첨부</button> -->
-                    <input type="file" id="video-end-file" accept="image/*" style="display: none;">
-                  </div>
-                  <div id="video-end-box" class="visualizer-output"
-                    style="height: 120px; background: rgba(0,0,0,0.2); border: 1px dashed var(--border-strong); border-radius: 8px; display: flex; align-items: center; justify-content: center; position: relative; cursor: pointer;">
-                    <span id="end-placeholder"
-                      style="font-size: 0.65rem; color: var(--fg-muted); text-align: center; pointer-events: none;">드래그
-                      앤 드롭 또는 클릭<br>종료 이미지 (선택)</span>
-                    <img id="video-end-preview" src=""
-                      style="display: none; width: 100%; height: 100%; object-fit: contain; border-radius: 6px; pointer-events: none; background: rgba(0,0,0,0.4);">
-                    <button id="clear-end-ref"
-                      style="position: absolute; top: 4px; right: 4px; background: rgba(255,0,0,0.6); color: white; border: none; border-radius: 4px; width: 18px; height: 18px; font-size: 10px; display: none; z-index: 10; cursor: pointer;">✕</button>
-                  </div>
-                </div>
-              </div>
+              <div class="label-mono" style="font-size: 0.7rem; color: var(--fg-dim); margin-bottom: 6px;">REFERENCE IMAGES · 최대 7장</div>
+              <p class="vref-hint">제품·인물·배경 사진을 함께 넣으면 영상에서 덜 바뀝니다. 프롬프트에서 <code>@image1</code>, <code>@image2</code>처럼 가리킬 수 있어요. (Grok은 시작·끝 장면 지정이 아니라 <b>참고용</b>으로 씁니다)</p>
+              <input type="file" id="video-ref-file" accept="image/jpeg,image/png,image/webp" multiple style="display: none;">
+              <div id="video-ref-grid" class="vref-grid" aria-live="polite"></div>
             </div>
           </div>
 

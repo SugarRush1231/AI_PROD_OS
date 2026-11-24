@@ -661,7 +661,7 @@ app.post('/api/video/create', ensurePaidAccess, strictAiLimiter, async (req, res
         const apiKey = process.env.KIE_API_KEY;
         if (!apiKey) return res.status(503).json({ error: '영상 생성 키(KIE_API_KEY)가 설정되지 않았습니다.' });
 
-        const { prompt, image, duration, resolution, aspect_ratio } = req.body;
+        const { prompt, image, images, duration, resolution, aspect_ratio } = req.body;
         if (!prompt || typeof prompt !== 'string') return res.status(400).json({ error: '영상 프롬프트가 필요합니다.' });
 
         // 🎬 Grok Imagine (Kie): Seedance Lite가 계속 Internal Error라 교체. 480p·6초 기본(최저가)
@@ -672,10 +672,13 @@ app.post('/api/video/create', ensurePaidAccess, strictAiLimiter, async (req, res
             duration: String(duration) === '10' ? '10' : '6',
             resolution: resolution === '720p' ? '720p' : '480p'
         };
-        if (image && typeof image === 'string') {
-            const url = image.startsWith('http') ? image : await uploadImageToKie(apiKey, image);
-            input.image_urls = [url];               // 단일 이미지: 영상 비율은 이미지 비율을 따름
-            model = 'grok-imagine/image-to-video';
+        // 참고 이미지: images[] (최대 7장, Grok Imagine 한도) 또는 예전 방식 image 1장
+        const refs = (Array.isArray(images) ? images : (image ? [image] : []))
+            .filter(x => typeof x === 'string' && x).slice(0, 7);
+        if (refs.length) {
+            input.image_urls = [];
+            for (const ref of refs) input.image_urls.push(ref.startsWith('http') ? ref : await uploadImageToKie(apiKey, ref));
+            model = 'grok-imagine/image-to-video';   // 영상 비율은 (첫) 이미지 비율을 따름
         } else {
             input.aspect_ratio = ['16:9', '9:16', '1:1', '2:3', '3:2'].includes(aspect_ratio) ? aspect_ratio : '9:16';
         }
@@ -690,7 +693,7 @@ app.post('/api/video/create', ensurePaidAccess, strictAiLimiter, async (req, res
             console.error('[VIDEO_CREATE_FAIL]', created);
             return res.status(502).json({ error: `영상 작업 생성 실패: ${created.msg || created.code}` });
         }
-        console.log(`[VIDEO] task ${created.data.taskId} (${model}, ${input.resolution}, ${input.duration}s)`);
+        console.log(`[VIDEO] task ${created.data.taskId} (${model}, ${input.resolution}, ${input.duration}s, refs ${input.image_urls ? input.image_urls.length : 0})`);
         res.json({ taskId: created.data.taskId, model });
     } catch (err) {
         console.error('[VIDEO_CREATE_ERROR]', err.message);

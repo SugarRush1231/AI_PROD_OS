@@ -771,6 +771,36 @@
                     <option value="summer-linen">여름 린넨 (Linen)</option>
                     <option value="winter-coat">겨울 코트 (Winter Coat)</option>
                     <option value="modern-hanbok">모던 한복 (Hanbok)</option>
+                    <option value="minimal-basic">미니멀 베이직 (Minimal)</option>
+                    <option value="old-money">올드머니 룩 (Old Money)</option>
+                    <option value="gorpcore">고프코어 아웃도어 (Gorpcore)</option>
+                    <option value="y2k">Y2K 레트로 (Y2K)</option>
+                    <option value="preppy-uniform">교복 스타일 (School Uniform)</option>
+                    <option value="trench-coat">트렌치코트 (Trench)</option>
+                    <option value="leather-jacket">가죽 재킷 (Leather)</option>
+                    <option value="blazer-casual">블레이저 캐주얼 (Smart Casual)</option>
+                    <option value="cardigan-soft">카디건 소프트룩 (Cardigan)</option>
+                    <option value="hoodie-comfy">후드티 편안룩 (Hoodie)</option>
+                    <option value="sporty-tennis">테니스 룩 (Tennis)</option>
+                    <option value="golf-wear">골프웨어 (Golf)</option>
+                    <option value="yoga-wear">요가복 (Yoga)</option>
+                    <option value="swimwear-resort">리조트 수영복 (Resort)</option>
+                    <option value="party-dress">파티 드레스 (Party)</option>
+                    <option value="wedding-guest">하객룩 (Wedding Guest)</option>
+                    <option value="pajama-home">홈웨어 파자마 (Loungewear)</option>
+                    <option value="chef-uniform">셰프 유니폼 (Chef)</option>
+                    <option value="doctor-gown">의료 가운 (Medical)</option>
+                    <option value="barista-apron">바리스타 앞치마 (Barista)</option>
+                    <option value="military-cargo">밀리터리 카고 (Military)</option>
+                    <option value="boho">보헤미안 (Boho)</option>
+                    <option value="grunge">그런지 (Grunge)</option>
+                    <option value="punk-rock">펑크 록 (Punk)</option>
+                    <option value="k-idol-stage">아이돌 무대의상 (Stage)</option>
+                    <option value="traditional-hanbok">전통 한복 (Traditional Hanbok)</option>
+                    <option value="kimono">기모노 (Kimono)</option>
+                    <option value="ski-wear">스키복 (Ski)</option>
+                    <option value="rain-gear">레인코트 (Rain)</option>
+                    <option value="tuxedo">턱시도 (Tuxedo)</option>
                   </select>
                 </div>
                 <div class="param-group">
@@ -1055,9 +1085,152 @@
           </div>
         </div>
 
-        <!-- CENTER: VISUALIZER -->
+        <!-- CENTER: 03 LIGHTING ENGINEERING + 04 CAMERA & OPTICS -->
+        <div class="lab-center">
+          <section class="lab-panel lighting-panel" id="lighting-panel" aria-labelledby="lt-title">
+            <div class="lab-panel-head">
+              <button type="button" class="lab-panel-toggle" id="lt-toggle" aria-expanded="true" aria-controls="lt-body">
+                <span class="label-mono" id="lt-title">03 Lighting Engineering</span>
+                <svg class="chev" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
+              </button>
+              <label class="lo-switch" title="조명 설정을 프롬프트에 반영">
+                <input type="checkbox" id="lt-enabled" checked> <span>사용</span>
+              </label>
+            </div>
+            <div class="lab-panel-body" id="lt-body">
+              <div class="param-group">
+                <label for="lt-preset">조명 프리셋 <span id="lt-origin" class="lo-origin"></span></label>
+                <select id="lt-preset" class="lab-select">
+                  <option value="auto">Auto (장면에 맞게)</option>
+                  <option value="natural">Natural Light · 자연광</option>
+                  <option value="soft">Soft Light · 부드러운 빛</option>
+                  <option value="hard">Hard Light · 강한 빛</option>
+                  <option value="direct-flash">Direct Flash · 정면 플래시</option>
+                  <option value="rim">Rim Lighting · 림 라이트</option>
+                  <option value="rembrandt">Rembrandt · 렘브란트</option>
+                  <option value="butterfly">Butterfly · 버터플라이</option>
+                  <option value="split">Split · 스플릿</option>
+                  <option value="loop">Loop · 루프</option>
+                  <option value="neon">Neon · 네온</option>
+                  <option value="golden-hour">Golden Hour · 골든아워</option>
+                  <option value="ambient">Ambient · 주변광</option>
+                  <option value="studio">Studio · 스튜디오</option>
+                  <option value="custom">Custom · 직접 설정</option>
+                </select>
+              </div>
+
+              <div class="lt-visual-row">
+                <div class="lt-svg-wrap">
+                  <svg id="lt-svg" class="lighting-controller" viewBox="0 0 200 200" role="group" aria-label="광원 위치 컨트롤러 (위에서 본 모습, 아래쪽이 카메라)">
+                    <circle cx="100" cy="100" r="78" class="lt-ring"></circle>
+                    <circle cx="100" cy="100" r="50" class="lt-ring lt-ring-inner"></circle>
+                    <line x1="100" y1="16" x2="100" y2="184" class="lt-axis"></line>
+                    <line x1="16" y1="100" x2="184" y2="100" class="lt-axis"></line>
+                    <text x="100" y="12" class="lt-tick">BACK 180°</text>
+                    <text x="150" y="95" class="lt-tick">R 90°</text>
+                    <text x="50" y="95" class="lt-tick">L 270°</text>
+                    <g class="lt-camera" transform="translate(100 196)"><rect x="-12" y="-9" width="24" height="9" rx="2"></rect><text y="-12" class="lt-tick">CAMERA 0°</text></g>
+                    <g class="lt-subject"><ellipse cx="100" cy="100" rx="13" ry="12"></ellipse><path d="M96 111 L100 117 L104 111 Z"></path></g>
+                    <line id="lt-beam" x1="100" y1="100" x2="100" y2="178" class="lt-beam"></line>
+                    <circle id="lt-handle" cx="100" cy="178" r="9" class="lt-handle" tabindex="0" role="slider"
+                      aria-label="광원 방위각 (좌우 화살표: 방위각, 위아래 화살표: 고도, Shift: 15도)" aria-valuemin="0" aria-valuemax="359" aria-valuenow="0"></circle>
+                  </svg>
+                  <div class="lt-caption"><span id="lt-angle-label">0° · +0°</span><span class="lt-hint">드래그 · 화살표 키</span></div>
+                </div>
+                <div class="lt-3d-wrap">
+                  <div id="lt-3d" class="lt-3d">
+                    <canvas id="lt-canvas" aria-label="조명 3D 개념 프리뷰 (드래그로 회전, 휠로 확대)"></canvas>
+                    <div id="lt-3d-status" class="lt-3d-status" hidden><span></span><button type="button" id="lt-3d-retry" class="btn-copy" hidden>다시 시도</button></div>
+                  </div>
+                  <div class="lt-caption"><span>개념적 프리뷰 · 실제 결과와 다를 수 있음</span><button type="button" id="lt-3d-reset" class="lt-link">시점 초기화</button></div>
+                </div>
+              </div>
+
+              <div class="lt-sliders">
+                <div class="lt-slider"><label for="lt-azimuth">방위각</label><input type="range" id="lt-azimuth" min="0" max="359" step="1"><input type="number" id="lt-azimuth-num" min="0" max="359" step="1" aria-label="방위각 (도)"><span class="unit">°</span></div>
+                <div class="lt-slider"><label for="lt-elevation">고도</label><input type="range" id="lt-elevation" min="-90" max="90" step="1"><input type="number" id="lt-elevation-num" min="-90" max="90" step="1" aria-label="고도 (도)"><span class="unit">°</span></div>
+                <div class="lt-slider"><label for="lt-intensity">세기</label><input type="range" id="lt-intensity" min="0" max="100" step="1"><input type="number" id="lt-intensity-num" min="0" max="100" step="1" aria-label="세기 (0=끔)"><span class="unit">%</span></div>
+                <div class="lt-slider"><label for="lt-distance">거리</label><input type="range" id="lt-distance" min="0.5" max="10" step="0.1"><input type="number" id="lt-distance-num" min="0.5" max="10" step="0.1" aria-label="거리 (미터)"><span class="unit">m</span></div>
+              </div>
+
+              <div class="lt-volumetric">
+                <label class="lo-switch"><input type="checkbox" id="lt-vol-enabled"> <span>볼류메트릭 (빛줄기·대기 효과)</span></label>
+                <div class="lt-grid-3">
+                  <select id="lt-vol-type" class="lab-select" aria-label="볼류메트릭 종류">
+                    <option value="haze">Haze · 연무</option><option value="fog">Fog · 안개</option><option value="dust">Dust · 먼지</option><option value="smoke">Smoke · 연기</option>
+                  </select>
+                  <select id="lt-vol-visibility" class="lab-select" aria-label="볼류메트릭 가시성">
+                    <option value="subtle">Subtle · 은은</option><option value="moderate">Moderate · 보통</option><option value="strong">Strong · 강함</option>
+                  </select>
+                  <div class="lt-slider lt-slider-compact"><input type="range" id="lt-vol-density" min="0" max="100" step="1" aria-label="밀도"><input type="number" id="lt-vol-density-num" min="0" max="100" step="1" aria-label="밀도 (0–100)"></div>
+                </div>
+              </div>
+
+              <details class="lt-advanced">
+                <summary>고급 설정 (광원 · 질감 · 톤 · 보조광 · 색온도)</summary>
+                <div class="lt-grid-2">
+                  <div class="param-group"><label for="lt-source">광원 종류</label>
+                    <select id="lt-source" class="lab-select"><option value="auto">Auto</option><option value="sunlight">Sunlight · 태양광</option><option value="led">LED</option><option value="fluorescent">Fluorescent · 형광등</option><option value="tungsten">Tungsten · 텅스텐</option><option value="strobe">Strobe · 스트로보</option></select></div>
+                  <div class="param-group"><label for="lt-quality">빛의 질감</label>
+                    <select id="lt-quality" class="lab-select"><option value="auto">Auto</option><option value="soft">Soft · 부드럽게</option><option value="hard">Hard · 선명하게</option><option value="custom">Custom · 그림자 경도</option></select></div>
+                  <div class="param-group"><label for="lt-tonal">톤 스타일</label>
+                    <select id="lt-tonal" class="lab-select"><option value="auto">Auto</option><option value="balanced">Balanced</option><option value="high-key">High Key</option><option value="low-key">Low Key</option><option value="high-contrast">High Contrast</option><option value="low-contrast">Low Contrast</option></select></div>
+                  <div class="param-group"><label for="lt-fill">보조광 (Fill)</label>
+                    <select id="lt-fill" class="lab-select"><option value="auto">Auto</option><option value="off">Off</option><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select></div>
+                </div>
+                <div class="lt-slider"><label for="lt-hardness">그림자 경도</label><input type="range" id="lt-hardness" min="0" max="100" step="1"><input type="number" id="lt-hardness-num" min="0" max="100" step="1" aria-label="그림자 경도 (0 부드러움 – 100 선명)"><span class="unit"></span></div>
+                <div class="lt-slider"><label for="lt-kelvin">색온도</label><input type="range" id="lt-kelvin" min="2000" max="10000" step="100"><input type="number" id="lt-kelvin-num" min="2000" max="10000" step="100" aria-label="색온도 (K)"><span class="unit">K</span></div>
+                <label class="lo-switch lo-switch-sm"><input type="checkbox" id="lt-kelvin-auto" checked> <span>색온도 Auto</span></label>
+              </details>
+            </div>
+          </section>
+
+          <section class="lab-panel optics-panel" id="optics-panel" aria-labelledby="op-title">
+            <div class="lab-panel-head">
+              <button type="button" class="lab-panel-toggle" id="op-toggle" aria-expanded="true" aria-controls="op-body">
+                <span class="label-mono" id="op-title">04 Camera &amp; Optics</span>
+                <svg class="chev" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
+              </button>
+            </div>
+            <div class="lab-panel-body" id="op-body">
+              <div class="param-group"><label for="op-lens">카메라 + 렌즈 프리셋 <span id="op-origin" class="lo-origin"></span></label>
+                <select id="op-lens" class="lab-select">
+                  <option value="auto">Auto</option>
+                  <option value="canon-r5ii-rf50">Canon EOS R5 Mark II + RF 50mm F1.8 STM</option>
+                  <option value="sony-a7iv-fe85">Sony A7 IV + FE 85mm F1.8</option>
+                  <option value="fuji-x100vi">Fujifilm X100VI (23mm ≈ 35mm 환산)</option>
+                  <option value="smartphone-main">Smartphone Main Camera</option>
+                  <option value="vintage-ccd">Vintage CCD Compact</option>
+                  <option value="custom">Custom · 직접 설정</option>
+                </select></div>
+              <div class="lt-grid-3">
+                <div class="param-group"><label for="op-camera">카메라</label>
+                  <select id="op-camera" class="lab-select"><option value="auto">Auto</option><option value="smartphone">Smartphone</option><option value="ccd-compact">CCD Compact</option><option value="dslr">DSLR</option><option value="mirrorless">Mirrorless</option><option value="cinema">Cinema</option><option value="film-35mm">35mm Film</option><option value="medium-format">Medium Format</option></select></div>
+                <div class="param-group"><label for="op-focal">초점거리 (환산)</label>
+                  <select id="op-focal" class="lab-select"><option value="auto">Auto</option><option value="14">14mm</option><option value="24">24mm</option><option value="28">28mm</option><option value="35">35mm</option><option value="50">50mm</option><option value="85">85mm</option><option value="105">105mm</option><option value="135">135mm</option><option value="200">200mm</option></select></div>
+                <div class="param-group"><label for="op-aperture">조리개</label>
+                  <select id="op-aperture" class="lab-select"><option value="auto">Auto</option><option value="1.2">f/1.2</option><option value="1.4">f/1.4</option><option value="1.8">f/1.8</option><option value="2">f/2</option><option value="2.8">f/2.8</option><option value="4">f/4</option><option value="5.6">f/5.6</option><option value="8">f/8</option><option value="11">f/11</option><option value="16">f/16</option></select></div>
+              </div>
+              <details class="lt-advanced">
+                <summary>고급 설정 (화이트밸런스)</summary>
+                <div class="lt-slider"><label for="op-wb">화이트밸런스</label><input type="range" id="op-wb" min="2000" max="10000" step="100"><input type="number" id="op-wb-num" min="2000" max="10000" step="100" aria-label="화이트밸런스 (K)"><span class="unit">K</span></div>
+                <label class="lo-switch lo-switch-sm"><input type="checkbox" id="op-wb-auto" checked> <span>화이트밸런스 Auto</span></label>
+              </details>
+            </div>
+          </section>
+
+          <ul id="lo-warnings" class="lo-warnings" role="status" aria-live="polite" hidden></ul>
+          <div class="lo-serialized-wrap">
+            <div class="label-mono" style="font-size:0.62rem;">프롬프트 반영 미리보기</div>
+            <p id="lo-serialized" class="lo-serialized" aria-live="polite"></p>
+          </div>
+        </div>
+
+        <!-- RIGHT: 05 LAYERS + 06 OUTPUT -->
+        <div class="lab-right">
+        <!-- 05 ENGINEERING LAYERS -->
         <div class="lab-visualizer">
-          <div class="label-mono">04 엔지니어링 레이어 (공정)</div>
+          <div class="label-mono">05 엔지니어링 레이어 (공정)</div>
           <div class="layer-stack">
             <div class="layer" id="layer-1">
               <span class="layer-num">L1</span>
@@ -1081,7 +1254,7 @@
         <div class="lab-output">
           <div class="visualizer-output">
             <div class="output-header">
-              <div class="label-mono">프롬프트 (최적화)</div>
+              <div class="label-mono">06 프롬프트 (최적화) <span id="regen-badge" class="regen-badge" hidden>재생성 필요</span></div>
               <div style="display: flex; gap: 8px;">
                 <button class="btn-copy" id="json-btn">JSON 복사</button>
                 <button class="btn-copy" id="copy-btn">복사</button>
@@ -1104,6 +1277,7 @@
             </div>
           </div>
         </div>
+        </div> <!-- end lab-right -->
       </div>
     </section>
 
@@ -1784,6 +1958,7 @@
   <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/ort.webgpu.min.js"></script>
   <script type="module" src="supertonic/tts.js"></script>
   <script src="script.js"></script>
+  <script src="lighting-lab.js"></script>
 </body>
 
 </html>

@@ -247,6 +247,7 @@ const MyPresets = {
     if (UI.paramCustom) UI.paramCustom.value = '';
     if (UI.intentInput) UI.intentInput.value = '';
     document.querySelectorAll('.chip.active').forEach(c => c.classList.remove('active'));
+    if (window.LightingLab) window.LightingLab.reset();
 
     // 3. UI 정리
     document.querySelectorAll('.preset-chip').forEach(c => c.classList.remove('active'));
@@ -308,7 +309,9 @@ const MyPresets = {
         paramSceneComp: UI.paramSceneComp?.value,
         angleInput: UI.angleInput?.value,
         intentInput: UI.intentInput?.value,
-        activeChips: activeChips // 칩 정보 추가
+        activeChips: activeChips, // 칩 정보 추가
+        // 03 조명 · 04 카메라/광학 (구조화 상태)
+        ...(window.LightingLab ? (({ lighting, optics }) => ({ lighting, optics }))(window.LightingLab.getState()) : {})
       }
     };
 
@@ -359,13 +362,16 @@ const MyPresets = {
     // 1. 기본적인 파라미터 복구
     Object.entries(p.params).forEach(([key, val]) => {
       const el = UI[key];
-      if (key !== 'activeChips' && el && val !== undefined) {
+      if (key !== 'activeChips' && key !== 'lighting' && key !== 'optics' && el && val !== undefined) {
         el.value = val;
         if (key === 'paramType' || key.startsWith('paramBg')) {
           el.dispatchEvent(new Event('change'));
         }
       }
     });
+
+    // 1-b. 조명/광학 복구 (없는 구버전 프리셋은 기본값으로 마이그레이션)
+    if (window.LightingLab) window.LightingLab.load(p.params.lighting, p.params.optics);
 
     // 2. 칩 상태 복구
     document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
@@ -412,6 +418,12 @@ const MyPresets = {
 };
 
 // 초기화 시 서버 데이터 호출 막음 (비로그인 401 에러 로그 방지. checkAuthStatus()에서 호출됨)
+
+// 생성 이후 다른 파라미터가 바뀌면 '재생성 필요' 표시
+document.querySelectorAll('.lab-params-area, .lab-header-area').forEach(area => {
+  ['change', 'input'].forEach(ev => area.addEventListener(ev, () => window.LightingLab && window.LightingLab.markDirty()));
+});
+document.querySelector('.lab-params-area')?.addEventListener('click', (e) => { if (e.target.closest('.chip')) window.LightingLab && window.LightingLab.markDirty(); });
 
 // 프리셋 버튼 리스너
 if (UI.savePresetBtn) {
@@ -930,6 +942,21 @@ if (UI.paramAngle && UI.angleInput) {
 
 
 // ===== 드롭다운 확장 선택지의 영문 설명 (AI에게 구체적으로 전달) =====
+// L1~L3 상태 표시 (실제 요청 이벤트 기반)
+function setLabLayer(i, st, text) {
+  const layer = UI.layers && UI.layers[i];
+  if (!layer) return;
+  layer.dataset.st = st;
+  const status = layer.querySelector('.layer-status');
+  layer.classList.toggle('active', st === 'run' || st === 'done');
+  layer.style.borderColor = st === 'done' ? 'var(--skills-cyan)' : st === 'fail' ? '#ff5555' : '';
+  if (!status) return;
+  status.style.color = st === 'fail' ? '#ff5555' : '';
+  if (st === 'run') status.innerHTML = `<span class="spinner-icon"></span> ${text}`;
+  else if (st === 'done') status.innerHTML = `<svg viewBox="0 0 24 24" width="12" height="12" stroke="#10b981" stroke-width="3" fill="none" style="flex-shrink:0"><polyline points="20 6 9 17 4 12"></polyline></svg> ${text}`;
+  else status.textContent = text;
+}
+
 const OPTION_DESC = {
   "k-drama": "Korean drama cinematography: soft warm grading, gentle backlight, romantic mood",
   "film-35mm": "35mm analog film photo, natural grain, slightly faded colors",
@@ -967,6 +994,42 @@ const OPTION_DESC = {
   "summer-linen": "light summer linen shirt and shorts or skirt",
   "winter-coat": "long wool winter coat with a scarf",
   "modern-hanbok": "modern minimal hanbok-inspired outfit",
+  "streetwear": "trendy streetwear: oversized top, wide pants, sneakers",
+  "techwear": "techwear: black technical fabrics, straps and utility pockets",
+  "luxury": "luxury designer look with refined tailoring and premium fabrics",
+  "academic": "neat preppy look: knit vest or cardigan over a collared shirt",
+  "vintage": "retro vintage outfit with classic cuts and muted colors",
+  "casual-chic": "relaxed casual-chic outfit: simple knit or shirt with clean trousers",
+  "minimal-basic": "minimal basic outfit in neutral tones: plain tee or shirt with clean-cut trousers",
+  "old-money": "quiet-luxury old-money style: cashmere knit, crisp shirt, tailored pleated trousers in cream and navy",
+  "gorpcore": "gorpcore outdoor style: technical shell jacket, fleece, cargo pants and trail shoes",
+  "y2k": "Y2K fashion: cropped top, low-rise jeans, small shoulder bag, playful accessories",
+  "preppy-uniform": "Korean school-uniform style: blazer, white shirt, tie and pleated skirt or trousers",
+  "trench-coat": "classic beige trench coat over simple layers",
+  "leather-jacket": "black leather biker jacket with dark jeans",
+  "blazer-casual": "relaxed blazer over a tee with straight trousers, smart-casual",
+  "cardigan-soft": "soft pastel cardigan with a long skirt or wide trousers",
+  "hoodie-comfy": "comfortable oversized hoodie and sweatpants",
+  "sporty-tennis": "tennis outfit: white pleated skirt or shorts, polo top, sneakers",
+  "golf-wear": "modern golf wear: fitted polo, pleated skirt or slim trousers, cap",
+  "yoga-wear": "fitted yoga wear in muted tones",
+  "swimwear-resort": "resort look: modest swimsuit with a linen cover-up",
+  "party-dress": "elegant evening party dress with subtle shine",
+  "wedding-guest": "refined wedding-guest outfit: soft-colored midi dress or light suit",
+  "pajama-home": "soft cotton pajama set, cozy home loungewear",
+  "chef-uniform": "white chef jacket and apron",
+  "doctor-gown": "clean white doctor's coat over scrubs",
+  "barista-apron": "barista look: simple shirt with a canvas apron",
+  "military-cargo": "military-inspired utility jacket and cargo pants in olive",
+  "boho": "bohemian style: flowing patterned maxi dress, layered jewelry",
+  "grunge": "90s grunge: flannel shirt, band-free plain tee, ripped jeans, boots",
+  "punk-rock": "punk rock style: studded leather, plaid, combat boots",
+  "k-idol-stage": "K-pop stage outfit: coordinated sparkly jacket or crop set, stage styling",
+  "traditional-hanbok": "traditional Korean hanbok with jeogori and chima in harmonious colors",
+  "kimono": "traditional Japanese kimono with obi",
+  "ski-wear": "insulated ski jacket and pants, goggles on the head",
+  "rain-gear": "glossy raincoat and rain boots",
+  "tuxedo": "classic black tuxedo with bow tie",
   "extreme-close-up": "extreme close-up on the eyes and face details",
   "medium-close-up": "medium close-up from chest up",
   "negative-space": "subject small on one side with generous empty space",
@@ -1349,6 +1412,7 @@ async function applyEngineering() {
     // 3단계: 시각적 레이어 처리 (Process Layers)
     UI.layers.forEach(l => {
       if (l) {
+        delete l.dataset.st;
         l.classList.remove('active');
         l.style.borderColor = '';
         const status = l.querySelector('.layer-status');
@@ -1359,23 +1423,9 @@ async function applyEngineering() {
       }
     });
 
-    for (let i = 0; i < UI.layers.length; i++) {
-      const layer = UI.layers[i];
-      if (layer) {
-        layer.classList.add('active');
-        layer.style.borderColor = ''; // reset border from previous run
-        const status = layer.querySelector('.layer-status');
-        if (status) status.innerHTML = '<span class="spinner-icon"></span> 최적화 중...';
-
-        const logs = [
-          '> [L1] Context & Alignment Processing...',
-          '> [L2] Style Consistency Refinement...',
-          '> [L3] Semantic Expansion & Details...'
-        ];
-        addLog(logs[i] || `> [L${i + 1}] Processing...`, 'success');
-        await new Promise(r => setTimeout(r, 300));
-      }
-    }
+    // L1~L3 상태는 실제 요청 이벤트에 맞춰 갱신: L1 설계 사양 조립 → L2 LLM 요청 → L3 제약 검증
+    setLabLayer(0, 'run', '사양 조립 중…');
+    addLog('> [L1] Context & Alignment Processing...', 'success');
 
     if (UI.engineerBtn) {
       UI.engineerBtn.disabled = true;
@@ -1637,7 +1687,14 @@ ${PromptContext.visual.camera.composition !== 'none' ? `- Composition: ${PromptC
 
     const finalDirectives = [config.chips, config.custom].map(x => (x || '').trim()).filter(Boolean).join(', ');
     if (finalDirectives) enrichedIntent += `\n[FINAL DIRECTIVES]\n${finalDirectives}`;
+    // 03 조명 · 04 카메라/광학 → 구조화 제약 (L1~L3 및 최종 프롬프트에 반영)
+    const loSer = window.LightingLab ? window.LightingLab.serialize() : { text: '', keys: [] };
+    if (loSer.text) {
+      enrichedIntent += `\n[LIGHTING & OPTICS CONSTRAINTS]\n${loSer.lightingText ? '- ' + loSer.lightingText + '\n' : ''}${loSer.opticsText ? '- ' + loSer.opticsText + '\n' : ''}- Must keep exactly: ${loSer.keys.join(', ') || '(as written above)'}\n`;
+      addLog(`  - Lighting/Optics: ${loSer.keys.join(', ') || 'custom'}`, 'secondary');
+    }
     enrichedIntent = enrichedIntent.replace(/\n\s*\n\s*\n+/g, '\n\n');
+    setLabLayer(0, 'done', '완료');
 
     let systemPrompt;
     if (config.type === 'animal') {
@@ -1737,6 +1794,11 @@ RULES:
 - Output only the prompt itself, nothing else.`;
     }
 
+    if (loSer.text) {
+      systemPrompt += `\n\nLIGHTING & OPTICS: The [LIGHTING & OPTICS CONSTRAINTS] block is authoritative. Describe that light direction (camera-frame left/right/front/back), height, intensity, quality, color temperature, atmosphere and the camera/lens look exactly as given, and keep these exact terms: ${loSer.keys.join(', ')}. They describe the photographic look, not objects visible in the image.${config.outputMode === 'zimage' ? '' : ' Put them in the technical paragraph.'}`;
+    }
+    setLabLayer(1, 'run', 'LLM 요청 중…');
+    addLog('> [L2] Style Consistency Refinement (LLM request)...', 'success');
     const apiPromise = fetch('/api/engineer', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1751,6 +1813,9 @@ RULES:
 
     const data = await apiPromise; // Wait purely for the true API response
     const endTime = Date.now();
+    setLabLayer(1, 'done', '응답 수신');
+    setLabLayer(2, 'run', '제약 검증 중…');
+    addLog('> [L3] Semantic Expansion & Constraint Check...', 'success');
 
     // [하드코딩] 셀카 POV별 기형 / 기기 노출 분기 처리
     let selfieNegatives = "";
@@ -1771,14 +1836,15 @@ RULES:
     }
     const duration = endTime - startTime;
 
-    // API 도착 후 즉시 모든 레이어를 성공("완료") 상태로 변경 (시간차 없이 자연스럽게)
-    UI.layers.forEach(layer => {
-      if (layer) {
-        const status = layer.querySelector('.layer-status');
-        if (status) status.innerHTML = '<svg viewBox="0 0 24 24" width="12" height="12" stroke="#10b981" stroke-width="3" fill="none" style="flex-shrink:0"><polyline points="20 6 9 17 4 12"></polyline></svg> 완료';
-        layer.style.borderColor = 'var(--skills-cyan)';
-      }
-    });
+    // L3: 핵심 조명/광학 제약이 응답에 빠졌으면 결정적으로 보강
+    if (window.LightingLab) {
+      const chk = window.LightingLab.enforce(data.result, config.outputMode);
+      data.result = chk.text;
+      setLabLayer(2, 'done', chk.appended ? `보강 적용 (${chk.missing.length})` : '검증 완료');
+      if (chk.appended) addLog(`  ! 누락된 제약 보강: ${chk.missing.join(', ')}`, 'secondary');
+    } else {
+      setLabLayer(2, 'done', '완료');
+    }
 
     stopLoadingAnimation(UI.optimizedOutput);
     if (UI.optimizedOutput) {
@@ -1786,6 +1852,7 @@ RULES:
       UI.optimizedOutput.style.color = 'var(--fg)';
     }
     addLog(`✓ 프롬프트 추론 성공. [유형: ${config.type.toUpperCase()}]`, true);
+    if (window.LightingLab) window.LightingLab.markGenerated();
     updateStatusUI('lab', 'idle', '아키텍처 설계 완료');
 
     // Update global metrics for view
@@ -1814,7 +1881,8 @@ RULES:
 
     // 🚨 에러 시 스피너가 무한정 도는 현상 방지: 실패 상태 시각화
     UI.layers.forEach(layer => {
-      if (layer) {
+      if (layer && layer.dataset.st !== 'done') {
+        layer.dataset.st = 'fail';
         const status = layer.querySelector('.layer-status');
         if (status) {
           status.innerHTML = '<svg viewBox="0 0 24 24" width="12" height="12" stroke="#ff5555" stroke-width="3" fill="none" style="flex-shrink:0"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg> 실패';
@@ -2080,6 +2148,13 @@ if (UI.jsonBtn) {
           mappedJson.description[key.replace(/ /g, '_').toLowerCase()] = parsedPrompt[key];
         }
       });
+
+      if (window.LightingLab) {
+        const lo = window.LightingLab.toJSON();
+        mappedJson.lighting = lo.lighting;
+        mappedJson.camera_optics = lo.optics;
+        if (lo.text) mappedJson.constraints["lighting_and_optics"] = lo.text;
+      }
 
       navigator.clipboard.writeText(JSON.stringify(mappedJson, null, 2));
 
@@ -3933,7 +4008,7 @@ function renderLabParamSummary() {
   if (!box || !lab) return;
   const chips = [];
   lab.querySelectorAll('select.lab-select').forEach(sel => {
-    if (sel.id === 'param-output-mode' || sel.offsetParent === null) return;
+    if (sel.id === 'param-output-mode' || sel.offsetParent === null || sel.closest('.lab-center')) return;
     const opt = sel.options[sel.selectedIndex];
     if (!opt || ['none', ''].includes(sel.value)) return;
     const label = (opt.text || '').replace(/\s*\(.*?\)\s*/g, ' ').trim();
@@ -3941,6 +4016,12 @@ function renderLabParamSummary() {
   });
   const angle = document.getElementById('param-angle');
   if (angle && angle.offsetParent !== null && angle.value !== '0') chips.push(`회전 ${angle.value}°`);
+  // 03 조명 · 04 광학: 실제 프롬프트에 반영되는 핵심 항목만
+  if (window.LightingLab) {
+    const ls = window.LightingLab.getState();
+    if (ls.lighting.enabled && ls.lighting.preset !== 'auto') chips.push(`💡 ${ls.lighting.preset === 'custom' ? 'Custom' : window.LightingLab.PRESETS[ls.lighting.preset].label} ${ls.lighting.azimuth}°`);
+    window.LightingLab.serialize().keys.filter(k => /mm$|^f\//.test(k)).forEach(k => chips.push(`📷 ${k}`));
+  }
   box.innerHTML = chips.map(c => `<span class="lab-chip">${c}</span>`).join('');
   box.style.display = chips.length ? 'flex' : 'none';
 }

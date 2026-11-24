@@ -189,7 +189,8 @@ const renderMainHtml = () => {
     MAIN_HTML = raw
         .replace(/src="script\.js"/g, `src="script.js?v=${ASSET_VERSION}"`)
         .replace(/href="style\.css(\?v=[^"]*)?"/g, `href="style.css?v=${ASSET_VERSION}"`)
-        .replace(/src="supertonic\/tts\.js"/g, `src="supertonic/tts.js?v=${ASSET_VERSION}"`);
+        .replace(/src="supertonic\/tts\.js"/g, `src="supertonic/tts.js?v=${ASSET_VERSION}"`)
+        .replace(/src="lighting-lab\.js"/g, `src="lighting-lab.js?v=${ASSET_VERSION}"`);
     return MAIN_HTML;
 };
 app.get(['/', '/index.html', '/workflow_web.html'], (req, res) => {

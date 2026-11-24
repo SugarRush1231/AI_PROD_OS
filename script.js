@@ -2531,7 +2531,7 @@ checkAuthStatus();
 const heroStartBtn = document.getElementById('hero-start-btn');
 if (heroStartBtn) {
   heroStartBtn.addEventListener('click', () => {
-    document.getElementById('autopilot').scrollIntoView({ behavior: 'smooth' });
+    document.getElementById('prompt-lab').scrollIntoView({ behavior: 'smooth' });
   });
 }
 

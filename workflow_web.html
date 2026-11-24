@@ -40,7 +40,7 @@
         </a>
       </div>
       <div class="nav-center">
-        <a href="#autopilot" class="nav-link">원클릭 제작</a>
+        <a href="#autopilot-card" class="nav-link">원클릭 제작</a>
         <a href="#prompt-lab" class="nav-link">프롬프트 랩</a>
         <a href="#image-studio" class="nav-link">이미지</a>
         <a href="#video-studio" class="nav-link">영상</a>
@@ -100,121 +100,16 @@
     <!-- HERO -->
     <section class="hero">
       <span class="badge">v1.0 --stable</span>
-      <h1>목표 한 줄로 <br><span class="grad-text">숏폼 한 편</span></h1>
+      <h1>Precision <br><span class="grad-text">Prompt Lab</span></h1>
       <p class="hero-desc">
-        기획 · 장면 설계 · 이미지 · 내레이션 · 영상 · 타이포까지,<br>
-        AI 숏폼 제작 파이프라인을 버튼 하나로.
+        프롬프트 설계부터 음성 자막 추출까지,<br>
+        AI 크리에이티브 워크플로우를 하나의 파이프라인으로.
       </p>
       <div class="hero-actions">
         <button class="btn-big" id="hero-start-btn">시작하기</button>
       </div>
     </section>
 
-    <!-- ===== 🎯 ONE-CLICK STUDIO (메인 기능) ===== -->
-    <section class="section" id="autopilot" style="margin-top: 20px;">
-      <div class="section-header">
-        <h2>원클릭 숏폼 제작</h2>
-        <div class="status-indicator"><span class="dot pulse" style="background: var(--skills-cyan);"></span><span style="color: var(--skills-cyan);">API Active</span></div>
-      </div>
-      <!-- ===== 🎯 원클릭 제작 파이프라인 (목표 1회 입력 → 기획 → 장면 → 이미지 → 영상) ===== -->
-      <div class="lab-card" id="autopilot-card"
-        style="margin-top: 16px; padding: 28px; border: 1.5px solid var(--skills-cyan); border-radius: 12px; background: var(--panel);">
-        <div class="label-mono" style="color: var(--skills-cyan);">🎯 ONE-CLICK PIPELINE · 목표만 입력하면 영상까지</div>
-        <textarea id="ap-goal" class="lab-input-small" rows="3"
-          style="width: 100%; margin-top: 12px; resize: vertical;"
-          placeholder="예) 직장인 대상 '퇴근 후 10분 홈카페' 릴스. 따뜻하고 감성적인 톤, 마지막에 저장 유도"></textarea>
-        <div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin-top: 12px;">
-          <div class="param-group" style="min-width: 140px;">
-            <label style="display:block; font-size: 0.75rem; color: var(--fg-muted); margin-bottom: 6px;">플랫폼</label>
-            <select id="ap-platform" class="lab-select">
-              <option value="instagram-reels" selected>인스타 릴스</option>
-              <option value="youtube-shorts">유튜브 쇼츠</option>
-              <option value="tiktok">틱톡</option>
-            </select>
-          </div>
-          <div class="param-group" style="min-width: 140px;">
-            <label style="display:block; font-size: 0.75rem; color: var(--fg-muted); margin-bottom: 6px;">장면 수</label>
-            <select id="ap-scenes" class="lab-select">
-              <option value="1" selected>1</option>
-              <option value="2">2</option>
-              <option value="3">3</option>
-              <option value="4">4</option>
-            </select>
-          </div>
-          <div class="param-group" style="min-width: 130px;">
-            <label style="display:block; font-size: 0.75rem; color: var(--fg-muted); margin-bottom: 6px;">내레이션</label>
-            <div style="display: flex; gap: 6px; align-items: center;">
-              <select id="ap-voice" class="lab-select">
-                <optgroup label="여성">
-                  <option value="F1" selected>여성 1 (차분한 저음)</option>
-                  <option value="F2">여성 2 (밝고 발랄)</option>
-                  <option value="F3">여성 3 (아나운서)</option>
-                  <option value="F4">여성 4 (또렷하고 힘 있는)</option>
-                  <option value="F5">여성 5 (부드럽고 다정한)</option>
-                </optgroup>
-                <optgroup label="남성">
-                  <option value="M1">남성 1 (활기차고 경쾌)</option>
-                  <option value="M2">남성 2 (깊고 진중한)</option>
-                  <option value="M3">남성 3 (신뢰감 있는 발표)</option>
-                  <option value="M4">남성 4 (부드럽고 친근한)</option>
-                  <option value="M5">남성 5 (따뜻한 이야기꾼)</option>
-                </optgroup>
-                <option value="none">내레이션 없음</option>
-              </select>
-              <button type="button" id="ap-voice-preview" class="btn-copy" title="목소리 미리듣기"
-                style="height: 36px; min-width: 40px; padding: 0 10px;">▶</button>
-            </div>
-          </div>
-          <div class="param-group" style="min-width: 150px;">
-            <label style="display:block; font-size: 0.75rem; color: var(--fg-muted); margin-bottom: 6px;">영상 연결</label>
-            <select id="ap-link" class="lab-select">
-              <option value="cut" selected>컷 전환 (장면별)</option>
-              <option value="extend">이어지는 원테이크 (연장)</option>
-            </select>
-          </div>
-          <label style="display:flex; align-items:center; gap:6px; font-size: 0.8rem; color: var(--fg-muted); padding-bottom: 8px;">
-            <input type="checkbox" id="ap-make-video" checked> 영상까지 생성
-          </label>
-          <label style="display:flex; align-items:center; gap:6px; font-size: 0.8rem; color: var(--fg-muted); padding-bottom: 8px;">
-            <input type="checkbox" id="ap-typo" checked> 타이포·자막
-          </label>
-          <button id="ap-run-btn" class="btn-skills" style="flex: 1; min-width: 220px; height: 44px; font-size: 1rem;">▶ 전체 자동 제작</button>
-        </div>
-
-        <div id="ap-steps" style="display: none; margin-top: 20px; display: none; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px;">
-          <div class="ap-step" data-step="concept">① 컨셉 기획</div>
-          <div class="ap-step" data-step="storyboard">② 스토리보드</div>
-          <div class="ap-step" data-step="shotlist">③ 숏 리스트</div>
-          <div class="ap-step" data-step="scenes">④ 장면 설계</div>
-          <div class="ap-step" data-step="release">⑤ BGM · 제목/태그</div>
-          <div class="ap-step" data-step="voice">⑥ 내레이션</div>
-          <div class="ap-step" data-step="images">⑦ 장면 이미지</div>
-          <div class="ap-step" data-step="videos">⑧ 장면 영상</div>
-          <div class="ap-step" data-step="merge">⑨ 완성본 합치기</div>
-        </div>
-
-        <div id="ap-progress" style="display: none; margin-top: 12px;">
-          <div style="height: 8px; border-radius: 999px; background: var(--input-bg); border: 1px solid var(--border); overflow: hidden;">
-            <div id="ap-progress-bar" style="height: 100%; width: 0%; background: linear-gradient(90deg, var(--skills-cyan), var(--skills-purple)); transition: width 0.4s ease;"></div>
-          </div>
-          <div id="ap-progress-text" style="margin-top: 6px; font-size: 0.75rem; color: var(--fg-muted);"></div>
-        </div>
-        <div id="ap-voice-status" style="display: none; margin-top: 10px; font-size: 0.75rem; color: var(--fg-muted);"></div>
-
-        <div id="ap-scene-grid"
-          style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; margin-top: 16px;"></div>
-
-        <div id="ap-final" style="display: none; margin-top: 20px; text-align: center;">
-          <div class="label-mono" style="margin-bottom: 8px;">🎬 완성본</div>
-          <video id="ap-final-player" controls playsinline muted
-            style="max-width: 100%; max-height: 520px; border-radius: 10px; background: #000;"></video>
-          <audio id="ap-final-voice" preload="auto" style="display: none;"></audio>
-          <div id="ap-final-note" style="font-size: 0.72rem; color: var(--fg-muted); margin-top: 8px;"></div>
-          <a id="ap-download" class="btn-skills" style="display: none; margin-top: 12px; text-decoration: none; align-items: center; justify-content: center; gap: 6px; padding: 10px 20px;">⬇ 완성본 다운로드</a>
-        </div>
-      </div>
-
-    </section>
 
     <!-- MODEL REGISTRY CARDS -->
     <div class="registry-section">
@@ -1520,6 +1415,104 @@
         <div class="status-indicator" id="status-container-vps">
           <span class="dot pulse" id="status-dot-vps" style="background: #10b981;"></span>
           <span id="status-text-vps">Server Status: Online</span>
+        </div>
+      </div>
+
+      <!-- ===== 🎯 원클릭 제작 파이프라인 (목표 1회 입력 → 기획 → 장면 → 이미지 → 영상) ===== -->
+      <div class="lab-card" id="autopilot-card"
+        style="margin-top: 24px; padding: 28px; border: 1.5px solid var(--skills-cyan); border-radius: 12px; background: var(--panel);">
+        <div class="label-mono" style="color: var(--skills-cyan);">🎯 ONE-CLICK PIPELINE · 목표만 입력하면 영상까지</div>
+        <textarea id="ap-goal" class="lab-input-small" rows="3"
+          style="width: 100%; margin-top: 12px; resize: vertical;"
+          placeholder="예) 직장인 대상 '퇴근 후 10분 홈카페' 릴스. 따뜻하고 감성적인 톤, 마지막에 저장 유도"></textarea>
+        <div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin-top: 12px;">
+          <div class="param-group" style="min-width: 140px;">
+            <label style="display:block; font-size: 0.75rem; color: var(--fg-muted); margin-bottom: 6px;">플랫폼</label>
+            <select id="ap-platform" class="lab-select">
+              <option value="instagram-reels" selected>인스타 릴스</option>
+              <option value="youtube-shorts">유튜브 쇼츠</option>
+              <option value="tiktok">틱톡</option>
+            </select>
+          </div>
+          <div class="param-group" style="min-width: 140px;">
+            <label style="display:block; font-size: 0.75rem; color: var(--fg-muted); margin-bottom: 6px;">장면 수</label>
+            <select id="ap-scenes" class="lab-select">
+              <option value="1" selected>1</option>
+              <option value="2">2</option>
+              <option value="3">3</option>
+              <option value="4">4</option>
+            </select>
+          </div>
+          <div class="param-group" style="min-width: 130px;">
+            <label style="display:block; font-size: 0.75rem; color: var(--fg-muted); margin-bottom: 6px;">내레이션</label>
+            <div style="display: flex; gap: 6px; align-items: center;">
+              <select id="ap-voice" class="lab-select">
+                <optgroup label="여성">
+                  <option value="F1" selected>여성 1 (차분한 저음)</option>
+                  <option value="F2">여성 2 (밝고 발랄)</option>
+                  <option value="F3">여성 3 (아나운서)</option>
+                  <option value="F4">여성 4 (또렷하고 힘 있는)</option>
+                  <option value="F5">여성 5 (부드럽고 다정한)</option>
+                </optgroup>
+                <optgroup label="남성">
+                  <option value="M1">남성 1 (활기차고 경쾌)</option>
+                  <option value="M2">남성 2 (깊고 진중한)</option>
+                  <option value="M3">남성 3 (신뢰감 있는 발표)</option>
+                  <option value="M4">남성 4 (부드럽고 친근한)</option>
+                  <option value="M5">남성 5 (따뜻한 이야기꾼)</option>
+                </optgroup>
+                <option value="none">내레이션 없음</option>
+              </select>
+              <button type="button" id="ap-voice-preview" class="btn-copy" title="목소리 미리듣기"
+                style="height: 36px; min-width: 40px; padding: 0 10px;">▶</button>
+            </div>
+          </div>
+          <div class="param-group" style="min-width: 150px;">
+            <label style="display:block; font-size: 0.75rem; color: var(--fg-muted); margin-bottom: 6px;">영상 연결</label>
+            <select id="ap-link" class="lab-select">
+              <option value="cut" selected>컷 전환 (장면별)</option>
+              <option value="extend">이어지는 원테이크 (연장)</option>
+            </select>
+          </div>
+          <label style="display:flex; align-items:center; gap:6px; font-size: 0.8rem; color: var(--fg-muted); padding-bottom: 8px;">
+            <input type="checkbox" id="ap-make-video" checked> 영상까지 생성
+          </label>
+          <label style="display:flex; align-items:center; gap:6px; font-size: 0.8rem; color: var(--fg-muted); padding-bottom: 8px;">
+            <input type="checkbox" id="ap-typo" checked> 타이포·자막
+          </label>
+          <button id="ap-run-btn" class="btn-skills" style="flex: 1; min-width: 220px; height: 44px; font-size: 1rem;">▶ 전체 자동 제작</button>
+        </div>
+
+        <div id="ap-steps" style="display: none; margin-top: 20px; display: none; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px;">
+          <div class="ap-step" data-step="concept">① 컨셉 기획</div>
+          <div class="ap-step" data-step="storyboard">② 스토리보드</div>
+          <div class="ap-step" data-step="shotlist">③ 숏 리스트</div>
+          <div class="ap-step" data-step="scenes">④ 장면 설계</div>
+          <div class="ap-step" data-step="release">⑤ BGM · 제목/태그</div>
+          <div class="ap-step" data-step="voice">⑥ 내레이션</div>
+          <div class="ap-step" data-step="images">⑦ 장면 이미지</div>
+          <div class="ap-step" data-step="videos">⑧ 장면 영상</div>
+          <div class="ap-step" data-step="merge">⑨ 완성본 합치기</div>
+        </div>
+
+        <div id="ap-progress" style="display: none; margin-top: 12px;">
+          <div style="height: 8px; border-radius: 999px; background: var(--input-bg); border: 1px solid var(--border); overflow: hidden;">
+            <div id="ap-progress-bar" style="height: 100%; width: 0%; background: linear-gradient(90deg, var(--skills-cyan), var(--skills-purple)); transition: width 0.4s ease;"></div>
+          </div>
+          <div id="ap-progress-text" style="margin-top: 6px; font-size: 0.75rem; color: var(--fg-muted);"></div>
+        </div>
+        <div id="ap-voice-status" style="display: none; margin-top: 10px; font-size: 0.75rem; color: var(--fg-muted);"></div>
+
+        <div id="ap-scene-grid"
+          style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; margin-top: 16px;"></div>
+
+        <div id="ap-final" style="display: none; margin-top: 20px; text-align: center;">
+          <div class="label-mono" style="margin-bottom: 8px;">🎬 완성본</div>
+          <video id="ap-final-player" controls playsinline muted
+            style="max-width: 100%; max-height: 520px; border-radius: 10px; background: #000;"></video>
+          <audio id="ap-final-voice" preload="auto" style="display: none;"></audio>
+          <div id="ap-final-note" style="font-size: 0.72rem; color: var(--fg-muted); margin-top: 8px;"></div>
+          <a id="ap-download" class="btn-skills" style="display: none; margin-top: 12px; text-decoration: none; align-items: center; justify-content: center; gap: 6px; padding: 10px 20px;">⬇ 완성본 다운로드</a>
         </div>
       </div>
 

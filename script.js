@@ -2779,6 +2779,19 @@ async function generateImage() {
       throw new Error("서버 응답에서 이미지 URL을 찾지 못했습니다.");
     }
 
+    // 실제 사용된 엔진 표시 (Kie 실패 시 폴백 사유도 노출)
+    const engineEl = document.getElementById('image-engine-status');
+    const provider = responseData.data && responseData.data.provider;
+    if (engineEl && provider) {
+      engineEl.innerText = provider === 'pollinations' ? 'Engine: Pollinations (폴백)' : 'Engine: Kie · Z-Image';
+      engineEl.style.color = provider === 'pollinations' ? '#f59e0b' : 'var(--skills-cyan)';
+    }
+    if (responseData.data && responseData.data.fallbackReason) {
+      console.warn('[IMAGE] 폴백 사유:', responseData.data.fallbackReason);
+      if (typeof addLog === 'function') addLog(`!! 이미지 폴백: ${responseData.data.fallbackReason}`, 'error');
+      if (engineEl) engineEl.title = responseData.data.fallbackReason;
+    }
+
     resultImage.src = finalImageUrl;
     resultImage.onload = () => {
       resultImage.style.display = "block";

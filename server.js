@@ -546,12 +546,14 @@ app.post('/api/generate-image', ensureAuthenticated, strictAiLimiter, async (req
         // 🖼️ 이미지 생성 1순위: Kie.ai z-image (약 0.8크레딧/장) → 실패/키 없음 시 2순위: Pollinations(무료)
         const kieRatioMap = { '1:1': '1:1', '4:3': '4:3', '3:4': '3:4', '16:9': '16:9', '9:16': '9:16', '21:9': '16:9' };
         const kieKey = process.env.KIE_API_KEY;
+        let fallbackReason = kieKey ? null : 'KIE_API_KEY 미설정';
         if (kieKey) {
             try {
                 const kieUrl = await generateWithKie(kieKey, String(prompt).slice(0, 1000), kieRatioMap[aspect_ratio] || '1:1');
                 return res.status(200).json({ data: { url: kieUrl, provider: 'kie:z-image' } });
             } catch (kieErr) {
                 console.warn('[KIE_FALLBACK] Kie 실패 → Pollinations로 전환:', kieErr.message);
+                fallbackReason = `Kie 실패: ${kieErr.message}`.slice(0, 300);
             }
         }
 
@@ -564,7 +566,7 @@ app.post('/api/generate-image', ensureAuthenticated, strictAiLimiter, async (req
         const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(String(prompt).slice(0, 1500))}`
             + `?width=${width}&height=${height}&seed=${seed}&model=flux&nologo=true`;
 
-        res.status(200).json({ data: { url, provider: 'pollinations' } });
+        res.status(200).json({ data: { url, provider: 'pollinations', fallbackReason } });
     } catch (error) {
         console.error('[IMAGE_GEN_ERROR]', error.message);
         res.status(500).json({ error: '이미지 생성 요청에 실패했습니다.' });

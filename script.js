@@ -2782,14 +2782,10 @@ async function generateImage() {
     // 실제 사용된 엔진 표시 (Kie 실패 시 폴백 사유도 노출)
     const engineEl = document.getElementById('image-engine-status');
     const provider = responseData.data && responseData.data.provider;
-    if (engineEl && provider) {
-      engineEl.innerText = provider === 'pollinations' ? 'Engine: Pollinations (폴백)' : 'Engine: Kie · Z-Image';
-      engineEl.style.color = provider === 'pollinations' ? '#f59e0b' : 'var(--skills-cyan)';
-    }
+    if (engineEl) engineEl.innerText = 'API Active';
     if (responseData.data && responseData.data.fallbackReason) {
       console.warn('[IMAGE] 폴백 사유:', responseData.data.fallbackReason);
       if (typeof addLog === 'function') addLog(`!! 이미지 폴백: ${responseData.data.fallbackReason}`, 'error');
-      if (engineEl) engineEl.title = responseData.data.fallbackReason;
     }
 
     resultImage.src = finalImageUrl;
@@ -2980,7 +2976,7 @@ async function generateKlingVideo() {
       <div style="height: 6px; background: rgba(255,255,255,0.1); border-radius: 10px; overflow: hidden;">
         <div id="video-progress-bar" style="width: 5%; height: 100%; background: linear-gradient(90deg, #6366f1, #c084fc); transition: width 0.4s ease;"></div>
       </div>
-      <div style="font-size: 0.7rem; margin-top: 12px; color: var(--fg-muted);">Seedance Lite 모델이 연산을 시작했습니다 (보통 1~3분)</div>
+      <div style="font-size: 0.7rem; margin-top: 12px; color: var(--fg-muted);">영상 렌더링을 시작했습니다 (보통 1~3분)</div>
     </div>
   `;
   videoElement.style.display = "none";
@@ -3343,7 +3339,7 @@ RULES:
         AP.setScene(i, '<span class="spinner"></span>', '이미지 생성 중');
         const img = await AP.makeImage(scenes[i].image_prompt);
         images.push(img.url);
-        AP.setScene(i, `<img src="${img.url}" alt="scene ${i + 1}">`, img.provider === 'pollinations' ? '이미지 완료 (폴백 엔진)' : '이미지 완료');
+        AP.setScene(i, `<img src="${img.url}" alt="scene ${i + 1}">`, '이미지 완료');
       }
       AP.setStep('images', 'done');
 

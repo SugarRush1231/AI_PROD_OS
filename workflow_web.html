@@ -884,7 +884,7 @@
               style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin: 10px 0 4px;">
               <select id="param-output-mode" class="lab-select" title="출력 형식"
                 style="width: auto; max-width: 100%; height: 30px; padding: 0 8px; font-size: 0.72rem;">
-                <option value="zimage" selected>이미지 생성용 (Z-Image)</option>
+                <option value="zimage" selected>이미지 생성용 (단일 문단)</option>
                 <option value="spec">상세 설계서 (4문단)</option>
               </select>
               <button class="btn-copy" id="send-to-studio-btn"
@@ -905,7 +905,7 @@
         <h2>AI Image Studio</h2>
         <div class="status-indicator">
           <span class="dot pulse" style="background: var(--skills-cyan);"></span>
-          <span id="image-engine-status" style="color: var(--skills-cyan);">Image Engine Ready</span>
+          <span id="image-engine-status" style="color: var(--skills-cyan);">API Active</span>
         </div>
       </div>
 
@@ -1012,7 +1012,7 @@
           AI Video Studio
           <span class="badge"
             style="background: rgba(147, 112, 219, 0.1); color: var(--skills-purple); border: 1px solid rgba(147, 112, 219, 0.2); font-size: 10px; padding: 2px 8px; border-radius: 4px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; transform: translateY(12px); line-height: 1;">KLING
-            LITE</span>
+            BETA</span>
         </h2>
       </div>
 
@@ -1046,8 +1046,8 @@
                 <label style="display: block; font-size: 0.75rem; color: var(--fg-muted); margin-bottom: 6px;">해상도
                   (Resolution)</label>
                 <select id="videoModeInput" class="lab-select" style="width: 100%; height: 36px;">
-                  <option value="480p" selected>480p (최저가 · 빠름)</option>
-                  <option value="720p">720p (선명 · 크레딧 더 사용)</option>
+                  <option value="480p" selected>480p (빠름)</option>
+                  <option value="720p">720p (선명)</option>
                 </select>
               </div>
             </div>
@@ -1101,7 +1101,7 @@
           </div>
 
           <div style="margin-top: 16px; font-size: 0.72rem; color: var(--fg-muted); line-height: 1.6;">
-            Seedance 1.0 Lite · 시작 프레임이 있으면 이미지→영상, 없으면 텍스트→영상 (480p·5초 기준 약 10크레딧)
+            시작 프레임이 있으면 이미지 → 영상, 없으면 텍스트 → 영상으로 생성됩니다.
           </div>
           <button id="generate-video-btn" class="btn-skills secondary"
             style="width: 100%; font-size: 1.05rem; padding: 16px; height: auto; margin-top: 12px; background: var(--skills-cyan); border: none; color: white;">
@@ -1160,9 +1160,9 @@
           <div class="param-group" style="min-width: 140px;">
             <label style="display:block; font-size: 0.75rem; color: var(--fg-muted); margin-bottom: 6px;">장면 수</label>
             <select id="ap-scenes" class="lab-select">
-              <option value="2">2장면 (약 22크레딧)</option>
-              <option value="3" selected>3장면 (약 32크레딧)</option>
-              <option value="4">4장면 (약 43크레딧)</option>
+              <option value="2">2장면</option>
+              <option value="3" selected>3장면</option>
+              <option value="4">4장면</option>
             </select>
           </div>
           <label style="display:flex; align-items:center; gap:6px; font-size: 0.8rem; color: var(--fg-muted); padding-bottom: 8px;">

@@ -2804,7 +2804,7 @@ async function generateImage() {
         
         // 영상 만들기 선택 시
         btnVideo.onclick = () => {
-          document.getElementById('kling-video-studio').scrollIntoView({ behavior: 'smooth' });
+          document.getElementById('video-studio').scrollIntoView({ behavior: 'smooth' });
           setVideoImageRef(finalImageUrl, 'start');
           choicePanel.style.display = "none"; // 이동 후 숨김
         };
@@ -2952,7 +2952,7 @@ setupVideoDragDrop('video-start-box', 'start');
 setupVideoDragDrop('video-end-box', 'end');
 
 // AI 비디오 생성 함수 (Kie Seedance 1.0 Lite · 작업 생성 → 상태 폴링)
-async function generateKlingVideo() {
+async function generateVideo() {
   const btn = document.getElementById('generate-video-btn');
   const promptInput = document.getElementById('videoPromptInput');
   const durationInput = document.getElementById('videoDurationInput');
@@ -3060,7 +3060,7 @@ async function generateKlingVideo() {
 // 이벤트 리스너 연결
 const genVideoBtn = document.getElementById('generate-video-btn');
 if (genVideoBtn) {
-  genVideoBtn.addEventListener('click', generateKlingVideo);
+  genVideoBtn.addEventListener('click', generateVideo);
 }
 
 // 🔍 이미지 크게 보기 기능 (CSP 준수 및 강제 표시 로직)

@@ -1,1 +1,49 @@
 # AI_PROD_OS
+
+목표 한 줄로 **기획 → 장면 설계 → 이미지 → 영상 → 게시용 메타데이터**까지 만드는 AI 숏폼 제작 워크스페이스.
+라이브: https://ai-prod.live
+
+## 주요 기능
+
+| 영역 | 설명 |
+|---|---|
+| **One-Click Pipeline** | 목표를 한 번 입력하면 컨셉 → 스토리보드 → 숏리스트 → 장면 설계 → 장면 이미지 → 장면 영상 → BGM·제목/태그까지 자동 실행. 앞 단계 결과를 다음 단계 맥락으로 넘겨 톤을 유지하고, 주인공 묘사를 모든 장면에 고정해 캐릭터 일관성을 확보 |
+| **Prompt Architecture Lab** | 피사체·포즈·샷·구도·조명 등 구조화된 파라미터로 프롬프트를 설계. 이미지 생성용(단일 문단) / 상세 설계서 출력, 결과를 이미지 스튜디오로 바로 전달 |
+| **AI Image Studio** | 텍스트 → 이미지 (9:16 등 비율 지원) |
+| **AI Video Studio** | 이미지 → 영상 / 텍스트 → 영상, 비동기 작업 생성 후 상태 폴링 |
+| **Video Production Studio** | 컨셉 기획서·스토리보드·숏리스트·BGM·자막(STT)·SEO 생성, 통합 기획서 내보내기 |
+
+## 아키텍처
+
+```
+Browser (workflow_web.html · script.js)
+   │  단계 오케스트레이션 · 진행 상태 · 결과 렌더링
+   ▼
+Express API (server.js) ── Google OAuth · Rate limit · Helmet CSP
+   ├─ /api/engineer        → LLM (Groq Llama, 다중 노드 폴백)
+   ├─ /api/whisper         → STT (Groq Whisper)
+   ├─ /api/generate-image  → 이미지 API (1순위) → 무료 엔진 폴백
+   ├─ /api/video/create    → 영상 작업 생성 (taskId 즉시 반환)
+   ├─ /api/video/status    → 작업 상태 조회 (브라우저 폴링)
+   └─ /api/presets 등      → PostgreSQL (사용자 프리셋·설정)
+```
+
+- 초기에는 n8n으로 생성 워크플로를 오케스트레이션했으나, 비동기 작업 패턴(작업 생성 → 상태 폴링)을 백엔드로 옮겨 **별도 워크플로 서버 없이** 동작하도록 단순화.
+- 생성 API는 서버 한 곳에서만 호출해 공급자 교체 시 프론트엔드 변경을 최소화하고, 실패 시 폴백 엔진으로 서비스 연속성 유지.
+
+## 환경 변수
+
+| 이름 | 용도 |
+|---|---|
+| `GROQ_API_KEY` (… `_6`) | 텍스트 생성 · STT |
+| `KIE_API_KEY` | 이미지 · 영상 생성 |
+| `DATABASE_URL` | PostgreSQL |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `CALLBACK_URL` | Google 로그인 |
+| `SESSION_SECRET`, `ALLOWED_ORIGIN`, `PORT` | 서버 설정 |
+
+## 로컬 실행
+
+```bash
+npm install
+npm start   # http://localhost:3000
+```

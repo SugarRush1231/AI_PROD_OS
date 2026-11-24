@@ -2809,3 +2809,9 @@ footer a { display: inline-flex; align-items: center; min-height: 24px; }
 
 .lt-credit { font-size: .6rem; color: var(--fg-muted); line-height: 1.4; }
 .lt-credit a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+
+/* 03·04 접힘 = 프롬프트 미반영 */
+.lo-collapsed-hint { display: none; font-size: .64rem; color: var(--fg-muted); border: 1px solid var(--border); border-radius: 999px; padding: 1px 8px; white-space: nowrap; }
+.lab-panel.is-collapsed .lo-collapsed-hint { display: inline-block; }
+.lab-panel.is-collapsed .lo-switch { display: none; }
+.lab-panel.is-collapsed { opacity: .85; }

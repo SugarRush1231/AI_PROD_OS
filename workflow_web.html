@@ -160,11 +160,11 @@
         <!-- GPT Image 1.5 -->
         <div class="model-card">
           <div class="model-icon-box">
-            <img src="ico/GPT.ico" class="model-svg-icon" alt="GPT Image 1.5">
+            <img src="ico/GPT.ico" class="model-svg-icon" alt="GPT Image">
           </div>
           <div class="model-info">
             <div class="model-title-row">
-              <span class="model-name">GPT Image 1.5</span>
+              <span class="model-name">GPT Image</span>
             </div>
             <span class="model-desc">True-color precision rendering</span>
           </div>
@@ -223,11 +223,11 @@
         </div>
         <div class="model-card">
           <div class="model-icon-box">
-            <img src="ico/GPT.ico" class="model-svg-icon" alt="GPT Image 1.5">
+            <img src="ico/GPT.ico" class="model-svg-icon" alt="GPT Image">
           </div>
           <div class="model-info">
             <div class="model-title-row">
-              <span class="model-name">GPT Image 1.5</span>
+              <span class="model-name">GPT Image</span>
             </div>
             <span class="model-desc">True-color precision rendering</span>
           </div>
@@ -1115,15 +1115,15 @@
         <div class="lab-center">
           <section class="lab-panel lighting-panel" id="lighting-panel" aria-labelledby="lt-title">
             <div class="lab-panel-head">
-              <button type="button" class="lab-panel-toggle" id="lt-toggle" aria-expanded="true" aria-controls="lt-body">
-                <span class="label-mono" id="lt-title">03 Lighting Engineering</span>
+              <button type="button" class="lab-panel-toggle" id="lt-toggle" aria-expanded="false" aria-controls="lt-body">
+                <span class="label-mono" id="lt-title">03 Lighting Engineering</span><span class="lo-collapsed-hint">접힘 · 프롬프트 미반영</span>
                 <svg class="chev" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
               </button>
               <label class="lo-switch" title="조명 설정을 프롬프트에 반영">
                 <input type="checkbox" id="lt-enabled" checked> <span>사용</span>
               </label>
             </div>
-            <div class="lab-panel-body" id="lt-body">
+            <div class="lab-panel-body" id="lt-body" hidden>
               <div class="param-group">
                 <label for="lt-preset">조명 프리셋 <span id="lt-origin" class="lo-origin"></span></label>
                 <select id="lt-preset" class="lab-select">
@@ -1220,12 +1220,12 @@
 
           <section class="lab-panel optics-panel" id="optics-panel" aria-labelledby="op-title">
             <div class="lab-panel-head">
-              <button type="button" class="lab-panel-toggle" id="op-toggle" aria-expanded="true" aria-controls="op-body">
-                <span class="label-mono" id="op-title">04 Camera &amp; Optics</span>
+              <button type="button" class="lab-panel-toggle" id="op-toggle" aria-expanded="false" aria-controls="op-body">
+                <span class="label-mono" id="op-title">04 Camera &amp; Optics</span><span class="lo-collapsed-hint">접힘 · 프롬프트 미반영</span>
                 <svg class="chev" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
               </button>
             </div>
-            <div class="lab-panel-body" id="op-body">
+            <div class="lab-panel-body" id="op-body" hidden>
               <div class="param-group"><label for="op-lens">카메라 + 렌즈 프리셋 <span id="op-origin" class="lo-origin"></span></label>
                 <select id="op-lens" class="lab-select">
                   <option value="auto">Auto</option>

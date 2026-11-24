@@ -107,7 +107,11 @@
   }
 
   // ── 3. 공유 상태 (단일 진실 공급원) ────────────────────────────────────────
-  const state = { lighting: DEFAULT_LIGHTING(), optics: DEFAULT_OPTICS() };
+  // panels: 03·04 패널이 펼쳐져 있을 때만 프롬프트에 반영 (기본: 접힘 = 반영 안 함, 값은 보존)
+  const DEFAULT_PANELS = () => ({ lighting: false, optics: false });
+  const state = { lighting: DEFAULT_LIGHTING(), optics: DEFAULT_OPTICS(), panels: DEFAULT_PANELS() };
+  const lightingOn = (s) => s.lighting.enabled && (!s.panels || s.panels.lighting);
+  const opticsOn = (s) => !s.panels || s.panels.optics;
   const listeners = new Set();
   const emit = (origin) => listeners.forEach(fn => { try { fn(state, origin); } catch (e) { console.error(e); } });
 
@@ -193,7 +197,7 @@
   function serialize(s = state) {
     const l = s.lighting, o = s.optics;
     const lp = [], keys = [];
-    if (l.enabled) {
+    if (lightingOn(s)) {
       const manual = l.preset !== 'auto';
       if (manual) {
         const name = l.preset === 'custom'
@@ -220,20 +224,20 @@
       }
     }
     const op = [];
-    const lens = LENS_PRESETS[o.lensPreset];
+    const lens = opticsOn(s) ? LENS_PRESETS[o.lensPreset] : null;
     if (lens && lens.text) { op.push(`shot on ${lens.text}`); keys.push(lens.text.split(' with ')[0].split(' (')[0]); }
-    else if (o.cameraType !== 'auto') op.push(`shot on ${CAMERA_TEXT[o.cameraType]}`);
-    if (o.focal !== 'auto') {
+    else if (opticsOn(s) && o.cameraType !== 'auto') op.push(`shot on ${CAMERA_TEXT[o.cameraType]}`);
+    if (opticsOn(s) && o.focal !== 'auto') {
       const f = Number(o.focal);
       const feel = f <= 24 ? 'wide-angle perspective' : f <= 35 ? 'natural wide-normal perspective' : f <= 50 ? 'natural perspective' : f <= 105 ? 'flattering portrait compression' : 'strong telephoto compression';
       op.push(`${o.focal}mm (full-frame equivalent) focal length, ${feel}`); keys.push(`${o.focal}mm`);
     }
-    if (o.aperture !== 'auto') {
+    if (opticsOn(s) && o.aperture !== 'auto') {
       const a = Number(o.aperture);
       const dof = a <= 2 ? 'shallow depth of field with creamy background blur' : a <= 4 ? 'moderate depth of field' : a <= 8 ? 'deep depth of field' : 'very deep focus, everything sharp';
       op.push(`f/${o.aperture} aperture, ${dof}`); keys.push(`f/${o.aperture}`);
     }
-    if (o.whiteBalanceK !== 'auto') op.push(`white balance set to ${o.whiteBalanceK}K`);
+    if (opticsOn(s) && o.whiteBalanceK !== 'auto') op.push(`white balance set to ${o.whiteBalanceK}K`);
 
     const lightingText = lp.length ? `Lighting: ${lp.join('; ')}.` : '';
     const opticsText = op.length ? `Camera & optics: ${op.join(', ')}.` : '';
@@ -266,7 +270,7 @@
   function warnings(s = state) {
     const l = s.lighting, o = s.optics, w = [];
     const rear = l.azimuth > 100 && l.azimuth < 260;
-    if (l.enabled) {
+    if (lightingOn(s)) {
       if (l.preset === 'direct-flash' || (l.preset === 'custom' && l.originPreset === 'direct-flash')) {
         if (rear) w.push('Direct Flash는 카메라 쪽 광원인데 광원이 피사체 뒤에 있습니다.');
       }
@@ -278,6 +282,7 @@
       if (l.colorTemperatureK !== 'auto' && (l.preset === 'golden-hour' || l.originPreset === 'golden-hour') && l.colorTemperatureK > 5000) w.push('골든아워는 보통 4000K 이하의 따뜻한 빛입니다.');
       if (l.elevation <= -60 && l.source === 'sunlight') w.push('태양광이 피사체 아래에서 올라오는 것은 물리적으로 어색합니다.');
     }
+    if (!opticsOn(s)) return w;
     const lens = LENS_PRESETS[o.lensPreset === 'custom' ? o.originPreset : o.lensPreset];
     if (o.aperture !== 'auto') {
       const a = Number(o.aperture);
@@ -292,7 +297,11 @@
 
   function toJSON() {
     const s = serialize();
-    return { lighting: JSON.parse(JSON.stringify(state.lighting)), optics: JSON.parse(JSON.stringify(state.optics)), text: s.text };
+    return {
+      lighting: lightingOn(state) ? JSON.parse(JSON.stringify(state.lighting)) : null,
+      optics: opticsOn(state) ? JSON.parse(JSON.stringify(state.optics)) : null,
+      text: s.text
+    };
   }
 
   // Kelvin → RGB (Tanner Helland 근사)
@@ -310,15 +319,22 @@
   const SVG_C = 100, SVG_R = 78;
   let generatedSnapshot = null;
 
-  function bindPanel(btnId, bodyId, onOpen) {
+  // 펼침 = 프롬프트에 반영, 접힘 = 반영 안 함 (값은 그대로 보존)
+  function bindPanel(btnId, bodyId, key, onOpen) {
     const btn = $(btnId), body = $(bodyId);
     if (!btn || !body) return;
     btn.addEventListener('click', () => {
-      const open = btn.getAttribute('aria-expanded') !== 'true';
-      btn.setAttribute('aria-expanded', String(open));
-      body.hidden = !open; // 접어도 상태는 유지(DOM만 숨김)
-      if (open && onOpen) onOpen();
+      state.panels = { ...state.panels, [key]: !state.panels[key] };
+      emit('panel');
+      if (state.panels[key] && onOpen) onOpen();
     });
+  }
+  function syncPanel(btnId, bodyId, key) {
+    const btn = $(btnId), body = $(bodyId), open = !!state.panels[key];
+    if (btn) btn.setAttribute('aria-expanded', String(open));
+    if (body) body.hidden = !open;
+    const panel = btn && btn.closest('.lab-panel');
+    if (panel) panel.classList.toggle('is-collapsed', !open);
   }
 
   function syncPair(rangeId, numId, getter, setter) {
@@ -368,12 +384,13 @@
 
     initSvgController(updaters);
 
-    bindPanel('lt-toggle', 'lt-body', () => Preview.maybeStart());
-    bindPanel('op-toggle', 'op-body');
+    bindPanel('lt-toggle', 'lt-body', 'lighting', () => Preview.maybeStart());
+    bindPanel('op-toggle', 'op-body', 'optics');
 
     // 상태 → UI 반영
     const render = () => {
       const l = L(), o = O();
+      syncPanel('lt-toggle', 'lt-body', 'lighting'); syncPanel('op-toggle', 'op-body', 'optics');
       const setVal = (id, v) => { const el = $(id); if (el && el.value !== String(v)) el.value = String(v); };
       if ($('lt-enabled')) $('lt-enabled').checked = l.enabled;
       root.classList.toggle('is-disabled', !l.enabled);
@@ -414,7 +431,7 @@
   const VOL_LABEL = { haze: 'Haze · 연무', fog: 'Fog · 안개', dust: 'Dust · 먼지', smoke: 'Smoke · 연기' };
   function exampleCards() {
     const l = state.lighting, o = state.optics, cards = [];
-    if (l.enabled) {
+    if (lightingOn(state)) {
       if (l.preset === 'auto') cards.push({ kind: '조명', src: 'base', label: 'Auto (장면에 맞게)', approx: false });
       else if (l.preset === 'custom') {
         const org = l.originPreset && l.originPreset !== 'auto' ? l.originPreset : null;
@@ -424,7 +441,7 @@
       if (l.tonalStyle !== 'auto') cards.push({ kind: '톤', src: `tonal/${l.tonalStyle}`, label: TONAL_LABEL[l.tonalStyle], approx: false });
       if (l.volumetric.enabled && l.volumetric.density > 0) cards.push({ kind: '대기', src: `volumetric/${l.volumetric.type}`, label: VOL_LABEL[l.volumetric.type], approx: false });
     }
-    if (o.lensPreset !== 'auto') {
+    if (opticsOn(state) && o.lensPreset !== 'auto') {
       const id = o.lensPreset === 'custom' ? (o.originPreset && o.originPreset !== 'auto' ? o.originPreset : null) : o.lensPreset;
       if (id) cards.push({ kind: '렌즈', src: `lens/${id}`, label: (o.lensPreset === 'custom' ? 'Custom · ' : '') + LENS_PRESETS[id].label.split(' (')[0] + (o.lensPreset === 'custom' ? ' 기반' : ''), approx: o.lensPreset === 'custom' });
     }
@@ -456,7 +473,7 @@
       });
       box.appendChild(b);
     });
-    if (!cards.length) box.innerHTML = '<span class="lo-ex-empty">조명 사용이 꺼져 있고 렌즈도 Auto입니다.</span>';
+    if (!cards.length) box.innerHTML = '<span class="lo-ex-empty">03·04가 접혀 있어 조명·카메라는 프롬프트에 넣지 않습니다. 펼치면 반영됩니다.</span>';
   }
 
   // ── 6. SVG 광원 위치 컨트롤러 ──────────────────────────────────────────────
@@ -742,8 +759,19 @@
     setLighting: (patch) => editLighting(patch, 'api'),
     setOptics: (patch) => editOptics(patch),
     /** 프리셋 로드 (구버전 프리셋은 기본값으로 마이그레이션) */
-    load(lighting, optics) { state.lighting = sanitizeLighting(lighting); state.optics = sanitizeOptics(optics); emit('load'); },
-    reset() { state.lighting = DEFAULT_LIGHTING(); state.optics = DEFAULT_OPTICS(); emit('reset'); },
+    load(lighting, optics, panels) {
+      state.lighting = sanitizeLighting(lighting); state.optics = sanitizeOptics(optics);
+      // 펼침 정보가 없는 예전 프리셋: 직접 고른 값이 있으면 펼친 상태로
+      const o = state.optics;
+      state.panels = (panels && typeof panels === 'object')
+        ? { lighting: !!panels.lighting, optics: !!panels.optics }
+        : { lighting: state.lighting.preset !== 'auto', optics: [o.lensPreset, o.cameraType, o.focal, o.aperture].some(v => v !== 'auto') };
+      emit('load');
+      if (state.panels.lighting) Preview.maybeStart();
+    },
+    reset() { state.lighting = DEFAULT_LIGHTING(); state.optics = DEFAULT_OPTICS(); state.panels = DEFAULT_PANELS(); emit('reset'); },
+    applied: () => ({ lighting: lightingOn(state), optics: opticsOn(state) }),
+    setPanel(key, open) { state.panels = { ...state.panels, [key]: !!open }; emit('panel'); if (key === 'lighting' && open) Preview.maybeStart(); },
     markGenerated, markDirty,
     onChange: (fn) => { listeners.add(fn); return () => listeners.delete(fn); },
     preview: Preview,

@@ -311,7 +311,7 @@ const MyPresets = {
         intentInput: UI.intentInput?.value,
         activeChips: activeChips, // 칩 정보 추가
         // 03 조명 · 04 카메라/광학 (구조화 상태)
-        ...(window.LightingLab ? (({ lighting, optics }) => ({ lighting, optics }))(window.LightingLab.getState()) : {})
+        ...(window.LightingLab ? (({ lighting, optics, panels }) => ({ lighting, optics, lightingPanels: panels }))(window.LightingLab.getState()) : {})
       }
     };
 
@@ -362,7 +362,7 @@ const MyPresets = {
     // 1. 기본적인 파라미터 복구
     Object.entries(p.params).forEach(([key, val]) => {
       const el = UI[key];
-      if (key !== 'activeChips' && key !== 'lighting' && key !== 'optics' && el && val !== undefined) {
+      if (key !== 'activeChips' && key !== 'lighting' && key !== 'optics' && key !== 'lightingPanels' && el && val !== undefined) {
         el.value = val;
         if (key === 'paramType' || key.startsWith('paramBg')) {
           el.dispatchEvent(new Event('change'));
@@ -371,7 +371,7 @@ const MyPresets = {
     });
 
     // 1-b. 조명/광학 복구 (없는 구버전 프리셋은 기본값으로 마이그레이션)
-    if (window.LightingLab) window.LightingLab.load(p.params.lighting, p.params.optics);
+    if (window.LightingLab) window.LightingLab.load(p.params.lighting, p.params.optics, p.params.lightingPanels);
 
     // 2. 칩 상태 복구
     document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
@@ -2286,8 +2286,8 @@ if (UI.jsonBtn) {
 
       if (window.LightingLab) {
         const lo = window.LightingLab.toJSON();
-        mappedJson.lighting = lo.lighting;
-        mappedJson.camera_optics = lo.optics;
+        if (lo.lighting) mappedJson.lighting = lo.lighting;
+        if (lo.optics) mappedJson.camera_optics = lo.optics;
         if (lo.text) mappedJson.constraints["lighting_and_optics"] = lo.text;
       }
 
@@ -4154,7 +4154,7 @@ function renderLabParamSummary() {
   // 03 조명 · 04 광학: 실제 프롬프트에 반영되는 핵심 항목만
   if (window.LightingLab) {
     const ls = window.LightingLab.getState();
-    if (ls.lighting.enabled && ls.lighting.preset !== 'auto') chips.push(`💡 ${ls.lighting.preset === 'custom' ? 'Custom' : window.LightingLab.PRESETS[ls.lighting.preset].label} ${ls.lighting.azimuth}°`);
+    if (window.LightingLab.applied().lighting && ls.lighting.preset !== 'auto') chips.push(`💡 ${ls.lighting.preset === 'custom' ? 'Custom' : window.LightingLab.PRESETS[ls.lighting.preset].label} ${ls.lighting.azimuth}°`);
     window.LightingLab.serialize().keys.filter(k => /mm$|^f\//.test(k)).forEach(k => chips.push(`📷 ${k}`));
   }
   box.innerHTML = chips.map(c => `<span class="lab-chip">${c}</span>`).join('');

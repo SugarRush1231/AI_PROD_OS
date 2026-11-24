@@ -1309,6 +1309,10 @@ async function applyEngineering() {
     } else if (typeof registryEntry === 'string') {
       bgDescription = registryEntry;
     }
+    if (!config.bg || config.bg === 'none') {
+      // 기본(None) = "배경 없음"이 아니라 "아이디어에 맞게 자동"
+      bgDescription = 'A real-world setting inferred naturally from the core intent. Do not default to an empty studio backdrop or visible studio equipment.';
+    }
 
     let enrichedIntent = `
         ### CORE DATA ###
@@ -1327,7 +1331,7 @@ async function applyEngineering() {
       if (config.outfit === 'reference') {
         outfitText = 'STRICT OUTFIT TRANSFERS: Perfectly replicate the garment from the reference image. Maintain identical color, fabric texture, cut, and specific clothing patterns. Do not add or subtract any clothing elements.';
       } else if (config.outfit === 'none') {
-        outfitText = 'Random trendy creative outfit';
+        outfitText = 'Outfit that naturally fits the subject, setting and mood described in the core intent (do not force a fashion style)';
       }
 
       poseDescription = config.pose;
@@ -1598,7 +1602,8 @@ ${PromptContext.visual.camera.composition !== 'none' ? `- Composition: ${PromptC
         : config.pov === 'selfie'
           ? 'Exactly two natural arms, one phone, natural fingers.'
           : 'Natural anatomy and realistic hands.';
-      enrichedIntent += `\n[CONSTRAINTS]\n${constraintHints}`;
+      const textHint = ' Clothing and props without printed text or logos (plain or simple patterns).';
+      enrichedIntent += `\n[CONSTRAINTS]\n${constraintHints}${textHint}`;
       systemPrompt = `You are a prompt engineer for Z-Image, a fast photorealistic text-to-image model.
 Convert the [DESIGN SPECIFICATIONS] into ONE English prompt paragraph.
 
@@ -3120,12 +3125,17 @@ if (sendToStudioBtn) {
     const input = document.getElementById('imagePromptInput');
     if (!input) return;
     input.value = toImagePrompt(raw);
+    // 비율 자동: 세로형 기본 (숏폼)
+    const ratioSel = document.getElementById('imageRatioInput');
+    if (ratioSel && [...ratioSel.options].some(o => o.value === '9:16') && ratioSel.value === '1:1') ratioSel.value = '9:16';
     const studio = document.getElementById('image-studio');
     if (studio) studio.scrollIntoView({ behavior: 'smooth', block: 'start' });
     input.style.transition = 'box-shadow 0.3s';
     input.style.boxShadow = '0 0 0 3px var(--skills-cyan)';
     setTimeout(() => { input.style.boxShadow = ''; }, 1500);
-    if (typeof addLog === 'function') addLog('→ 최적화 프롬프트를 이미지 스튜디오로 전달', 'success');
+    if (typeof addLog === 'function') addLog('→ 최적화 프롬프트로 이미지 생성 시작', 'success');
+    const genBtn = document.getElementById('image-generate-btn');
+    if (genBtn && !genBtn.disabled) setTimeout(() => genBtn.click(), 600);
   });
 }
 
@@ -3478,3 +3488,24 @@ RULES:
 
 const apRunBtn = document.getElementById('ap-run-btn');
 if (apRunBtn) apRunBtn.addEventListener('click', () => AP.run());
+
+
+// ===== Prompt Lab: 적용된 설정 요약 칩 (프롬프트에 무엇이 반영됐는지 한눈에) =====
+function renderLabParamSummary() {
+  const box = document.getElementById('lab-param-summary');
+  const lab = document.getElementById('prompt-lab');
+  if (!box || !lab) return;
+  const chips = [];
+  lab.querySelectorAll('select.lab-select').forEach(sel => {
+    if (sel.id === 'param-output-mode' || sel.offsetParent === null) return;
+    const opt = sel.options[sel.selectedIndex];
+    if (!opt || ['none', ''].includes(sel.value)) return;
+    const label = (opt.text || '').replace(/\s*\(.*?\)\s*/g, ' ').trim();
+    if (label) chips.push(label);
+  });
+  const angle = document.getElementById('param-angle');
+  if (angle && angle.offsetParent !== null && angle.value !== '0') chips.push(`회전 ${angle.value}°`);
+  box.innerHTML = chips.map(c => `<span class="lab-chip">${c}</span>`).join('');
+  box.style.display = chips.length ? 'flex' : 'none';
+}
+if (UI.engineerBtn) UI.engineerBtn.addEventListener('click', renderLabParamSummary);

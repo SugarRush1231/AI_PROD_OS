@@ -1316,7 +1316,7 @@ async function applyEngineering() {
     }
     if (!config.bg || config.bg === 'none') {
       // 기본(None) = "배경 없음"이 아니라 "아이디어에 맞게 자동"
-      bgDescription = 'A real-world setting inferred naturally from the core intent. Do not default to an empty studio backdrop or visible studio equipment.';
+      bgDescription = 'If the core intent names or clearly implies a place, use exactly that place. Otherwise use a simple, uncluttered neutral background (soft plain tone or gentle blur). Do NOT invent a specific location (no cafe, kitchen, street, etc. unless the intent says so) and no visible studio equipment.';
     }
 
     let enrichedIntent = `
@@ -1620,7 +1620,9 @@ RULES:
 - Order: main subject and action -> appearance and outfit -> environment/background -> lighting -> camera (shot size, angle, lens feel) -> overall style/mood.
 - Use concrete visual nouns and adjectives. Avoid empty buzzwords such as 8k, masterpiece, ultra-detailed, ray-tracing, award-winning.
 - There is NO negative prompt field. Express every exclusion positively (e.g. "clean background" instead of "no clutter").
-- Follow pose, shot, composition, camera angle and lighting specifications with full fidelity. If the camera angle is a back view, the subject faces away from the viewer.
+- Follow pose, shot, composition, camera angle and lighting specifications with full fidelity.
+- VIEWING DIRECTION: if the horizontal camera angle is not a front view, state it in plain words in the first or second sentence (e.g. "seen from behind, facing away from the viewer", "in side profile", "from a three-quarter angle"). Never write degree numbers.
+- Do not invent a location that the specifications do not give.
 - CONCRETE OVER ABSTRACT: turn every abstract word into visible details — exact colors (e.g. "dusty pink and lavender"), specific garments and materials, a specific action with hands/gaze, specific props and setting objects.
 - Put the main subject and its most important attributes in the first sentence.
 - Where a specification says it is inferred/automatic, choose ONE simple, plausible option that fits the core intent instead of stacking many trendy details.
@@ -2205,6 +2207,28 @@ async function checkAuthStatus() {
       imageBtn.innerText = isLoggedIn ? "✨ 이미지 생성하기" : "🔒 로그인 필요";
     }
     if (ratioInput) ratioInput.disabled = !isLoggedIn;
+
+    // 🎬 영상 생성·원클릭: 로그인 + 승인 계정만
+    const paidOk = isLoggedIn && window.CAN_USE_PAID !== false;
+    const videoBtn = document.getElementById('generate-video-btn');
+    if (videoBtn) {
+      videoBtn.disabled = !paidOk;
+      videoBtn.innerText = !isLoggedIn ? '🔒 로그인 필요' : (paidOk ? '🎬 AI 비디오 생성하기' : '🔒 승인된 계정 전용');
+      videoBtn.style.opacity = paidOk ? '1' : '0.6';
+    }
+    const videoPrompt = document.getElementById('videoPromptInput');
+    if (videoPrompt) videoPrompt.disabled = !paidOk;
+    const apBtn = document.getElementById('ap-run-btn');
+    if (apBtn) {
+      apBtn.disabled = !isLoggedIn;
+      apBtn.innerText = isLoggedIn ? '▶ 전체 자동 제작' : '🔒 로그인 필요';
+    }
+    const apVideo = document.getElementById('ap-make-video');
+    if (apVideo) {
+      apVideo.disabled = !paidOk;
+      if (!paidOk) apVideo.checked = false;
+      if (apVideo.parentElement) apVideo.parentElement.title = paidOk ? '' : '영상 생성은 승인된 계정만 사용할 수 있습니다.';
+    }
     if (imageUploadBtn) {
       imageUploadBtn.disabled = !isLoggedIn;
       imageUploadBtn.style.opacity = isLoggedIn ? '1' : '0.5';
@@ -2232,6 +2256,7 @@ async function checkAuthStatus() {
     if (!res.ok) throw new Error('Auth fetch failed');
     const data = await res.json();
 
+    window.CAN_USE_PAID = data.canUsePaid !== false;
     if (data.user) {
       USER_LOGGED_IN = true;
       if (loginBtn) loginBtn.style.display = 'none';
@@ -3207,7 +3232,7 @@ const AP = {
     }
   },
 
-  async designScenes(goal, platform, count, storyboard, shotlist) {
+  async designScenes(goal, platform, count, storyboard, shotlist, linkMode = 'cut') {
     const systemPrompt = `You are a short-form video director. Turn the plan into exactly ${count} vertical (9:16) scenes for ${platform}.
 Return ONLY valid JSON, no markdown fences, in this shape:
 {"character":"one-sentence visual description of the main subject (age, look, hair, outfit)","scenes":[{"title":"short Korean title","image_prompt":"English, one paragraph, max 600 characters","motion_prompt":"English, max 200 characters","narration":"Korean voice-over line"}]}
@@ -3216,7 +3241,8 @@ RULES:
 - image_prompt: photorealistic still frame, subject + action, setting, lighting, camera shot, vertical composition. Plain text, no negative prompts, no buzzwords like 8k or masterpiece.
 - motion_prompt: what moves in 5 seconds (subject action + camera movement), simple and physically plausible.
 - narration: natural spoken Korean (구어체) voice-over for that scene, readable in about 4 seconds (max 30 Korean characters). The lines must flow as one story across scenes; the last line delivers the call-to-action.
-- Scene 1 must be a strong visual hook; the last scene should support the call-to-action. If there is only one scene, it must deliver both the hook and the call-to-action.`;
+- Scene 1 must be a strong visual hook; the last scene should support the call-to-action. If there is only one scene, it must deliver both the hook and the call-to-action.${linkMode === 'extend' ? `
+- CONTINUOUS ONE-SHOT MODE: all scenes are consecutive moments of ONE unbroken camera shot in the SAME location. Each motion_prompt must start exactly where the previous one ended (same framing, lighting and outfit) and describe only what happens next. Only scene 1's image_prompt will be rendered as a still.` : ''}`;
     const intent = `[GOAL]\n${goal}\n\n[STORYBOARD]\n${(storyboard || '').slice(0, 1500)}\n\n[SHOT LIST]\n${(shotlist || '').slice(0, 1000)}`;
     const raw = await AP.engineer(intent, systemPrompt);
     const jsonText = raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1);
@@ -3315,6 +3341,112 @@ RULES:
     throw lastErr || new Error('영상 생성 실패');
   },
 
+  // 외부(Kie) 영상은 canvas로 읽을 수 없어 같은 주소의 중계 경로로 연다
+  proxied(url) {
+    if (!url || url.startsWith('blob:') || url.startsWith('data:')) return url;
+    try { if (new URL(url, location.href).origin === location.origin) return url; } catch (e) { return url; }
+    return `/api/media-proxy?url=${encodeURIComponent(url)}`;
+  },
+
+  loadVideo(url) {
+    return new Promise((res, rej) => {
+      const v = document.createElement('video');
+      v.muted = true; v.playsInline = true; v.preload = 'auto'; v.crossOrigin = 'anonymous';
+      const t = setTimeout(() => rej(new Error('클립 로드 시간 초과')), 60000);
+      v.oncanplaythrough = () => { clearTimeout(t); res(v); };
+      v.onerror = () => { clearTimeout(t); rej(new Error('클립을 불러오지 못했습니다')); };
+      v.src = AP.proxied(url);
+      v.load();
+    });
+  },
+
+  // 영상의 마지막 프레임을 이미지(data URL)로 캡처 → 다음 클립의 시작 이미지
+  async lastFrame(url) {
+    const v = await AP.loadVideo(url);
+    await new Promise((res) => { v.onseeked = res; v.currentTime = Math.max(0, (v.duration || 5) - 0.05); });
+    const c = document.createElement('canvas');
+    c.width = v.videoWidth; c.height = v.videoHeight;
+    c.getContext('2d').drawImage(v, 0, 0);
+    return c.toDataURL('image/jpeg', 0.92);
+  },
+
+  // 클립을 순서대로 재생하며 화면+내레이션을 녹화해 파일 하나로 만든다 (브라우저 내장 MediaRecorder)
+  async mergeClips(clips, voices = []) {
+    if (typeof MediaRecorder === 'undefined') throw new Error('이 브라우저는 녹화를 지원하지 않습니다.');
+    const vids = [];
+    for (const u of clips) vids.push(await AP.loadVideo(u));
+    const W = vids[0].videoWidth || 720, H = vids[0].videoHeight || 1280;
+    const canvas = document.createElement('canvas');
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext('2d');
+    const ac = new (window.AudioContext || window.webkitAudioContext)();
+    const dest = ac.createMediaStreamDestination();
+    const buffers = await Promise.all(clips.map(async (_, i) => {
+      if (!voices[i]) return null;
+      try { return await ac.decodeAudioData(await (await fetch(voices[i])).arrayBuffer()); } catch (e) { return null; }
+    }));
+    const drawFrame = (v) => {
+      const vw = v.videoWidth || W, vh = v.videoHeight || H;
+      const sc = Math.max(W / vw, H / vh), dw = vw * sc, dh = vh * sc;
+      ctx.drawImage(v, (W - dw) / 2, (H - dh) / 2, dw, dh);
+    };
+    drawFrame(vids[0]);
+    const canvasStream = canvas.captureStream(0);           // 프레임을 직접 밀어 넣는 방식 (끊김 방지)
+    const vTrack = canvasStream.getVideoTracks()[0];
+    const push = () => { if (vTrack.requestFrame) vTrack.requestFrame(); };
+    const stream = new MediaStream([vTrack, ...dest.stream.getAudioTracks()]);
+    const mime = ['video/mp4;codecs=avc1.42E01E,mp4a.40.2', 'video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm']
+      .find(m => MediaRecorder.isTypeSupported(m));
+    const rec = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: 5e6 } : undefined);
+    const chunks = [];
+    rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+    const stopped = new Promise(r => { rec.onstop = r; });
+    if (ac.state === 'suspended') { try { await ac.resume(); } catch (e) { } }
+    rec.start(500);
+    for (let i = 0; i < vids.length; i++) {
+      const v = vids[i];
+      v.currentTime = 0;
+      if (buffers[i]) { const src = ac.createBufferSource(); src.buffer = buffers[i]; src.connect(dest); src.start(); }
+      await v.play();
+      await new Promise((res) => {
+        let done = false;
+        const finish = () => { if (!done) { done = true; drawFrame(v); push(); res(); } };
+        v.onended = finish;
+        const tick = () => { if (done) return; drawFrame(v); push(); if (v.ended) return finish(); schedule(); };
+        const schedule = () => (v.requestVideoFrameCallback ? v.requestVideoFrameCallback(tick) : requestAnimationFrame(tick));
+        tick();
+        setTimeout(finish, ((v.duration || 5) + 3) * 1000); // 안전장치
+      });
+    }
+    await AP.sleep(300);
+    rec.stop();
+    await stopped;
+    try { ac.close(); } catch (e) { }
+    const type = (rec.mimeType || mime || 'video/webm').split(';')[0];
+    const blob = new Blob(chunks, { type });
+    if (!blob.size) throw new Error('녹화 결과가 비어 있습니다.');
+    return { url: URL.createObjectURL(blob), ext: type.includes('mp4') ? 'mp4' : 'webm', blob };
+  },
+
+  showMerged(merged, n) {
+    const wrap = document.getElementById('ap-final');
+    const player = document.getElementById('ap-final-player');
+    const voiceEl = document.getElementById('ap-final-voice');
+    const note = document.getElementById('ap-final-note');
+    const dl = document.getElementById('ap-download');
+    if (voiceEl) { voiceEl.pause(); voiceEl.removeAttribute('src'); }
+    player.onended = null; player.onpause = null; player.onplay = null;
+    player.muted = false;
+    player.src = merged.url;
+    wrap.style.display = 'block';
+    if (note) note.innerText = `완성본 · 장면 ${n}개 · ${merged.ext.toUpperCase()} · ${(merged.blob.size / 1e6).toFixed(1)}MB`;
+    if (dl) {
+      dl.href = merged.url;
+      dl.download = `ai-prod-shortform-${new Date().toISOString().slice(0, 10)}.${merged.ext}`;
+      dl.style.display = 'inline-flex';
+    }
+  },
+
   // 장면 클립 + 장면별 내레이션을 맞춰 연속 재생 (voices[k]가 없으면 영상만)
   playSequence(urls, voices = []) {
     const wrap = document.getElementById('ap-final');
@@ -3348,7 +3480,8 @@ RULES:
     const platform = platformSel.options[platformSel.selectedIndex].text;
     const count = parseInt(document.getElementById('ap-scenes').value, 10) || 1;
     const makeVideo = document.getElementById('ap-make-video').checked;
-    const voiceOpt = document.getElementById('ap-voice')?.value || 'female';
+    const voiceOpt = document.getElementById('ap-voice')?.value || 'F1';
+    const linkMode = document.getElementById('ap-link')?.value || 'cut';
 
     if (typeof USER_LOGGED_IN !== 'undefined' && !USER_LOGGED_IN) { alert('로그인 후 사용할 수 있습니다.'); return; }
     if (!goal) { alert('목표(만들고 싶은 영상)를 한 줄 이상 입력해 주세요.'); return; }
@@ -3358,7 +3491,8 @@ RULES:
     btn.innerText = '⏳ 자동 제작 중...';
     const steps = document.getElementById('ap-steps');
     steps.style.display = 'grid';
-    ['concept', 'storyboard', 'shotlist', 'scenes', 'images', 'voice', 'videos', 'release'].forEach(k => AP.setStep(k, null));
+    ['concept', 'storyboard', 'shotlist', 'scenes', 'images', 'voice', 'videos', 'merge', 'release'].forEach(k => AP.setStep(k, null));
+    const dl = document.getElementById('ap-download'); if (dl) dl.style.display = 'none';
     document.getElementById('ap-final').style.display = 'none';
     document.getElementById('ap-scene-grid').innerHTML = '';
     updateStatusUI('vps', 'processing', '원클릭 파이프라인 실행 중...');
@@ -3388,7 +3522,7 @@ RULES:
 
       // ④ 장면 설계 (캐릭터 묘사 고정)
       current = 'scenes'; AP.setStep('scenes', 'running');
-      const scenes = await AP.designScenes(goal, platform, count, storyboard, shotlist);
+      const scenes = await AP.designScenes(goal, platform, count, storyboard, shotlist, linkMode);
       AP.renderScenes(scenes);
       AP.setStep('scenes', 'done');
 
@@ -3444,6 +3578,11 @@ RULES:
       current = 'images'; AP.setStep('images', 'running');
       const images = [];
       for (let i = 0; i < scenes.length; i++) {
+        if (linkMode === 'extend' && makeVideo && i > 0) {   // 연장 모드: 2번째부터는 앞 영상의 마지막 프레임을 사용
+          images.push(null);
+          AP.setScene(i, '⤵ 앞 장면에서 이어짐', '연장 대기');
+          continue;
+        }
         AP.setScene(i, '<span class="spinner"></span>', '이미지 생성 중');
         const img = await AP.makeImage(scenes[i].image_prompt);
         images.push(img.url);
@@ -3455,22 +3594,68 @@ RULES:
       let clips = [];
       if (makeVideo) {
         current = 'videos'; AP.setStep('videos', 'running');
-        const results = await Promise.allSettled(scenes.map(async (sc, i) => {
-          await AP.sleep(i * 1500); // 동시 생성 요청 분산
-          AP.setScene(i, null, '영상 렌더링 중 (1~3분)');
-          const url = await AP.makeVideo(sc.motion_prompt || sc.image_prompt, images[i],
-            (n) => AP.setScene(i, null, `영상 재시도 ${n}/2 중...`), sc.image_prompt);
-          AP.setScene(i, `<video src="${url}" muted loop autoplay playsinline></video>`, '영상 완료');
-          return url;
-        }));
+        let results;
+        if (linkMode === 'extend') {
+          // 연장 모드: 순차 생성, 앞 클립의 마지막 프레임 → 다음 클립의 시작 이미지
+          results = [];
+          let prevUrl = null;
+          for (let i = 0; i < scenes.length; i++) {
+            const sc = scenes[i];
+            try {
+              let startImage = images[i];
+              if (i > 0) {
+                if (!prevUrl) throw new Error('앞 장면 영상이 없어 이어 붙일 수 없습니다.');
+                AP.setScene(i, null, '앞 영상의 마지막 장면 캡처 중');
+                startImage = await AP.lastFrame(prevUrl);
+                AP.setScene(i, `<img src="${startImage}" alt="scene ${i + 1}">`, '영상 렌더링 중 (1~3분)');
+              } else {
+                AP.setScene(i, null, '영상 렌더링 중 (1~3분)');
+              }
+              const url = await AP.makeVideo(sc.motion_prompt || sc.image_prompt, startImage,
+                (n) => AP.setScene(i, null, `영상 재시도 ${n}/2 중...`), sc.image_prompt);
+              AP.setScene(i, `<video src="${url}" muted loop autoplay playsinline></video>`, '영상 완료');
+              prevUrl = url;
+              results.push({ status: 'fulfilled', value: url });
+            } catch (e) {
+              prevUrl = null;
+              results.push({ status: 'rejected', reason: e });
+            }
+          }
+        } else {
+          results = await Promise.allSettled(scenes.map(async (sc, i) => {
+            await AP.sleep(i * 1500); // 동시 생성 요청 분산
+            AP.setScene(i, null, '영상 렌더링 중 (1~3분)');
+            const url = await AP.makeVideo(sc.motion_prompt || sc.image_prompt, images[i],
+              (n) => AP.setScene(i, null, `영상 재시도 ${n}/2 중...`), sc.image_prompt);
+            AP.setScene(i, `<video src="${url}" muted loop autoplay playsinline></video>`, '영상 완료');
+            return url;
+          }));
+        }
         results.forEach((r, i) => { if (r.status === 'rejected') AP.setScene(i, null, `영상 실패: ${r.reason.message}`); });
         clips = results.filter(r => r.status === 'fulfilled').map(r => r.value);
         AP.setStep('videos', clips.length === scenes.length ? 'done' : (clips.length ? 'done' : 'failed'));
         const voiceUrls = await voicePromise;
         const okIdx = results.map((r, i) => (r.status === 'fulfilled' ? i : -1)).filter(i => i >= 0);
-        AP.playSequence(clips, okIdx.map(i => voiceUrls[i] || null));
+        const clipVoices = okIdx.map(i => voiceUrls[i] || null);
+        // 🎬 완성본: 클립 + 내레이션을 파일 하나로 합치기 (실패 시 연속 재생 미리보기)
+        if (clips.length) {
+          AP.setStep('merge', 'running');
+          const note = document.getElementById('ap-final-note');
+          document.getElementById('ap-final').style.display = 'block';
+          if (note) note.innerText = '🎬 완성본 만드는 중... 영상 길이만큼 걸려요. 이 탭을 띄워 둔 채로 기다려 주세요.';
+          try {
+            const merged = await AP.mergeClips(clips, clipVoices);
+            AP.showMerged(merged, clips.length);
+            AP.setStep('merge', 'done');
+          } catch (e) {
+            addLog(`!! 완성본 합치기 실패: ${e.message} — 연속 재생으로 대체`, 'error');
+            AP.setStep('merge', 'failed');
+            AP.playSequence(clips, clipVoices);
+          }
+        }
       } else {
         AP.setStep('videos', 'skipped');
+        AP.setStep('merge', 'skipped');
       }
 
       await voicePromise;

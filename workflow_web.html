@@ -1163,9 +1163,9 @@
           <div class="param-group" style="min-width: 140px;">
             <label style="display:block; font-size: 0.75rem; color: var(--fg-muted); margin-bottom: 6px;">장면 수</label>
             <select id="ap-scenes" class="lab-select">
-              <option value="1" selected>1장면</option>
+              <option value="1">1장면</option>
               <option value="2">2장면</option>
-              <option value="3">3장면</option>
+              <option value="3" selected>3장면</option>
               <option value="4">4장면</option>
             </select>
           </div>
@@ -1177,6 +1177,13 @@
               <option value="M1">남성 1</option>
               <option value="M2">남성 2</option>
               <option value="none">내레이션 없음</option>
+            </select>
+          </div>
+          <div class="param-group" style="min-width: 150px;">
+            <label style="display:block; font-size: 0.75rem; color: var(--fg-muted); margin-bottom: 6px;">영상 연결</label>
+            <select id="ap-link" class="lab-select">
+              <option value="cut" selected>컷 전환 (장면별)</option>
+              <option value="extend">이어지는 원테이크 (연장)</option>
             </select>
           </div>
           <label style="display:flex; align-items:center; gap:6px; font-size: 0.8rem; color: var(--fg-muted); padding-bottom: 8px;">
@@ -1194,6 +1201,7 @@
           <div class="ap-step" data-step="voice">⑥ 내레이션</div>
           <div class="ap-step" data-step="images">⑦ 장면 이미지</div>
           <div class="ap-step" data-step="videos">⑧ 장면 영상</div>
+          <div class="ap-step" data-step="merge">⑨ 완성본 합치기</div>
         </div>
 
         <div id="ap-voice-status" style="display: none; margin-top: 10px; font-size: 0.75rem; color: var(--fg-muted);"></div>
@@ -1202,11 +1210,12 @@
           style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; margin-top: 16px;"></div>
 
         <div id="ap-final" style="display: none; margin-top: 20px; text-align: center;">
-          <div class="label-mono" style="margin-bottom: 8px;">🎬 완성본 미리보기 (장면 연속 재생)</div>
+          <div class="label-mono" style="margin-bottom: 8px;">🎬 완성본</div>
           <video id="ap-final-player" controls playsinline muted
             style="max-width: 100%; max-height: 520px; border-radius: 10px; background: #000;"></video>
           <audio id="ap-final-voice" preload="auto" style="display: none;"></audio>
           <div id="ap-final-note" style="font-size: 0.72rem; color: var(--fg-muted); margin-top: 8px;"></div>
+          <a id="ap-download" class="btn-skills" style="display: none; margin-top: 12px; text-decoration: none; align-items: center; justify-content: center; gap: 6px; padding: 10px 20px;">⬇ 완성본 다운로드</a>
         </div>
       </div>
 

@@ -24,6 +24,20 @@ const ensureAuthenticated = (req, res, next) => {
     res.status(401).json({ error: '로그인 후 진행해 주세요.' });
 };
 
+// --- [유료 기능 허용 계정] ---
+// ALLOWED_EMAILS="a@gmail.com,b@gmail.com" → 이 계정만 유료 API(Kie 이미지·영상) 사용
+// 비워 두면 기존처럼 로그인한 모든 사용자 허용 (경고 로그 출력)
+const ALLOWED_EMAILS = (process.env.ALLOWED_EMAILS || '')
+    .split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+if (!ALLOWED_EMAILS.length) console.warn('[ACCESS] ALLOWED_EMAILS 미설정 — 로그인한 모든 사용자가 유료 기능을 사용할 수 있습니다.');
+const userEmails = (user) => ((user && user.emails) || []).map(e => String(e.value || '').toLowerCase());
+const canUsePaid = (req) => !!(req.user && (!ALLOWED_EMAILS.length || userEmails(req.user).some(e => ALLOWED_EMAILS.includes(e))));
+const ensurePaidAccess = (req, res, next) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ error: '로그인 후 진행해 주세요.' });
+    if (canUsePaid(req)) return next();
+    res.status(403).json({ error: '승인된 계정만 사용할 수 있는 기능입니다.' });
+};
+
 const app = express();
 app.set('trust proxy', 1); // ✅ Railway 리버스 프록시 뒤에서 https를 올바르게 인식하도록 설정
 const PORT = process.env.PORT || 3000;
@@ -65,7 +79,7 @@ app.use(helmet({
             fontSrc: ["'self'", "https://fonts.gstatic.com"],
             imgSrc: ["'self'", "data:", "https://*", "https://lh3.googleusercontent.com"],
             mediaSrc: ["'self'", "data:", "blob:", "https://*"], // 비디오 재생 허용
-            connectSrc: ["'self'", "https://text.pollinations.ai", "https://api.groq.com", "https:"],
+            connectSrc: ["'self'", "https://text.pollinations.ai", "https://api.groq.com", "https:", "blob:", "data:"],
             upgradeInsecureRequests: null,
         },
     },
@@ -153,7 +167,7 @@ const dbApiLimiter = rateLimit({
 });
 
 app.get('/api/me', generalApiLimiter, (req, res) => {
-    res.json({ user: req.user || null });
+    res.json({ user: req.user || null, canUsePaid: canUsePaid(req) });
 });
 
 // 4. 교차 출처 및 파싱 제한
@@ -558,8 +572,8 @@ app.post('/api/generate-image', ensureAuthenticated, strictAiLimiter, async (req
         // 🖼️ 이미지 생성 1순위: Kie.ai z-image (약 0.8크레딧/장) → 실패/키 없음 시 2순위: Pollinations(무료)
         const kieRatioMap = { '1:1': '1:1', '4:3': '4:3', '3:4': '3:4', '16:9': '16:9', '9:16': '9:16', '21:9': '16:9' };
         const kieKey = process.env.KIE_API_KEY;
-        let fallbackReason = kieKey ? null : 'KIE_API_KEY 미설정';
-        if (kieKey) {
+        let fallbackReason = !kieKey ? 'KIE_API_KEY 미설정' : (!canUsePaid(req) ? '승인되지 않은 계정 (무료 엔진 사용)' : null);
+        if (kieKey && canUsePaid(req)) {
             try {
                 const kieUrl = await generateWithKie(kieKey, String(prompt).slice(0, 1000), kieRatioMap[aspect_ratio] || '1:1');
                 return res.status(200).json({ data: { url: kieUrl, provider: 'kie:z-image' } });
@@ -608,7 +622,7 @@ async function uploadImageToKie(apiKey, dataOrBase64) {
     return url;
 }
 
-app.post('/api/video/create', ensureAuthenticated, strictAiLimiter, async (req, res) => {
+app.post('/api/video/create', ensurePaidAccess, strictAiLimiter, async (req, res) => {
     try {
         const apiKey = process.env.KIE_API_KEY;
         if (!apiKey) return res.status(503).json({ error: '영상 생성 키(KIE_API_KEY)가 설정되지 않았습니다.' });
@@ -652,10 +666,39 @@ app.post('/api/video/create', ensureAuthenticated, strictAiLimiter, async (req, 
     }
 });
 
+// --- 🎞 생성 결과 중계 (브라우저에서 영상 합치기·마지막 프레임 캡처용) ---
+// 다른 도메인 영상은 canvas로 읽을 수 없어서 같은 주소로 중계. Kie 결과 도메인만 허용(SSRF 방지)
+const MEDIA_HOST_ALLOW = ['aiquickdraw.com', 'redpandaai.co', 'kie.ai'];
+app.get('/api/media-proxy', ensurePaidAccess, async (req, res) => {
+    try {
+        let target;
+        try { target = new URL(String(req.query.url || '')); } catch (e) { return res.status(400).json({ error: '잘못된 주소' }); }
+        const okHost = target.protocol === 'https:' &&
+            MEDIA_HOST_ALLOW.some(h => target.hostname === h || target.hostname.endsWith('.' + h));
+        if (!okHost) return res.status(403).json({ error: '허용되지 않은 주소' });
+
+        const headers = {};
+        if (req.headers.range) headers.Range = req.headers.range;
+        const upstream = await fetch(target.toString(), { headers, redirect: 'follow' });
+        if (!upstream.ok && upstream.status !== 206) return res.status(502).json({ error: `원본 응답 ${upstream.status}` });
+
+        res.status(upstream.status);
+        ['content-type', 'content-length', 'content-range', 'accept-ranges'].forEach(h => {
+            const v = upstream.headers.get(h);
+            if (v) res.setHeader(h, v);
+        });
+        res.setHeader('Cache-Control', 'private, max-age=3600');
+        upstream.body.pipe(res);
+        upstream.body.on('error', () => res.end());
+    } catch (err) {
+        if (!res.headersSent) res.status(500).json({ error: err.message });
+    }
+});
+
 // 🎙 내레이션은 브라우저에서 Supertonic 3로 생성 (서버 비용 0원) — /supertonic/tts.js
 
 // 작업 상태 조회 (영상 작업)
-app.get(['/api/video/status', '/api/task/status'], ensureAuthenticated, videoStatusLimiter, async (req, res) => {
+app.get(['/api/video/status', '/api/task/status'], ensurePaidAccess, videoStatusLimiter, async (req, res) => {
     try {
         const apiKey = process.env.KIE_API_KEY;
         const taskId = String(req.query.taskId || '');

@@ -1667,6 +1667,7 @@
         <button class="vps-tab" data-vps-tab="bgm">🎵 BGM 추천</button>
         <button class="vps-tab" data-vps-tab="subtitle">🎬 자막 생성</button>
         <button class="vps-tab" data-vps-tab="seo">🏷️ 제목/태그 추천</button>
+        <button class="vps-tab" data-vps-tab="tts">🎙️ TTS 음성</button>
       </div>
 
       <!-- ===== 탭 1: 자막 생성 (기존) ===== -->
@@ -1887,6 +1888,59 @@
               <div class="output-block" id="vps-seo-output"
                 style="height: 300px; font-size: 0.85rem; line-height: 1.6; padding: 20px;">
                 대기 중... (영상 주제를 입력한 후 생성 버튼을 누르세요)
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== 탭 7: TTS (Supertonic 3 · 브라우저 실행 · kimbs318 Hugging Face 미러) ===== -->
+      <div class="vps-panel" id="vps-panel-tts">
+        <div class="video-suite-grid"
+          style="display: grid; grid-template-columns: 1fr 1.5fr; gap: 32px; margin-top: 24px;">
+          <div class="lab-card" style="height: fit-content;">
+            <div class="label-mono">🎙️ SUPERTONIC 3 TTS</div>
+            <div class="param-group" style="width: 100%; margin-top: 20px;">
+              <label for="vps-tts-input">읽을 문장 (필수)</label>
+              <textarea id="vps-tts-input" class="lab-input-small" rows="5" maxlength="2000" style="resize: vertical; min-height: 110px;"
+                placeholder="예) 퇴근하고 딱 10분, 나만을 위한 홈카페 시간. 저장해두고 오늘 바로 해보세요."></textarea>
+              <div id="vps-tts-count" style="font-size: 0.7rem; color: var(--fg-muted); text-align: right; margin-top: 4px;">0 / 2000</div>
+            </div>
+            <div class="tts-grid">
+              <div class="param-group"><label for="vps-tts-voice">목소리</label>
+                <select id="vps-tts-voice" class="lab-select"><optgroup label="여성"><option value="F1" selected>여성 1 (차분한 저음)</option><option value="F2">여성 2 (밝고 발랄)</option><option value="F3">여성 3 (아나운서)</option><option value="F4">여성 4 (또렷하고 힘 있는)</option><option value="F5">여성 5 (부드럽고 다정한)</option></optgroup><optgroup label="남성"><option value="M1">남성 1 (활기차고 경쾌)</option><option value="M2">남성 2 (깊고 진중한)</option><option value="M3">남성 3 (신뢰감 있는 발표)</option><option value="M4">남성 4 (부드럽고 친근한)</option><option value="M5">남성 5 (따뜻한 이야기꾼)</option></optgroup></select></div>
+              <div class="param-group"><label for="vps-tts-lang">언어</label>
+                <select id="vps-tts-lang" class="lab-select">
+                  <option value="ko" selected>한국어</option><option value="en">English</option><option value="ja">日本語</option>
+                  <option value="es">Español</option><option value="fr">Français</option><option value="de">Deutsch</option>
+                  <option value="pt">Português</option><option value="vi">Tiếng Việt</option><option value="id">Bahasa Indonesia</option>
+                </select></div>
+              <div class="param-group"><label for="vps-tts-speed">속도 <span id="vps-tts-speed-val" style="margin-left: 6px; color: var(--skills-cyan);">1.15×</span></label>
+                <input type="range" id="vps-tts-speed" min="0.8" max="1.5" step="0.05" value="1.15" style="width: 100%; accent-color: var(--skills-cyan);"></div>
+              <div class="param-group"><label for="vps-tts-steps">품질</label>
+                <select id="vps-tts-steps" class="lab-select"><option value="5">빠르게</option><option value="8" selected>보통</option><option value="16">고품질 (느림)</option></select></div>
+            </div>
+            <button type="button" id="vps-tts-btn" class="btn-skills" style="width: 100%; height: 50px; font-weight: 700; margin-top: 20px;">음성 생성</button>
+            <p style="font-size: 0.7rem; color: var(--fg-muted); margin-top: 10px; line-height: 1.6;">
+              모델: <a href="https://huggingface.co/kimbs318/supertonic-3" target="_blank" rel="noopener" style="color: var(--skills-cyan);">kimbs318/supertonic-3</a> (Hugging Face) ·
+              내 브라우저에서 실행되어 비용 0원 · 처음 한 번 약 400MB 내려받고 이후엔 캐시 사용 · 라이선스 OpenRAIL-M
+            </p>
+          </div>
+          <div class="lab-output">
+            <div class="visualizer-output"
+              style="height: 100%; min-height: 280px; border: 1px solid var(--border-strong);">
+              <div class="output-header" style="padding: 12px 20px; border-bottom: 1px solid var(--border-strong);">
+                <div class="label-mono">VOICE OUTPUT</div>
+                <a id="vps-tts-download" class="btn-copy" style="display: none; text-decoration: none;" download="ai-voice.wav">WAV 다운로드</a>
+              </div>
+              <div style="padding: 20px; display: flex; flex-direction: column; gap: 14px;">
+                <div id="vps-tts-status" role="status" aria-live="polite" style="font-size: 0.85rem; color: var(--skills-cyan);">대기 중... (문장을 입력하고 음성 생성을 누르세요)</div>
+                <div id="vps-tts-progress" style="display: none; height: 6px; border-radius: 999px; background: var(--input-bg); border: 1px solid var(--border); overflow: hidden;">
+                  <div id="vps-tts-progress-bar" style="height: 100%; width: 0%; background: linear-gradient(90deg, var(--skills-cyan), var(--skills-purple)); transition: width .3s;"></div>
+                </div>
+                <audio id="vps-tts-audio" controls style="width: 100%; display: none;"></audio>
+                <div id="vps-tts-meta" style="font-size: 0.72rem; color: var(--fg-muted);"></div>
+                <div style="font-size: 0.7rem; color: var(--fg-muted);">※ 생성된 음성은 AI 음성입니다. 게시할 때 'AI 음성' 표기를 권장합니다.</div>
               </div>
             </div>
           </div>

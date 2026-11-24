@@ -2739,3 +2739,8 @@ html { scroll-behavior: smooth; scroll-padding-top: 80px; }
 }
 .ap-title { display: flex; align-items: baseline; flex-wrap: wrap; gap: 10px; }
 .ap-title h3 { margin: 0; font-size: 1.25rem; font-weight: 700; letter-spacing: -0.01em; color: var(--fg); }
+
+/* VPS · TTS 탭 */
+.tts-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 12px; }
+.tts-grid .param-group { margin: 0; }
+@media (max-width: 480px) { .tts-grid { grid-template-columns: 1fr; } }

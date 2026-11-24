@@ -4180,3 +4180,58 @@ if (UI.engineerBtn) UI.engineerBtn.addEventListener('click', renderLabParamSumma
   sel.addEventListener('change', () => { audio.pause(); btn.innerText = '▶'; sync(); });
   sync();
 })();
+
+
+// ===== 🎙️ VPS · TTS 탭 (Supertonic 3, 브라우저 실행 · 비용 0원) =====
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const btn = $('vps-tts-btn'), input = $('vps-tts-input');
+  if (!btn || !input) return;
+  const status = $('vps-tts-status'), bar = $('vps-tts-progress-bar'), prog = $('vps-tts-progress');
+  const audio = $('vps-tts-audio'), dl = $('vps-tts-download'), meta = $('vps-tts-meta');
+  const speed = $('vps-tts-speed'), speedVal = $('vps-tts-speed-val'), count = $('vps-tts-count');
+  let lastUrl = null;
+  const setStatus = (msg, color) => { status.textContent = msg; status.style.color = color || 'var(--skills-cyan)'; };
+  input.addEventListener('input', () => { count.textContent = `${input.value.length} / 2000`; });
+  speed.addEventListener('input', () => { speedVal.textContent = `${Number(speed.value).toFixed(2)}×`; });
+
+  const ready = () => globalThis.SupertonicTTS ? Promise.resolve() : new Promise((res, rej) => {
+    const t = setTimeout(() => rej(new Error('음성 엔진 스크립트를 불러오지 못했습니다.')), 15000);
+    window.addEventListener('supertonic-ready', () => { clearTimeout(t); res(); }, { once: true });
+  });
+
+  btn.addEventListener('click', async () => {
+    const text = input.value.trim();
+    if (!text) { setStatus('읽을 문장을 입력해 주세요.', '#f59e0b'); input.focus(); return; }
+    const label = btn.textContent;
+    btn.disabled = true; btn.textContent = '음성 생성 중…';
+    prog.style.display = 'block'; bar.style.width = '5%';
+    setStatus('음성 엔진 준비 중…');
+    let unsub = null;
+    const t0 = performance.now();
+    try {
+      await ready();
+      unsub = globalThis.SupertonicTTS.onProgress((m, pct) => { setStatus(`🎙 ${m}`); if (typeof pct === 'number') bar.style.width = `${Math.max(5, Math.min(100, pct <= 1 ? pct * 100 : pct))}%`; });
+      const { url, duration } = await globalThis.SupertonicTTS.speak(text, {
+        voice: $('vps-tts-voice').value, lang: $('vps-tts-lang').value,
+        speed: Number(speed.value), steps: Number($('vps-tts-steps').value)
+      });
+      if (lastUrl) URL.revokeObjectURL(lastUrl);
+      lastUrl = url;
+      audio.src = url; audio.style.display = 'block';
+      dl.href = url; dl.download = `ai-voice-${$('vps-tts-voice').value}-${Date.now()}.wav`; dl.style.display = 'inline-flex';
+      bar.style.width = '100%';
+      const backend = globalThis.SupertonicTTS.backend && globalThis.SupertonicTTS.backend();
+      meta.textContent = `길이 ${duration.toFixed(1)}초 · 생성 ${((performance.now() - t0) / 1000).toFixed(1)}초 · 실행 ${backend === 'webgpu' ? 'WebGPU' : 'WebAssembly(CPU)'} · 모델 ${(globalThis.SupertonicTTS.source && globalThis.SupertonicTTS.source()) || '브라우저 캐시'}`;
+      setStatus('✓ 완료 — 재생하거나 WAV로 내려받으세요.', '#10b981');
+      audio.play().catch(() => { });
+    } catch (err) {
+      console.error('[TTS tab]', err);
+      setStatus(`음성 생성 실패: ${err.message}`, '#ff5555');
+    } finally {
+      if (unsub) unsub();
+      btn.disabled = false; btn.textContent = label;
+      setTimeout(() => { prog.style.display = 'none'; bar.style.width = '0%'; }, 800);
+    }
+  });
+})();

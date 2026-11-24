@@ -9,8 +9,8 @@ import { loadTextToSpeech, loadVoiceStyle, writeWavFile } from './helper.js';
 // 모델 출처: 앞에서부터 시도하고 실패하면 다음으로 (원본 아카이브가 사라져도 계속 동작)
 // 세 곳 모두 같은 파일(SHA-256 일치 확인). 라이선스: BigScience OpenRAIL-M
 const MODEL_SOURCES = globalThis.SUPERTONIC_BASE ? [globalThis.SUPERTONIC_BASE] : [
+  'https://huggingface.co/kimbs318/supertonic-3/resolve/main',                                                  // 자체 미러 (기본)
   'https://huggingface.co/supertone-oss-archive/supertonic-3/resolve/aafc6e32416a594460b32413efc49d7fe4ce6d46', // 공식 아카이브
-  'https://huggingface.co/kimbs318/supertonic-3/resolve/main',                                                  // 자체 미러
   'https://huggingface.co/lnkiai/supertonic-3-mirror/resolve/main'                                              // 공개 미러
 ];
 const MODEL_BASE = 'st://model';   // 가상 경로: 실제 주소는 MODEL_SOURCES 중 살아 있는 곳
@@ -29,7 +29,7 @@ async function fetchFromSources(url) {
   for (const base of MODEL_SOURCES) {
     try {
       const res = await fetch(base + rel);
-      if (res.ok) return res;
+      if (res.ok) { state.source = base; return res; }
       lastErr = new Error(`${res.status} @ ${base}`);
     } catch (e) { lastErr = e; }
     console.warn('[Supertonic] source failed, trying next:', base, lastErr && lastErr.message);
@@ -128,6 +128,7 @@ globalThis.SupertonicTTS = {
   load, speak,
   isReady: () => !!state.tts,
   backend: () => state.backend,
+  source: () => (state.source || '').replace(/^https:\/\/huggingface\.co\//, '').split('/resolve')[0] || null,
   onProgress: (fn) => { state.listeners.add(fn); return () => state.listeners.delete(fn); }
 };
 window.dispatchEvent(new Event('supertonic-ready'));

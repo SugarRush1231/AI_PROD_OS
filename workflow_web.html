@@ -40,7 +40,7 @@
         </a>
       </div>
       <div class="nav-center">
-        <a href="#autopilot-card" class="nav-link">원클릭 제작</a>
+        <a href="#autopilot-card" class="nav-link">Autopilot</a>
         <a href="#prompt-lab" class="nav-link">프롬프트 랩</a>
         <a href="#image-studio" class="nav-link">이미지</a>
         <a href="#video-studio" class="nav-link">영상</a>
@@ -967,17 +967,6 @@
             </div>
           </div> <!-- end all-params-container -->
 
-          <div class="lab-actions" style="margin-top: 24px;">
-            <button class="btn-skills" id="engineer-btn">적용 후 프롬프트 생성</button>
-            <button id="save-preset-btn" class="save-icon-btn" title="현재 설정을 프리셋으로 저장">
-              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5">
-                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
-                <polyline points="17 21 17 13 7 13 7 21" />
-                <polyline points="7 3 7 8 15 8" />
-              </svg>
-              <span>SAVE</span>
-            </button>
-          </div>
         </div>
 
         <!-- CENTER: 03 LIGHTING ENGINEERING + 04 CAMERA & OPTICS -->
@@ -1123,6 +1112,17 @@
 
         <!-- RIGHT: 05 LAYERS + 06 OUTPUT -->
         <div class="lab-right">
+          <div class="lab-actions" id="lab-actions">
+            <button class="btn-skills" id="engineer-btn">적용 후 프롬프트 생성</button>
+            <button id="save-preset-btn" class="save-icon-btn" title="현재 설정을 프리셋으로 저장">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+                <polyline points="17 21 17 13 7 13 7 21" />
+                <polyline points="7 3 7 8 15 8" />
+              </svg>
+              <span>SAVE</span>
+            </button>
+          </div>
         <!-- 05 ENGINEERING LAYERS -->
         <div class="lab-visualizer">
           <div class="label-mono">05 엔지니어링 레이어 (공정)</div>
@@ -1207,7 +1207,7 @@
               <div class="control-item" style="display: flex; align-items: center; gap: 8px;">
                 <span style="font-size: 0.75rem; color: var(--fg-muted); white-space: nowrap;">화면 비율</span>
                 <select id="imageRatioInput" class="lab-select"
-                  style="min-width: 130px; height: 36px; padding: 0 12px;">
+                  style="min-width: 150px; height: 36px; padding: 0 12px;">
                   <option value="auto" selected>Auto (자동 맞춤)</option>
                   <option value="1:1">1:1 (Square)</option>
                   <option value="3:4">3:4 (Portrait)</option>
@@ -1421,7 +1421,7 @@
       <!-- ===== 🎯 원클릭 제작 파이프라인 (목표 1회 입력 → 기획 → 장면 → 이미지 → 영상) ===== -->
       <div class="lab-card" id="autopilot-card"
         style="margin-top: 24px; padding: 28px; border: 1.5px solid var(--skills-cyan); border-radius: 12px; background: var(--panel);">
-        <div class="label-mono" style="color: var(--skills-cyan);">🎯 ONE-CLICK PIPELINE · 목표만 입력하면 영상까지</div>
+        <div class="ap-title"><h3>Autopilot Studio</h3><span class="label-mono" style="color: var(--skills-cyan);">목표만 입력하면 영상까지</span></div>
         <textarea id="ap-goal" class="lab-input-small" rows="3"
           style="width: 100%; margin-top: 12px; resize: vertical;"
           placeholder="예) 직장인 대상 '퇴근 후 10분 홈카페' 릴스. 따뜻하고 감성적인 톤, 마지막에 저장 유도"></textarea>

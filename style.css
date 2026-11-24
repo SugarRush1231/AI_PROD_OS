@@ -2716,3 +2716,21 @@ html { scroll-behavior: smooth; scroll-padding-top: 80px; }
   .lt-grid-3 { grid-template-columns: 1fr; }
   .lt-grid-2 { grid-template-columns: 1fr; }
 }
+
+/* ── Prompt Lab 정리: 생성 버튼은 오른쪽(05 위), 좁은 칸 글자 잘림·버튼 튀어나옴 방지 ── */
+.lab-right > .lab-actions { margin: 0; }
+.lab-params-area { container-type: inline-size; }
+@container (max-width: 460px) {
+  .params-grid { grid-template-columns: minmax(0, 1fr); }
+}
+.lab-grid .lab-select { text-overflow: ellipsis; }
+.output-header { flex-wrap: wrap; gap: 8px; }
+.output-header .label-mono { white-space: nowrap; }
+.output-header > div:last-child { flex-wrap: wrap; }
+.output-header .btn-copy { white-space: nowrap; }
+.lab-output .output-toolbar select { max-width: 100%; }
+@media (max-width: 1400px) and (min-width: 1025px) {
+  .lab-right > .lab-actions { grid-column: 1 / -1; }
+}
+.ap-title { display: flex; align-items: baseline; flex-wrap: wrap; gap: 10px; }
+.ap-title h3 { margin: 0; font-size: 1.25rem; font-weight: 700; letter-spacing: -0.01em; color: var(--fg); }

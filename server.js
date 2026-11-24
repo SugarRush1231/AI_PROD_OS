@@ -60,7 +60,7 @@ app.use(helmet({
     contentSecurityPolicy: {
         directives: {
             defaultSrc: ["'self'"],
-            scriptSrc: ["'self'", "'unsafe-inline'", "blob:"],
+            scriptSrc: ["'self'", "'unsafe-inline'", "blob:", "'wasm-unsafe-eval'", "https://cdn.jsdelivr.net"], // Supertonic(onnxruntime-web)
             styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
             fontSrc: ["'self'", "https://fonts.gstatic.com"],
             imgSrc: ["'self'", "data:", "https://*", "https://lh3.googleusercontent.com"],
@@ -652,42 +652,9 @@ app.post('/api/video/create', ensureAuthenticated, strictAiLimiter, async (req, 
     }
 });
 
-// --- 🎙 내레이션 TTS (Kie ElevenLabs Multilingual v2, 한국어) ---
-const TTS_VOICES = {
-    female: 'EXAVITQu4vr4xnSDxMaL',
-    male: 'pNInz6obpgDQGcFmaJgB',
-    fallback: 'EkK5I93UQWFDigLMpZcX'
-};
-app.post('/api/tts/create', ensureAuthenticated, strictAiLimiter, async (req, res) => {
-    try {
-        const apiKey = process.env.KIE_API_KEY;
-        if (!apiKey) return res.status(503).json({ error: 'TTS 키(KIE_API_KEY)가 설정되지 않았습니다.' });
-        const text = String(req.body.text || '').trim().slice(0, 500);
-        if (!text) return res.status(400).json({ error: '읽을 문장이 필요합니다.' });
-        const voices = [TTS_VOICES[req.body.voice] || TTS_VOICES.female, TTS_VOICES.fallback];
+// 🎙 내레이션은 브라우저에서 Supertonic 3로 생성 (서버 비용 0원) — /supertonic/tts.js
 
-        let lastMsg = '';
-        for (const voice of voices) {
-            const createRes = await fetch('https://api.kie.ai/api/v1/jobs/createTask', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-                body: JSON.stringify({
-                    model: 'elevenlabs/text-to-speech-multilingual-v2',
-                    input: { text, voice, stability: 0.5, similarity_boost: 0.75, style: 0, speed: 1, language_code: 'ko' }
-                })
-            });
-            const created = await createRes.json();
-            if (created.code === 200 && created.data?.taskId) return res.json({ taskId: created.data.taskId });
-            lastMsg = created.msg || String(created.code);
-            console.warn('[TTS_CREATE_RETRY]', voice, lastMsg);
-        }
-        res.status(502).json({ error: `TTS 작업 생성 실패: ${lastMsg}` });
-    } catch (err) {
-        res.status(500).json({ error: err.message || 'TTS 오류' });
-    }
-});
-
-// 작업 상태 조회 (영상·TTS 공용)
+// 작업 상태 조회 (영상 작업)
 app.get(['/api/video/status', '/api/task/status'], ensureAuthenticated, videoStatusLimiter, async (req, res) => {
     try {
         const apiKey = process.env.KIE_API_KEY;

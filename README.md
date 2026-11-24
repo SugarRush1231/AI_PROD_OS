@@ -19,13 +19,15 @@
 Browser (workflow_web.html · script.js)
    │  단계 오케스트레이션 · 진행 상태 · 결과 렌더링
    ▼
+Supertonic 3 TTS (supertonic/) — 브라우저에서 ONNX Runtime Web으로 내레이션 생성 (서버·API 비용 0)
+   │  모델은 첫 사용 시 Hugging Face에서 받아 Cache API에 저장
+   ▼
 Express API (server.js) ── Google OAuth · Rate limit · Helmet CSP
    ├─ /api/engineer        → LLM (Groq Llama, 다중 노드 폴백)
    ├─ /api/whisper         → STT (Groq Whisper)
    ├─ /api/generate-image  → 이미지 API (1순위) → 무료 엔진 폴백
    ├─ /api/video/create    → 영상 작업 생성 (taskId 즉시 반환)
-   ├─ /api/tts/create      → 장면별 한국어 내레이션 (TTS)
-   ├─ /api/task/status     → 영상·TTS 작업 상태 조회 (브라우저 폴링)
+   ├─ /api/task/status     → 영상 작업 상태 조회 (브라우저 폴링)
    └─ /api/presets 등      → PostgreSQL (사용자 프리셋·설정)
 ```
 
@@ -37,7 +39,7 @@ Express API (server.js) ── Google OAuth · Rate limit · Helmet CSP
 | 이름 | 용도 |
 |---|---|
 | `GROQ_API_KEY` (… `_6`) | 텍스트 생성 · STT |
-| `KIE_API_KEY` | 이미지 · 영상 · TTS 생성 |
+| `KIE_API_KEY` | 이미지 · 영상 생성 |
 | `DATABASE_URL` | PostgreSQL |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `CALLBACK_URL` | Google 로그인 |
 | `SESSION_SECRET`, `ALLOWED_ORIGIN`, `PORT` | 서버 설정 |
@@ -48,3 +50,9 @@ Express API (server.js) ── Google OAuth · Rate limit · Helmet CSP
 npm install
 npm start   # http://localhost:3000
 ```
+
+## 내레이션 (TTS)
+
+- [Supertonic 3](https://huggingface.co/supertone-oss-archive/supertonic-3) (Supertone, 한국어 포함 31개 언어)를 브라우저에서 직접 실행 — WebGPU 우선, 미지원 시 WebAssembly(CPU)
+- 장면별 대본 → 음성 생성 → 앞뒤 무음 제거 → 영상과 동기 재생
+- 모델 라이선스(BigScience OpenRAIL-M)에 따라 **AI 음성임을 고지**: 파이프라인이 제목/태그 결과 끝에 `목소리: AI 음성`을 자동으로 붙임

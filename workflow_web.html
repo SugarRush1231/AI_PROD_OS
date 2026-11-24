@@ -1168,8 +1168,10 @@
           <div class="param-group" style="min-width: 130px;">
             <label style="display:block; font-size: 0.75rem; color: var(--fg-muted); margin-bottom: 6px;">내레이션</label>
             <select id="ap-voice" class="lab-select">
-              <option value="female" selected>여성 목소리</option>
-              <option value="male">남성 목소리</option>
+              <option value="F1" selected>여성 1</option>
+              <option value="F2">여성 2</option>
+              <option value="M1">남성 1</option>
+              <option value="M2">남성 2</option>
               <option value="none">내레이션 없음</option>
             </select>
           </div>
@@ -1189,6 +1191,8 @@
           <div class="ap-step" data-step="images">⑦ 장면 이미지</div>
           <div class="ap-step" data-step="videos">⑧ 장면 영상</div>
         </div>
+
+        <div id="ap-voice-status" style="display: none; margin-top: 10px; font-size: 0.75rem; color: var(--fg-muted);"></div>
 
         <div id="ap-scene-grid"
           style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; margin-top: 16px;"></div>
@@ -1633,6 +1637,9 @@
       style="max-width: 90vw; max-height: 90vh; object-fit: contain; margin: auto; display: block; border-radius: 8px; box-shadow: 0 10px 40px rgba(0,0,0,0.5);">
   </div>
 
+  <!-- 🎙 Supertonic 3 브라우저 TTS (onnxruntime-web) -->
+  <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/ort.webgpu.min.js"></script>
+  <script type="module" src="supertonic/tts.js"></script>
   <script src="script.js"></script>
 </body>
 

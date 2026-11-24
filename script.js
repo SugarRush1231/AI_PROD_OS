@@ -3254,15 +3254,16 @@ RULES:
     throw new Error('시간 초과');
   },
 
+  // 🎙 Supertonic 3 (브라우저 실행, 무료). 모델은 첫 사용 때 한 번 받고 캐시
   async makeVoice(text, voice) {
-    const res = await fetch('/api/tts/create', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, voice })
-    });
-    const created = await res.json();
-    if (!res.ok) throw new Error(created.error || 'TTS 실패');
-    return AP.pollTask(created.taskId, 3 * 60 * 1000);
+    if (!globalThis.SupertonicTTS) {
+      await new Promise((res, rej) => {
+        const t = setTimeout(() => rej(new Error('음성 엔진 스크립트를 불러오지 못했습니다.')), 15000);
+        window.addEventListener('supertonic-ready', () => { clearTimeout(t); res(); }, { once: true });
+      });
+    }
+    const { url } = await globalThis.SupertonicTTS.speak(text, { voice, speed: 1.15 });
+    return url;
   },
 
   // 실패 시 자동 재시도: 이미지→영상 480p → 이미지→영상 720p → 텍스트→영상 720p
@@ -3374,14 +3375,34 @@ RULES:
       let voicePromise = Promise.resolve([]);
       if (voiceOpt !== 'none') {
         AP.setStep('voice', 'running');
-        voicePromise = Promise.allSettled(scenes.map(async (sc, i) => {
-          if (!sc.narration) return null;
-          await AP.sleep(i * 1200);
-          const url = await AP.makeVoice(sc.narration, voiceOpt);
-          const slot = document.getElementById(`ap-voice-${i}`);
-          if (slot) slot.innerHTML = `<audio src="${url}" controls style="width:100%; height:28px;"></audio>`;
-          return url;
-        })).then(rs => {
+        const vStatus = document.getElementById('ap-voice-status');
+        let unsub = null;
+        if (vStatus) {
+          vStatus.style.display = 'block';
+          vStatus.innerText = '🎙 음성 엔진 준비 중... (처음 한 번은 모델을 받느라 1~2분 걸릴 수 있어요)';
+          if (globalThis.SupertonicTTS) unsub = globalThis.SupertonicTTS.onProgress((m) => { vStatus.innerText = `🎙 ${m}`; });
+        }
+        voicePromise = (async () => {
+          const rs = [];
+          for (let i = 0; i < scenes.length; i++) {   // 같은 모델을 쓰므로 순차 생성
+            const sc = scenes[i];
+            try {
+              if (!sc.narration) { rs.push({ status: 'fulfilled', value: null }); continue; }
+              const slot = document.getElementById(`ap-voice-${i}`);
+              if (slot) slot.innerText = '🎙 음성 생성 중...';
+              const url = await AP.makeVoice(sc.narration, voiceOpt);
+              if (slot) slot.innerHTML = `<audio src="${url}" controls style="width:100%; height:28px;"></audio>`;
+              rs.push({ status: 'fulfilled', value: url });
+            } catch (e) {
+              rs.push({ status: 'rejected', reason: e });
+              const slot = document.getElementById(`ap-voice-${i}`);
+              if (slot) slot.innerText = `🎙 음성 실패: ${e.message}`;
+            }
+          }
+          if (unsub) unsub();
+          if (vStatus) vStatus.innerText = '🎙 내레이션 완료 · AI 음성(Supertonic)';
+          return rs;
+        })().then(rs => {
           const urls = rs.map(r => (r.status === 'fulfilled' ? r.value : null));
           rs.forEach((r, i) => { if (r.status === 'rejected') addLog(`!! 내레이션 ${i + 1} 실패: ${r.reason.message}`, 'error'); });
           AP.setStep('voice', urls.some(Boolean) ? 'done' : 'failed');
@@ -3433,6 +3454,14 @@ RULES:
 
       await voicePromise;
       await releasePromise;
+      // AI 음성 고지 (Supertonic OpenRAIL-M 사용 조건: 기계 생성 콘텐츠임을 밝힐 것)
+      if (voiceOpt !== 'none') {
+        const seoOut = document.getElementById('vps-seo-output');
+        if (seoOut && seoOut.dataset.rawResult && !seoOut.dataset.rawResult.includes('AI 음성')) {
+          seoOut.dataset.rawResult += '\n\n목소리: AI 음성';
+          seoOut.innerText = seoOut.dataset.rawResult;
+        }
+      }
       updateStatusUI('vps', 'idle', '원클릭 파이프라인 완료');
       addLog(`✓ 원클릭 파이프라인 완료 — 장면 ${scenes.length}개, 영상 ${clips.length}개`, 'success');
     } catch (err) {

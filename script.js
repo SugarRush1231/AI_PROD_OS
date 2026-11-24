@@ -2692,7 +2692,7 @@ async function generateN8NImage() {
     const responseData = await response.json();
 
     if (!response.ok) {
-      console.error("n8n 에러:", responseData);
+      console.error("이미지 생성 에러:", responseData);
       alert(`[생성 실패] ${responseData.error || '통신 오류'}`);
       throw new Error(responseData.error);
     }
@@ -2730,11 +2730,14 @@ async function generateN8NImage() {
       return null;
     };
 
-    const finalImageUrl = findImageInObject(responseData.data);
+    // 서버가 data.url로 직접 주는 경우 우선 사용 (Kie / Pollinations)
+    const finalImageUrl = (responseData.data && typeof responseData.data.url === 'string' && responseData.data.url.startsWith('http'))
+      ? responseData.data.url
+      : findImageInObject(responseData.data);
 
     if (!finalImageUrl) {
       console.error("최종 이미지 추출 실패. 응답 원본:", responseData);
-      throw new Error("n8n 응답에서 이미지 URL을 찾지 못했습니다.");
+      throw new Error("서버 응답에서 이미지 URL을 찾지 못했습니다.");
     }
 
     resultImage.src = finalImageUrl;

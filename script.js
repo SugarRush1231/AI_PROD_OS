@@ -2321,7 +2321,6 @@ async function checkAuthStatus() {
     if (videoBtn) {
       videoBtn.disabled = !paidOk;
       videoBtn.innerText = !isLoggedIn ? '🔒 로그인 필요' : (paidOk ? '🎬 AI 비디오 생성하기' : '🔒 승인된 계정 전용');
-      videoBtn.style.opacity = paidOk ? '1' : '0.6';
     }
     const videoPrompt = document.getElementById('videoPromptInput');
     if (videoPrompt) videoPrompt.disabled = !paidOk;
@@ -2457,7 +2456,7 @@ checkAuthStatus();
 const heroStartBtn = document.getElementById('hero-start-btn');
 if (heroStartBtn) {
   heroStartBtn.addEventListener('click', () => {
-    document.getElementById('prompt-lab').scrollIntoView({ behavior: 'smooth' });
+    document.getElementById('autopilot').scrollIntoView({ behavior: 'smooth' });
   });
 }
 

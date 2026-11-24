@@ -2599,3 +2599,40 @@ footer {
 .ap-scene img, .ap-scene video { width: 100%; height: 100%; object-fit: cover; }
 
 .lab-chip { font-size: 0.7rem; padding: 3px 8px; border-radius: 999px; border: 1px solid var(--border); background: var(--input-bg); color: var(--fg-muted); }
+
+/* 영상 생성 버튼: 활성일 때만 청록색, 잠기면 다른 버튼과 같은 비활성 스타일 */
+.btn-video:not(:disabled) { background: var(--skills-cyan); border: none; color: #fff; }
+
+/* ===== UI 개편 (uiverse 참고: 그라데이션 알약 CTA·글로우·포커스 링·글래스 카드) ===== */
+.nav-center { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; }
+.nav-link { font-size: 0.82rem; color: var(--fg-muted); text-decoration: none; padding: 6px 12px; border-radius: 999px; transition: background .2s, color .2s; }
+.nav-link:hover { color: var(--fg); background: var(--input-bg); }
+html { scroll-behavior: smooth; scroll-padding-top: 80px; }
+
+#ap-run-btn:not(:disabled) {
+  background: linear-gradient(90deg, #2563eb, #7c3aed);
+  border: none; color: #fff; border-radius: 999px; font-weight: 700;
+  box-shadow: 0 6px 24px rgba(99, 102, 241, 0.35);
+  transition: transform .15s ease, box-shadow .2s ease;
+}
+#ap-run-btn:not(:disabled):hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(99, 102, 241, 0.5); }
+#ap-run-btn:disabled { border-radius: 999px; }
+
+#autopilot-card {
+  background: linear-gradient(180deg, rgba(99,102,241,0.06), rgba(6,182,212,0.04)), var(--panel) !important;
+  box-shadow: 0 12px 40px rgba(15, 23, 42, 0.08);
+  backdrop-filter: blur(6px);
+}
+.lab-select:focus, .lab-input-small:focus, .lab-textarea:focus, textarea:focus, input[type="text"]:focus {
+  outline: none; border-color: var(--skills-cyan) !important;
+  box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.18);
+}
+.ap-step.running::before {
+  content: ''; display: inline-block; width: 8px; height: 8px; margin-right: 6px; border-radius: 50%;
+  border: 2px solid var(--skills-cyan); border-top-color: transparent; vertical-align: -1px;
+  animation: ap-spin .8s linear infinite;
+}
+@keyframes ap-spin { to { transform: rotate(360deg); } }
+.ap-scene { transition: transform .2s ease, box-shadow .2s ease; }
+.ap-scene:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(15,23,42,0.08); }
+@media (max-width: 900px) { .nav-center { display: none; } }

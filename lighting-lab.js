@@ -779,6 +779,8 @@
       state.panels = (panels && typeof panels === 'object')
         ? { lighting: !!panels.lighting, optics: !!panels.optics }
         : { lighting: state.lighting.preset !== 'auto', optics: [o.lensPreset, o.cameraType, o.focal, o.aperture].some(v => v !== 'auto') };
+      // '사용' 체크는 없어지고 접힘이 그 역할 → 예전에 꺼 둔 조명은 접힌 상태로 옮김
+      if (!state.lighting.enabled) { state.panels.lighting = false; state.lighting.enabled = true; }
       emit('load');
       if (state.panels.lighting) Preview.maybeStart();
     },

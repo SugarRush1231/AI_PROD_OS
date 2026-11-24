@@ -1253,9 +1253,18 @@
 
           <ul id="lo-warnings" class="lo-warnings" role="status" aria-live="polite" hidden></ul>
           <div class="lo-serialized-wrap">
-            <div class="label-mono" style="font-size:0.62rem;">프롬프트 반영 미리보기</div>
-            <p id="lo-serialized" class="lo-serialized" aria-live="polite"></p>
+            <div class="label-mono" style="font-size:0.62rem;">적용될 조명·카메라 · 예시 사진</div>
+            <div id="lo-examples" class="lo-examples" aria-live="polite"></div>
+            <details class="lo-text">
+              <summary>프롬프트에 들어가는 문장 보기</summary>
+              <p id="lo-serialized" class="lo-serialized"></p>
+            </details>
           </div>
+          <dialog id="lo-zoom" class="lo-zoom" aria-label="예시 사진 크게 보기">
+            <form method="dialog"><button class="lo-zoom-close" aria-label="닫기">×</button></form>
+            <img id="lo-zoom-img" alt="">
+            <div id="lo-zoom-cap" class="lo-zoom-cap"></div>
+          </dialog>
         </div>
 
         <!-- RIGHT: 05 LAYERS + 06 OUTPUT -->

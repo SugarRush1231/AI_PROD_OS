@@ -1,3 +1,6 @@
 .env
 .env.*
 uploads/
+
+# 예시 이미지 원본(PNG, 대용량) — 사이트엔 img/presets/*.webp 사용
+_preset_originals/

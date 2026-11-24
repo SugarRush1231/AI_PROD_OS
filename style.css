@@ -2785,3 +2785,24 @@ footer a { display: inline-flex; align-items: center; min-height: 24px; }
 .tts-note b { color: var(--fg-dim); font-weight: 600; }
 .tts-note a { color: var(--skills-cyan); }
 .tts-note code { font-family: var(--font-mono); font-size: 0.68rem; padding: 0 4px; border-radius: 4px; background: var(--input-bg); color: var(--fg-dim); }
+
+/* 적용될 조명·카메라 예시 사진 */
+.lo-examples { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; margin-top: 8px; }
+.lo-ex { all: unset; cursor: zoom-in; display: flex; flex-direction: column; gap: 4px; border-radius: 8px; border: 1px solid var(--border); background: var(--input-bg); overflow: hidden; transition: border-color .15s, transform .15s; }
+.lo-ex:hover { border-color: var(--skills-cyan); transform: translateY(-1px); }
+.lo-ex:focus-visible { outline: 2px solid var(--skills-cyan); outline-offset: 2px; }
+.lo-ex img { width: 100%; aspect-ratio: 1 / 1; object-fit: cover; display: block; background: #888; }
+.lo-ex.is-approx img { opacity: .55; filter: saturate(.7); }
+.lo-ex.is-missing { cursor: default; }
+.lo-ex-cap { padding: 0 6px 6px; font-size: .66rem; line-height: 1.35; color: var(--fg-dim); }
+.lo-ex-cap em { font-style: normal; color: var(--skills-cyan); font-weight: 700; margin-right: 2px; }
+.lo-ex-empty { font-size: .72rem; color: var(--fg-muted); }
+.lo-text { margin-top: 8px; }
+.lo-text > summary { cursor: pointer; font-size: .7rem; color: var(--fg-muted); min-height: 24px; display: flex; align-items: center; }
+.lo-zoom { border: 1px solid var(--border-strong); border-radius: 12px; padding: 14px; background: var(--panel); color: var(--fg); max-width: min(560px, 92vw); }
+.lo-zoom::backdrop { background: rgba(0,0,0,.6); }
+.lo-zoom img { width: 100%; height: auto; border-radius: 8px; display: block; }
+.lo-zoom-cap { font-size: .75rem; color: var(--fg-dim); margin-top: 8px; line-height: 1.5; }
+.lo-zoom form { display: flex; justify-content: flex-end; }
+.lo-zoom-close { all: unset; cursor: pointer; font-size: 1.4rem; line-height: 1; width: 32px; height: 32px; display: grid; place-items: center; border-radius: 6px; color: var(--fg-dim); }
+.lo-zoom-close:hover, .lo-zoom-close:focus-visible { background: var(--hover); color: var(--fg); }

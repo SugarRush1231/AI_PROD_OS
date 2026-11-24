@@ -396,12 +396,64 @@
       // 직렬화 미리보기
       const pv = $('lo-serialized');
       if (pv) pv.textContent = serialize().text || 'Auto — 조명·카메라 지정 없음 (모델이 장면에 맞게 선택)';
+      renderExamples();
       // 재생성 필요 배지
       const badge = $('regen-badge');
       if (badge) badge.hidden = !(generatedSnapshot && generatedSnapshot !== snapshot());
     };
     listeners.add(render);
     render();
+  }
+
+  // ── 5-b. 예시 사진 (img/presets/*.webp, 같은 석고 흉상으로 촬영한 참고용) ───────────
+  const EX_BASE = 'img/presets/';
+  const TONAL_LABEL = { balanced: 'Balanced', 'high-key': 'High Key', 'low-key': 'Low Key', 'high-contrast': 'High Contrast', 'low-contrast': 'Low Contrast' };
+  const VOL_LABEL = { haze: 'Haze · 연무', fog: 'Fog · 안개', dust: 'Dust · 먼지', smoke: 'Smoke · 연기' };
+  function exampleCards() {
+    const l = state.lighting, o = state.optics, cards = [];
+    if (l.enabled) {
+      if (l.preset === 'auto') cards.push({ kind: '조명', src: 'base', label: 'Auto (장면에 맞게)', approx: false });
+      else if (l.preset === 'custom') {
+        const org = l.originPreset && l.originPreset !== 'auto' ? l.originPreset : null;
+        cards.push(org ? { kind: '조명', src: `lighting/${org}`, label: `Custom · ${LIGHT_PRESETS[org].label} 기반`, approx: true }
+                       : { kind: '조명', src: 'base', label: 'Custom', approx: true });
+      } else cards.push({ kind: '조명', src: `lighting/${l.preset}`, label: LIGHT_PRESETS[l.preset].label, approx: false });
+      if (l.tonalStyle !== 'auto') cards.push({ kind: '톤', src: `tonal/${l.tonalStyle}`, label: TONAL_LABEL[l.tonalStyle], approx: false });
+      if (l.volumetric.enabled && l.volumetric.density > 0) cards.push({ kind: '대기', src: `volumetric/${l.volumetric.type}`, label: VOL_LABEL[l.volumetric.type], approx: false });
+    }
+    if (o.lensPreset !== 'auto') {
+      const id = o.lensPreset === 'custom' ? (o.originPreset && o.originPreset !== 'auto' ? o.originPreset : null) : o.lensPreset;
+      if (id) cards.push({ kind: '렌즈', src: `lens/${id}`, label: (o.lensPreset === 'custom' ? 'Custom · ' : '') + LENS_PRESETS[id].label.split(' (')[0] + (o.lensPreset === 'custom' ? ' 기반' : ''), approx: o.lensPreset === 'custom' });
+    }
+    return cards;
+  }
+  let lastExKey = '';
+  function renderExamples() {
+    const box = $('lo-examples'); if (!box) return;
+    const cards = exampleCards();
+    const key = JSON.stringify(cards);
+    if (key === lastExKey) return; // 같은 내용이면 다시 그리지 않음 (드래그 중 깜빡임 방지)
+    lastExKey = key;
+    box.innerHTML = '';
+    cards.forEach(c => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'lo-ex' + (c.approx ? ' is-approx' : '');
+      b.title = `${c.kind}: ${c.label} — 클릭하면 크게 보기`;
+      const img = document.createElement('img');
+      img.src = `${EX_BASE}${c.src}.webp`; img.alt = `${c.kind} 예시: ${c.label}`; img.loading = 'lazy'; img.decoding = 'async';
+      img.onerror = () => { b.classList.add('is-missing'); img.remove(); };
+      const cap = document.createElement('span'); cap.className = 'lo-ex-cap';
+      cap.innerHTML = `<em>${c.kind}</em> ${c.label.replace(/</g, '&lt;')}`;
+      b.append(img, cap);
+      b.addEventListener('click', () => {
+        const dlg = $('lo-zoom'); if (!dlg || !dlg.showModal) return;
+        $('lo-zoom-img').src = img.src; $('lo-zoom-img').alt = img.alt;
+        $('lo-zoom-cap').textContent = `${c.kind} · ${c.label}${c.approx ? ' (직접 조정한 값과 다를 수 있음)' : ''} — 예시 사진 · 실제 결과는 프롬프트·장면에 따라 달라집니다`;
+        dlg.showModal();
+      });
+      box.appendChild(b);
+    });
+    if (!cards.length) box.innerHTML = '<span class="lo-ex-empty">조명 사용이 꺼져 있고 렌즈도 Auto입니다.</span>';
   }
 
   // ── 6. SVG 광원 위치 컨트롤러 ──────────────────────────────────────────────
@@ -656,6 +708,7 @@
     initUI();
     $('lt-3d-retry')?.addEventListener('click', () => { Preview.status('', false); Preview.start(); });
     $('lt-3d-reset')?.addEventListener('click', () => Preview.resetView());
+    $('lo-zoom')?.addEventListener('click', (e) => { if (e.target === e.currentTarget) e.currentTarget.close(); });
     Preview.maybeStart();
   };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();

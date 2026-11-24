@@ -10,6 +10,9 @@
 
   // ── 1. 상수 · 프리셋 ──────────────────────────────────────────────────────
   const THREE_URL = 'https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.min.js';
+  // 3D 프리뷰 머리: "Infinite, 3D Head Scan" by Lee Perry-Smith, CC BY 3.0 (assets/models/LICENSE-lee-perry-smith-head.txt)
+  const HEAD_URL = 'assets/models/lee-perry-smith-head.glb';
+  const HEAD_Y = -0.06;
 
   const LIGHT_PRESETS = {
     'auto': { label: 'Auto' },
@@ -396,6 +399,7 @@
       // 직렬화 미리보기
       const pv = $('lo-serialized');
       if (pv) pv.textContent = serialize().text || 'Auto — 조명·카메라 지정 없음 (모델이 장면에 맞게 선택)';
+      renderExamples();
       // 재생성 필요 배지
       const badge = $('regen-badge');
       if (badge) badge.hidden = !(generatedSnapshot && generatedSnapshot !== snapshot());
@@ -404,62 +408,142 @@
     render();
   }
 
+  // ── 5-b. 예시 사진 (img/presets/*.webp, 같은 석고 흉상으로 촬영한 참고용) ───────────
+  const EX_BASE = 'img/presets/';
+  const TONAL_LABEL = { balanced: 'Balanced', 'high-key': 'High Key', 'low-key': 'Low Key', 'high-contrast': 'High Contrast', 'low-contrast': 'Low Contrast' };
+  const VOL_LABEL = { haze: 'Haze · 연무', fog: 'Fog · 안개', dust: 'Dust · 먼지', smoke: 'Smoke · 연기' };
+  function exampleCards() {
+    const l = state.lighting, o = state.optics, cards = [];
+    if (l.enabled) {
+      if (l.preset === 'auto') cards.push({ kind: '조명', src: 'base', label: 'Auto (장면에 맞게)', approx: false });
+      else if (l.preset === 'custom') {
+        const org = l.originPreset && l.originPreset !== 'auto' ? l.originPreset : null;
+        cards.push(org ? { kind: '조명', src: `lighting/${org}`, label: `Custom · ${LIGHT_PRESETS[org].label} 기반`, approx: true }
+                       : { kind: '조명', src: 'base', label: 'Custom', approx: true });
+      } else cards.push({ kind: '조명', src: `lighting/${l.preset}`, label: LIGHT_PRESETS[l.preset].label, approx: false });
+      if (l.tonalStyle !== 'auto') cards.push({ kind: '톤', src: `tonal/${l.tonalStyle}`, label: TONAL_LABEL[l.tonalStyle], approx: false });
+      if (l.volumetric.enabled && l.volumetric.density > 0) cards.push({ kind: '대기', src: `volumetric/${l.volumetric.type}`, label: VOL_LABEL[l.volumetric.type], approx: false });
+    }
+    if (o.lensPreset !== 'auto') {
+      const id = o.lensPreset === 'custom' ? (o.originPreset && o.originPreset !== 'auto' ? o.originPreset : null) : o.lensPreset;
+      if (id) cards.push({ kind: '렌즈', src: `lens/${id}`, label: (o.lensPreset === 'custom' ? 'Custom · ' : '') + LENS_PRESETS[id].label.split(' (')[0] + (o.lensPreset === 'custom' ? ' 기반' : ''), approx: o.lensPreset === 'custom' });
+    }
+    return cards;
+  }
+  let lastExKey = '';
+  function renderExamples() {
+    const box = $('lo-examples'); if (!box) return;
+    const cards = exampleCards();
+    const key = JSON.stringify(cards);
+    if (key === lastExKey) return; // 같은 내용이면 다시 그리지 않음 (드래그 중 깜빡임 방지)
+    lastExKey = key;
+    box.innerHTML = '';
+    cards.forEach(c => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'lo-ex' + (c.approx ? ' is-approx' : '');
+      b.title = `${c.kind}: ${c.label} — 클릭하면 크게 보기`;
+      const img = document.createElement('img');
+      img.src = `${EX_BASE}${c.src}.webp`; img.alt = `${c.kind} 예시: ${c.label}`; img.loading = 'lazy'; img.decoding = 'async';
+      img.onerror = () => { b.classList.add('is-missing'); img.remove(); };
+      const cap = document.createElement('span'); cap.className = 'lo-ex-cap';
+      cap.innerHTML = `<em>${c.kind}</em> ${c.label.replace(/</g, '&lt;')}`;
+      b.append(img, cap);
+      b.addEventListener('click', () => {
+        const dlg = $('lo-zoom'); if (!dlg || !dlg.showModal) return;
+        $('lo-zoom-img').src = img.src; $('lo-zoom-img').alt = img.alt;
+        $('lo-zoom-cap').textContent = `${c.kind} · ${c.label}${c.approx ? ' (직접 조정한 값과 다를 수 있음)' : ''} — 예시 사진 · 실제 결과는 프롬프트·장면에 따라 달라집니다`;
+        dlg.showModal();
+      });
+      box.appendChild(b);
+    });
+    if (!cards.length) box.innerHTML = '<span class="lo-ex-empty">조명 사용이 꺼져 있고 렌즈도 Auto입니다.</span>';
+  }
+
   // ── 6. SVG 광원 위치 컨트롤러 ──────────────────────────────────────────────
+  // 위에서 본 반지름 ↔ 거리 (로그 눈금: 0.5m = 안쪽 원, 10m = 바깥 원 → 가까운 거리를 세밀하게)
+  const R_MIN = 22, D_MIN = 0.5, D_MAX = 10;
+  const distToR = (d) => R_MIN + (SVG_R - R_MIN) * Math.log(clamp(d, D_MIN, D_MAX) / D_MIN) / Math.log(D_MAX / D_MIN);
+  const rToDist = (r) => Math.round(D_MIN * Math.pow(D_MAX / D_MIN, clamp((r - R_MIN) / (SVG_R - R_MIN), 0, 1)) * 10) / 10;
+
   function initSvgController(updaters) {
     const svg = $('lt-svg');
     if (!svg) return;
-    const handle = $('lt-handle'), beam = $('lt-beam'), label = $('lt-angle-label');
-    let dragging = false, raf = 0, pendingAz = null;
+    const handle = $('lt-handle'), beam = $('lt-beam'), label = $('lt-angle-label'), dist = $('lt-dist-label');
+    let dragging = false, raf = 0, pending = null;
 
     const toLocal = (evt) => {
       const pt = svg.createSVGPoint(); pt.x = evt.clientX; pt.y = evt.clientY;
       const m = svg.getScreenCTM(); if (!m) return null;
       return pt.matrixTransform(m.inverse());
     };
-    const angleFrom = (p) => norm360(Math.atan2(p.x - SVG_C, p.y - SVG_C) * 180 / Math.PI);
-    const commit = () => { raf = 0; if (pendingAz !== null) { editLighting({ azimuth: pendingAz }, 'svg'); pendingAz = null; } };
-    const queue = (az) => { pendingAz = az; if (!raf) raf = requestAnimationFrame(commit); };
+    // 방향 = 각도, 거리 = 중심에서 떨어진 정도
+    const fromPoint = (p) => ({
+      azimuth: norm360(Math.atan2(p.x - SVG_C, p.y - SVG_C) * 180 / Math.PI),
+      distance: rToDist(Math.hypot(p.x - SVG_C, p.y - SVG_C))
+    });
+    const commit = () => { raf = 0; if (pending) { editLighting(pending, 'svg'); pending = null; } };
+    const queue = (patch) => { pending = patch; if (!raf) raf = requestAnimationFrame(commit); };
 
     svg.addEventListener('pointerdown', (e) => {
       const p = toLocal(e); if (!p) return;
-      if (Math.hypot(p.x - SVG_C, p.y - SVG_C) < 22) return; // 중심 근처 클릭 무시
+      if (Math.hypot(p.x - SVG_C, p.y - SVG_C) < 12) return; // 피사체(중심) 클릭은 무시
       dragging = true; svg.setPointerCapture(e.pointerId); svg.classList.add('dragging');
-      queue(angleFrom(p)); e.preventDefault();
+      queue(fromPoint(p)); e.preventDefault();
       handle?.focus({ preventScroll: true });
     });
-    svg.addEventListener('pointermove', (e) => { if (!dragging) return; const p = toLocal(e); if (p) queue(angleFrom(p)); });
+    svg.addEventListener('pointermove', (e) => { if (!dragging) return; const p = toLocal(e); if (p) queue(fromPoint(p)); });
     const end = (e) => { if (!dragging) return; dragging = false; svg.classList.remove('dragging'); try { svg.releasePointerCapture(e.pointerId); } catch (_) { } };
     svg.addEventListener('pointerup', end); svg.addEventListener('pointercancel', end);
 
+    // 휠: 세기 ±5 · Shift+휠: 고도 ±5 (Shift+휠은 브라우저에 따라 deltaX로 옴)
+    svg.addEventListener('wheel', (e) => {
+      const delta = e.deltaY || e.deltaX; if (!delta) return;
+      e.preventDefault();
+      const l = state.lighting, dir = delta < 0 ? 1 : -1;
+      editLighting(e.shiftKey ? { elevation: l.elevation + dir * 5 } : { intensity: l.intensity + dir * 5 }, 'wheel');
+    }, { passive: false });
+
     handle?.addEventListener('keydown', (e) => {
       const step = e.shiftKey ? 15 : 1, l = state.lighting;
-      const map = { ArrowRight: { azimuth: l.azimuth + step }, ArrowLeft: { azimuth: l.azimuth - step }, ArrowUp: { elevation: l.elevation + step }, ArrowDown: { elevation: l.elevation - step }, Home: { azimuth: 0 }, End: { azimuth: 180 } };
+      const map = {
+        ArrowRight: { azimuth: l.azimuth + step }, ArrowLeft: { azimuth: l.azimuth - step },
+        ArrowUp: { elevation: l.elevation + step }, ArrowDown: { elevation: l.elevation - step },
+        PageUp: { distance: l.distance + 0.5 }, PageDown: { distance: l.distance - 0.5 },
+        '+': { intensity: l.intensity + 5 }, '=': { intensity: l.intensity + 5 }, '-': { intensity: l.intensity - 5 },
+        Home: { azimuth: 0 }, End: { azimuth: 180 }
+      };
       if (map[e.key]) { e.preventDefault(); editLighting(map[e.key], 'keyboard'); }
     });
 
     updaters.push(() => {
       const l = state.lighting, a = l.azimuth * Math.PI / 180;
-      // 고도가 높을수록 위에서 내려다본 투영 반지름이 줄어듦 (cos e)
-      const r = SVG_R * (0.45 + 0.55 * Math.cos(l.elevation * Math.PI / 180));
+      const r = distToR(l.distance); // 점 위치 = 방향 + 거리만 표현 (고도는 숫자·3D로)
       const x = SVG_C + r * Math.sin(a), y = SVG_C + r * Math.cos(a);
       if (handle) {
         handle.setAttribute('cx', x.toFixed(2)); handle.setAttribute('cy', y.toFixed(2));
         handle.setAttribute('r', (6 + l.intensity / 100 * 5).toFixed(1));
         handle.setAttribute('aria-valuenow', String(l.azimuth));
-        handle.setAttribute('aria-valuetext', `방위각 ${l.azimuth}도 (${directionWords(l.azimuth)}), 고도 ${l.elevation}도`);
+        handle.setAttribute('aria-valuetext', `방위각 ${l.azimuth}도 (${directionWords(l.azimuth)}), 거리 ${l.distance}미터, 세기 ${l.intensity}, 고도 ${l.elevation}도`);
         const [kr, kg, kb] = kelvinToRGB(l.colorTemperatureK === 'auto' ? 5600 : l.colorTemperatureK);
         handle.style.fill = `rgb(${Math.round(kr * 255)},${Math.round(kg * 255)},${Math.round(kb * 255)})`;
         handle.style.opacity = l.intensity === 0 ? 0.35 : 1;
       }
       if (beam) { beam.setAttribute('x2', x.toFixed(2)); beam.setAttribute('y2', y.toFixed(2)); }
-      if (label) label.textContent = `${l.azimuth}° · ${l.elevation >= 0 ? '+' : ''}${l.elevation}°`;
+      if (dist) {
+        // 거리 글자는 점 바깥쪽(중심 반대편)에, 원 밖으로 안 나가게
+        const lr = Math.min(r + 15, SVG_R + 14);
+        dist.setAttribute('x', (SVG_C + lr * Math.sin(a)).toFixed(1));
+        dist.setAttribute('y', (SVG_C + lr * Math.cos(a) + 2.5).toFixed(1));
+        dist.textContent = `${l.distance}m`;
+      }
+      if (label) label.textContent = `${l.azimuth}° · 고도 ${l.elevation >= 0 ? '+' : ''}${l.elevation}° · 세기 ${l.intensity}%`;
     });
   }
 
   // ── 7. Three.js 개념 프리뷰 (지연 로드 · 온디맨드 렌더) ────────────────────
   const Preview = {
     started: false, THREE: null, renderer: null, scene: null, camera: null, key: null, fill: null, gizmo: null, ro: null, io: null,
-    orbit: { theta: 0.35, phi: 1.35, radius: 1.25, target: [0, 0.02, 0] },
+    orbit: { theta: 0.35, phi: 1.35, radius: 1.1, target: [0, 0.07, 0] },
     maybeStart() {
       if (this.started) { this.request(); return; }
       const wrap = $('lt-3d');
@@ -506,7 +590,7 @@
       const camera = new T.PerspectiveCamera(35, 1, 0.05, 50); this.camera = camera;
 
       // 절차적 흉상(머리·목·어깨) — 회색 무광 재질
-      const mat = new T.MeshStandardMaterial({ color: 0xb8bcc4, roughness: 0.85, metalness: 0 });
+      const mat = new T.MeshStandardMaterial({ color: 0xe9e6df, roughness: 0.92, metalness: 0 }); // 석고 느낌의 무광 오프화이트
       const bust = new T.Group();
       const add = (geo, pos, scale) => { const m = new T.Mesh(geo, mat); m.position.set(...pos); if (scale) m.scale.set(...scale); m.castShadow = true; m.receiveShadow = true; bust.add(m); return m; };
       add(new T.SphereGeometry(0.1, 48, 32), [0, 0.13, 0], [0.86, 1.12, 0.95]);           // 머리
@@ -518,6 +602,17 @@
       add(new T.SphereGeometry(0.2, 48, 24, 0, Math.PI * 2, 0, Math.PI / 2), [0, -0.1, -0.01], [1.1, 0.42, 0.55]); // 어깨
       bust.position.y = -0.02;
       scene.add(bust);
+      this.bust = bust; this.plaster = mat;
+      // 실제 머리 스캔(CC BY 3.0, Lee Perry-Smith)으로 교체 — 실패하면 위 절차적 흉상 유지
+      this.loadHead(T, mat).then(head => {
+        if (!head || !this.scene) return;
+        bust.children.slice(0, 7).forEach(m => { m.visible = false; }); // 절차적 흉상 숨김
+        // 예시 사진처럼 원통 받침대 위에 올림
+        const ped = new T.Mesh(new T.CylinderGeometry(0.085, 0.085, 0.045, 48), mat);
+        ped.position.set(0, -0.0825, 0); ped.castShadow = true; ped.receiveShadow = true;
+        bust.add(ped);
+        bust.add(head); this.request();
+      }).catch(err => console.warn('[LightingLab] head scan not loaded, using procedural bust:', err));
 
       const floor = new T.Mesh(new T.CircleGeometry(0.6, 48), new T.ShadowMaterial({ opacity: 0.25 }));
       floor.rotation.x = -Math.PI / 2; floor.position.y = -0.125; floor.receiveShadow = true; scene.add(floor);
@@ -525,7 +620,7 @@
       this.fill = new T.HemisphereLight(0xdfe6f0, 0x2a2d33, 0.3); scene.add(this.fill);
       const key = new T.SpotLight(0xffffff, 3, 0, Math.PI / 5, 0.5, 0);
       key.castShadow = true; key.shadow.mapSize.set(1024, 1024); key.shadow.bias = -0.0005; key.shadow.camera.near = 0.05; key.shadow.camera.far = 15;
-      key.target.position.set(0, 0.1, 0); scene.add(key); scene.add(key.target); this.key = key;
+      key.target.position.set(0, 0.12, 0); scene.add(key); scene.add(key.target); this.key = key;
       this.gizmo = new T.Mesh(new T.SphereGeometry(0.02, 16, 12), new T.MeshBasicMaterial({ color: 0xffffff }));
       scene.add(this.gizmo);
       this.axis = new T.Line(new T.BufferGeometry().setFromPoints([new T.Vector3(), new T.Vector3()]), new T.LineBasicMaterial({ color: 0x888888, transparent: true, opacity: 0.5 }));
@@ -537,6 +632,38 @@
       listeners.add(this.onState);
       document.addEventListener('visibilitychange', this.onVis = () => { if (!document.hidden) this.request(); });
       this.resize();
+    },
+    // 최소 GLB 파서: 메시 1개(position·normal·index)만 읽어 BufferGeometry 생성 (추가 로더 불필요)
+    async loadHead(T, mat) {
+      const res = await fetch(HEAD_URL);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const buf = await res.arrayBuffer(), dv = new DataView(buf);
+      if (dv.getUint32(0, true) !== 0x46546C67) throw new Error('not a GLB');
+      const jsonLen = dv.getUint32(12, true);
+      const json = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 20, jsonLen)));
+      const binStart = 20 + jsonLen + 8;
+      const prim = json.meshes[0].primitives[0];
+      const read = (accIdx) => {
+        const a = json.accessors[accIdx], v = json.bufferViews[a.bufferView];
+        const off = binStart + (v.byteOffset || 0) + (a.byteOffset || 0);
+        const comps = { SCALAR: 1, VEC2: 2, VEC3: 3, VEC4: 4 }[a.type];
+        const Ctor = { 5126: Float32Array, 5125: Uint32Array, 5123: Uint16Array }[a.componentType];
+        return new Ctor(buf.slice(off, off + a.count * comps * Ctor.BYTES_PER_ELEMENT));
+      };
+      const geo = new T.BufferGeometry();
+      geo.setAttribute('position', new T.BufferAttribute(read(prim.attributes.POSITION), 3));
+      if (prim.attributes.NORMAL !== undefined) geo.setAttribute('normal', new T.BufferAttribute(read(prim.attributes.NORMAL), 3));
+      else geo.computeVertexNormals();
+      if (prim.indices !== undefined) geo.setIndex(new T.BufferAttribute(read(prim.indices), 1));
+      // 크기·위치 맞춤: 목까지 높이 약 0.34, 목 아래가 어깨 받침에 묻히도록
+      geo.computeBoundingBox();
+      const bb = geo.boundingBox, h = bb.max.y - bb.min.y, k = 0.34 / h;
+      geo.translate(-(bb.max.x + bb.min.x) / 2, -bb.min.y, -(bb.max.z + bb.min.z) / 2);
+      geo.scale(k, k, k);
+      const head = new T.Mesh(geo, mat);
+      head.position.set(0, HEAD_Y, 0.005);
+      head.castShadow = true; head.receiveShadow = true;
+      return head;
     },
     bindOrbit(canvas) {
       let drag = null;
@@ -550,7 +677,7 @@
       canvas.addEventListener('pointerup', up); canvas.addEventListener('pointercancel', up);
       canvas.addEventListener('wheel', (e) => { e.preventDefault(); this.orbit.radius = clamp(this.orbit.radius * (e.deltaY > 0 ? 1.08 : 0.93), 0.5, 3); this.request(); }, { passive: false });
     },
-    resetView() { this.orbit = { theta: 0.35, phi: 1.35, radius: 1.25, target: [0, 0.02, 0] }; this.request(); },
+    resetView() { this.orbit = { theta: 0.35, phi: 1.35, radius: 1.1, target: [0, 0.07, 0] }; this.request(); },
     resize() {
       if (!this.renderer) return;
       const wrap = $('lt-3d'); const w = Math.max(1, wrap.clientWidth), h = Math.max(1, wrap.clientHeight);
@@ -568,9 +695,9 @@
       // 광원: x=d·cos e·sin a, y=d·sin e, z=d·cos e·cos a (+Z 정면, +X 오른쪽). 시각용 거리는 0.35~1.0 으로 압축
       const a = l.azimuth * Math.PI / 180, e = l.elevation * Math.PI / 180;
       const d = 0.35 + (l.distance - 0.5) / 9.5 * 0.65;
-      const pos = [d * Math.cos(e) * Math.sin(a), 0.1 + d * Math.sin(e), d * Math.cos(e) * Math.cos(a)];
+      const pos = [d * Math.cos(e) * Math.sin(a), 0.12 + d * Math.sin(e), d * Math.cos(e) * Math.cos(a)];
       this.key.position.set(...pos); this.gizmo.position.set(...pos);
-      this.axis.geometry.setFromPoints([new T.Vector3(0, 0.1, 0), new T.Vector3(...pos)]);
+      this.axis.geometry.setFromPoints([new T.Vector3(0, 0.12, 0), new T.Vector3(...pos)]);
       const on = l.enabled && l.intensity > 0;
       const [r, g, b] = kelvinToRGB(l.colorTemperatureK === 'auto' ? 5600 : l.colorTemperatureK);
       this.key.color.setRGB(r, g, b); this.gizmo.material.color.setRGB(r, g, b);
@@ -627,6 +754,7 @@
     initUI();
     $('lt-3d-retry')?.addEventListener('click', () => { Preview.status('', false); Preview.start(); });
     $('lt-3d-reset')?.addEventListener('click', () => Preview.resetView());
+    $('lo-zoom')?.addEventListener('click', (e) => { if (e.target === e.currentTarget) e.currentTarget.close(); });
     Preview.maybeStart();
   };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();

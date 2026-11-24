@@ -492,6 +492,37 @@ app.post('/api/engineer', ensureAuthenticated, strictAiLimiter, async (req, res,
 /**
  * n8n 이미지 생성 API 프록시 (CORS 방어용)
  */
+// --- Kie.ai Market API: 작업 생성 → 상태 폴링 → 결과 URL 반환 ---
+async function generateWithKie(apiKey, prompt, aspectRatio) {
+    const headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` };
+    const createRes = await fetch('https://api.kie.ai/api/v1/jobs/createTask', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ model: 'z-image', input: { prompt, aspect_ratio: aspectRatio } })
+    });
+    const created = await createRes.json();
+    if (created.code !== 200 || !created.data?.taskId) {
+        throw new Error(`createTask 실패 (code ${created.code}): ${created.msg}`);
+    }
+    const taskId = created.data.taskId;
+
+    const deadline = Date.now() + 120000; // 최대 2분 대기
+    while (Date.now() < deadline) {
+        await new Promise(r => setTimeout(r, 3000));
+        const infoRes = await fetch(`https://api.kie.ai/api/v1/jobs/recordInfo?taskId=${encodeURIComponent(taskId)}`, { headers });
+        const info = await infoRes.json();
+        const state = info.data?.state;
+        if (state === 'success') {
+            const result = JSON.parse(info.data.resultJson || '{}');
+            const url = result.resultUrls?.[0];
+            if (!url) throw new Error('결과 URL 없음');
+            return url;
+        }
+        if (state === 'fail') throw new Error(`생성 실패: ${info.data?.failMsg || 'unknown'}`);
+    }
+    throw new Error('Kie 생성 시간 초과');
+}
+
 app.post('/api/generate-image', ensureAuthenticated, strictAiLimiter, async (req, res, next) => {
     try {
         const { prompt, aspect_ratio } = req.body;
@@ -503,7 +534,18 @@ app.post('/api/generate-image', ensureAuthenticated, strictAiLimiter, async (req
             return res.status(503).json({ error: '영상 생성은 현재 비활성 상태입니다. (n8n 서버 종료 · 비용 절감)' });
         }
 
-        // 🖼️ 이미지 생성: n8n 대신 Pollinations(무료, 키 불필요)로 직접 생성
+        // 🖼️ 이미지 생성 1순위: Kie.ai z-image (약 0.8크레딧/장) → 실패/키 없음 시 2순위: Pollinations(무료)
+        const kieRatioMap = { '1:1': '1:1', '4:3': '4:3', '3:4': '3:4', '16:9': '16:9', '9:16': '9:16', '21:9': '16:9' };
+        const kieKey = process.env.KIE_API_KEY;
+        if (kieKey) {
+            try {
+                const kieUrl = await generateWithKie(kieKey, String(prompt).slice(0, 1000), kieRatioMap[aspect_ratio] || '1:1');
+                return res.status(200).json({ data: { url: kieUrl, provider: 'kie:z-image' } });
+            } catch (kieErr) {
+                console.warn('[KIE_FALLBACK] Kie 실패 → Pollinations로 전환:', kieErr.message);
+            }
+        }
+
         const sizeMap = {
             '1:1': [1024, 1024], '16:9': [1344, 768], '9:16': [768, 1344],
             '3:4': [896, 1152], '4:3': [1152, 896], '21:9': [1536, 640]

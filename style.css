@@ -2777,3 +2777,8 @@ footer a { display: inline-flex; align-items: center; min-height: 24px; }
 .lighting-controller .lt-dist-tick { font-size: 6px; opacity: .8; }
 .lighting-controller .lt-dist-label { fill: var(--skills-cyan); font: 700 8px var(--font-mono); text-anchor: middle; pointer-events: none; paint-order: stroke; stroke: var(--panel); stroke-width: 3px; }
 .lt-caption { flex-wrap: wrap; }
+
+.tts-note { margin-top: 12px; padding: 10px 12px; border: 1px dashed var(--border-strong); border-radius: 8px; font-size: 0.72rem; line-height: 1.65; color: var(--fg-muted); display: flex; flex-direction: column; gap: 4px; }
+.tts-note b { color: var(--fg-dim); font-weight: 600; }
+.tts-note a { color: var(--skills-cyan); }
+.tts-note code { font-family: var(--font-mono); font-size: 0.68rem; padding: 0 4px; border-radius: 4px; background: var(--input-bg); color: var(--fg-dim); }

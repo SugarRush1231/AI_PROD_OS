@@ -1927,10 +1927,12 @@
                 <select id="vps-tts-steps" class="lab-select"><option value="5">빠르게</option><option value="8" selected>보통</option><option value="16">고품질 (느림)</option></select></div>
             </div>
             <button type="button" id="vps-tts-btn" class="btn-skills" style="width: 100%; height: 50px; font-weight: 700; margin-top: 20px;">음성 생성</button>
-            <p style="font-size: 0.7rem; color: var(--fg-muted); margin-top: 10px; line-height: 1.6;">
-              모델: <a href="https://huggingface.co/kimbs318/supertonic-3" target="_blank" rel="noopener" style="color: var(--skills-cyan);">kimbs318/supertonic-3</a> (Hugging Face) ·
-              내 브라우저에서 실행되어 비용 0원 · 처음 한 번 약 400MB 내려받고 이후엔 캐시 사용 · 라이선스 OpenRAIL-M
-            </p>
+            <div class="tts-note">
+              <div><b>모델 출처</b> · <a href="https://huggingface.co/kimbs318/supertonic-3" target="_blank" rel="noopener">kimbs318/supertonic-3</a> (Hugging Face) → 안 되면 공식 아카이브 · 라이선스 OpenRAIL-M</div>
+              <div><b>저장 위치</b> · 다운로드 폴더가 아니라 <b>이 브라우저의 사이트 저장소</b>(Cache Storage › <code>supertonic3-v1</code>, 약 400MB)에 저장됩니다. 처음 한 번만 받고 이후엔 바로 실행되며, 서버를 거치지 않아 비용 0원입니다.</div>
+              <div><b>확인·삭제</b> · F12 → Application → Cache storage → <code>supertonic3-v1</code> / 지우려면 Application → Storage → <i>Clear site data</i></div>
+              <div><b>참고</b> · 브라우저·기기마다 따로 저장(크롬에서 받아도 엣지·휴대폰은 다시 받음), 시크릿 창은 닫으면 삭제</div>
+            </div>
           </div>
           <div class="lab-output">
             <div class="visualizer-output"

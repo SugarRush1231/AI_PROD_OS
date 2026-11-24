@@ -125,6 +125,14 @@ const strictAiLimiter = rateLimit({
 });
 
 // ✅ 일반 API 연타 방지 (1분에 10회 허용)
+// 텍스트 생성(Groq, 무료 티어)은 기획→스토리보드→숏리스트를 연속 실행하므로 한도를 넉넉하게
+const textAiLimiter = rateLimit({
+    windowMs: 1 * 60 * 1000,
+    max: 15,
+    keyGenerator: (req) => req.user ? req.user.id : req.ip,
+    message: { error: '요청이 너무 많습니다. 1분 후 다시 시도해 주세요.' }
+});
+
 const generalApiLimiter = rateLimit({
     windowMs: 1 * 60 * 1000,
     max: 10,
@@ -260,7 +268,7 @@ function addLogServer(msg) {
 /**
  * AI 엔지니어링 API
  */
-app.post('/api/engineer', ensureAuthenticated, strictAiLimiter, async (req, res, next) => {
+app.post('/api/engineer', ensureAuthenticated, textAiLimiter, async (req, res, next) => {
     try {
         const { intent, systemPrompt } = req.body;
 
@@ -490,7 +498,8 @@ app.post('/api/engineer', ensureAuthenticated, strictAiLimiter, async (req, res,
 });
 
 /**
- * n8n 이미지 생성 API 프록시 (CORS 방어용)
+ * 이미지 생성 API: Kie.ai z-image(1순위) → Pollinations(무료 폴백)
+ * (영상은 /api/video/create · /api/video/status 로 분리)
  */
 // --- Kie.ai Market API: 작업 생성 → 상태 폴링 → 결과 URL 반환 ---
 async function generateWithKie(apiKey, prompt, aspectRatio) {
@@ -528,10 +537,10 @@ app.post('/api/generate-image', ensureAuthenticated, strictAiLimiter, async (req
         const { prompt, aspect_ratio } = req.body;
         if (!prompt) return res.status(400).json({ error: '프롬프트가 필요합니다.' });
 
-        // 🎬 영상 생성: n8n 서버 종료로 현재 비활성 (비용 절감)
+        // 🎬 영상 생성: 렌더링 엔진 종료로 현재 비활성 (비용 절감)
         const isVideo = req.body.generate_video || req.body.is_video || req.body.video;
         if (isVideo) {
-            return res.status(503).json({ error: '영상 생성은 현재 비활성 상태입니다. (n8n 서버 종료 · 비용 절감)' });
+            return res.status(503).json({ error: '영상 생성은 현재 일시 중단 상태입니다. (인프라 비용 절감)' });
         }
 
         // 🖼️ 이미지 생성 1순위: Kie.ai z-image (약 0.8크레딧/장) → 실패/키 없음 시 2순위: Pollinations(무료)
@@ -559,6 +568,90 @@ app.post('/api/generate-image', ensureAuthenticated, strictAiLimiter, async (req
     } catch (error) {
         console.error('[IMAGE_GEN_ERROR]', error.message);
         res.status(500).json({ error: '이미지 생성 요청에 실패했습니다.' });
+    }
+});
+
+
+// --- 🎬 영상 생성 (n8n 없이 직접 비동기 처리): 작업 생성 → 브라우저가 상태 폴링 ---
+// 모델: Kie bytedance/v1-lite (Seedance 1.0 Lite, 최저가). 시작 이미지가 있으면 image-to-video, 없으면 text-to-video
+const videoStatusLimiter = rateLimit({
+    windowMs: 1 * 60 * 1000,
+    max: 30,
+    keyGenerator: (req) => req.user ? req.user.id : req.ip,
+    message: { error: '상태 조회가 너무 잦습니다. 잠시 후 다시 시도해 주세요.' }
+});
+
+async function uploadImageToKie(apiKey, dataOrBase64) {
+    const base64Data = dataOrBase64.startsWith('data:') ? dataOrBase64 : `data:image/png;base64,${dataOrBase64}`;
+    const upRes = await fetch('https://kieai.redpandaai.co/api/file-base64-upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+        body: JSON.stringify({ base64Data, uploadPath: 'ai-prod-os/video-refs', fileName: `ref_${Date.now()}.png` })
+    });
+    const up = await upRes.json();
+    const url = up.data?.downloadUrl || up.data?.fileUrl || up.data?.url;
+    if (!url) throw new Error(`참고 이미지 업로드 실패: ${up.msg || upRes.status}`);
+    return url;
+}
+
+app.post('/api/video/create', ensureAuthenticated, strictAiLimiter, async (req, res) => {
+    try {
+        const apiKey = process.env.KIE_API_KEY;
+        if (!apiKey) return res.status(503).json({ error: '영상 생성 키(KIE_API_KEY)가 설정되지 않았습니다.' });
+
+        const { prompt, image, duration, resolution, aspect_ratio } = req.body;
+        if (!prompt || typeof prompt !== 'string') return res.status(400).json({ error: '영상 프롬프트가 필요합니다.' });
+
+        const input = {
+            prompt: prompt.slice(0, 2000),
+            resolution: resolution === '720p' ? '720p' : '480p',   // 기본 480p (최저가)
+            duration: String(duration) === '10' ? '10' : '5'        // 기본 5초
+        };
+
+        let model = 'bytedance/v1-lite-text-to-video';
+        if (image && typeof image === 'string') {
+            input.image_url = image.startsWith('http') ? image : await uploadImageToKie(apiKey, image);
+            model = 'bytedance/v1-lite-image-to-video';
+        } else {
+            input.aspect_ratio = ['16:9', '9:16', '1:1', '4:3', '3:4'].includes(aspect_ratio) ? aspect_ratio : '9:16';
+        }
+
+        const createRes = await fetch('https://api.kie.ai/api/v1/jobs/createTask', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+            body: JSON.stringify({ model, input })
+        });
+        const created = await createRes.json();
+        if (created.code !== 200 || !created.data?.taskId) {
+            console.error('[VIDEO_CREATE_FAIL]', created);
+            return res.status(502).json({ error: `영상 작업 생성 실패: ${created.msg || created.code}` });
+        }
+        console.log(`[VIDEO] task ${created.data.taskId} (${model}, ${input.resolution}, ${input.duration}s)`);
+        res.json({ taskId: created.data.taskId, model });
+    } catch (err) {
+        console.error('[VIDEO_CREATE_ERROR]', err.message);
+        res.status(500).json({ error: err.message || '영상 작업 생성 중 오류' });
+    }
+});
+
+app.get('/api/video/status', ensureAuthenticated, videoStatusLimiter, async (req, res) => {
+    try {
+        const apiKey = process.env.KIE_API_KEY;
+        const taskId = String(req.query.taskId || '');
+        if (!apiKey || !/^[\w-]{4,200}$/.test(taskId)) return res.status(400).json({ error: '잘못된 요청입니다.' });
+
+        const infoRes = await fetch(`https://api.kie.ai/api/v1/jobs/recordInfo?taskId=${encodeURIComponent(taskId)}`, {
+            headers: { 'Authorization': `Bearer ${apiKey}` }
+        });
+        const info = await infoRes.json();
+        const state = info.data?.state || 'unknown';
+        let url = null;
+        if (state === 'success') {
+            try { url = JSON.parse(info.data.resultJson || '{}').resultUrls?.[0] || null; } catch (e) { }
+        }
+        res.json({ state, url, failMsg: info.data?.failMsg || null });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
     }
 });
 

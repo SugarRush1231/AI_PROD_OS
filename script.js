@@ -215,11 +215,11 @@ const MyPresets = {
       paramBgHuman: 'none',
       paramBgAnimal: 'none',
       paramBgScene: 'none',
-      paramPose: 'dynamic',
+      paramPose: 'relaxed',
       paramPov: 'standard',
-      paramHumanRef: 'strict',
+      paramHumanRef: 'creative',
       paramFace: 'natural',
-      paramOutfit: 'reference',
+      paramOutfit: 'none',
       paramHumanShot: 'none',
       paramHumanComp: 'none',
       paramDogBreed: 'none',
@@ -698,7 +698,16 @@ if (UI.paramAngle && UI.angleInput) {
       if (!config) return;
 
       const { inputEl, outputEl, systemPrompt } = config;
-      const userInput = inputEl.value.trim();
+      let userInput = inputEl.value.trim();
+
+      // 🔗 파이프라인 연결: 입력이 비어 있으면 컨셉 주제를 가져오고,
+      //    컨셉 기획서가 이미 있으면 다음 단계(스토리보드/숏리스트/BGM/SEO)에 맥락으로 함께 전달해 톤·내용 일관성 유지
+      const conceptInput = document.getElementById('vps-concept-input')?.value.trim() || '';
+      const conceptOut = document.getElementById('vps-concept-output')?.dataset.rawResult || '';
+      if (!userInput && tool !== 'concept' && conceptInput) {
+        userInput = conceptInput;
+        inputEl.value = conceptInput;
+      }
 
       if (!userInput) {
         inputEl.style.borderColor = '#ff6b6b';
@@ -714,7 +723,12 @@ if (UI.paramAngle && UI.angleInput) {
         const res = await fetch('/api/engineer', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ intent: userInput, systemPrompt })
+          body: JSON.stringify({
+            intent: (tool !== 'concept' && conceptOut)
+              ? `${userInput}\n\n[참고: 앞 단계 컨셉 기획서 요약 — 톤·타깃·핵심 메시지를 일관되게 유지]\n${conceptOut.slice(0, 1500)}`
+              : userInput,
+            systemPrompt
+          })
         });
         const data = await res.json();
         stopLoadingAnimation(outputEl);
@@ -1175,6 +1189,7 @@ async function applyEngineering() {
 
     const config = {
       type: subjectType,
+      outputMode: document.getElementById('param-output-mode')?.value || 'zimage',
       style: UI.paramStyle ? UI.paramStyle.value : 'cinematic',
       angle: UI.paramAngle ? UI.paramAngle.value : '0',
       camAngle: selectedCamAngle,
@@ -1316,6 +1331,9 @@ async function applyEngineering() {
       }
 
       poseDescription = config.pose;
+      if (config.pose === 'relaxed') {
+        poseDescription = 'Relaxed candid everyday moment, natural unposed body language, as if caught mid-action';
+      }
       if (config.pose === 't-pose') {
         poseDescription = 'STRICT TECHNICAL T-POSE: Arms fully extended horizontally to the sides at 90 degrees from the torso, palms down or forward, standing perfectly upright, legs straight together, facing front, symmetrical, character sheet orthographic style.';
       } else if (config.pose === 'a-pose') {
@@ -1573,6 +1591,27 @@ ${PromptContext.visual.camera.composition !== 'none' ? `- Composition: ${PromptC
       systemPrompt = `You are a High-End AI Prompt Architect. Provide a professional 4-paragraph prompt based on [DESIGN SPECIFICATIONS].`;
     }
 
+    // 🎯 출력 모드: 이미지 생성용(Z-Image) — 단일 문단 · 1000자 이내 · 네거티브 없음(긍정형으로 변환)
+    if (config.outputMode === 'zimage') {
+      const constraintHints = config.pov === 'arm-extended'
+        ? 'No phone or camera visible in frame; anatomically correct arms and hands.'
+        : config.pov === 'selfie'
+          ? 'Exactly two natural arms, one phone, natural fingers.'
+          : 'Natural anatomy and realistic hands.';
+      enrichedIntent += `\n[CONSTRAINTS]\n${constraintHints}`;
+      systemPrompt = `You are a prompt engineer for Z-Image, a fast photorealistic text-to-image model.
+Convert the [DESIGN SPECIFICATIONS] into ONE English prompt paragraph.
+
+RULES:
+- Plain text only. No markdown, no headers, no bullet points, no quotes.
+- 60 to 140 words, and never more than 900 characters.
+- Order: main subject and action -> appearance and outfit -> environment/background -> lighting -> camera (shot size, angle, lens feel) -> overall style/mood.
+- Use concrete visual nouns and adjectives. Avoid empty buzzwords such as 8k, masterpiece, ultra-detailed, ray-tracing, award-winning.
+- There is NO negative prompt field. Express every exclusion positively (e.g. "clean background" instead of "no clutter").
+- Follow pose, shot, composition and lighting specifications with full fidelity.
+- Output only the prompt itself, nothing else.`;
+    }
+
     const apiPromise = fetch('/api/engineer', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1598,7 +1637,7 @@ ${PromptContext.visual.camera.composition !== 'none' ? `- Composition: ${PromptC
       selfieNegatives = "- extra hands, multiple arms, floating limbs, disconnected arms, weird fingers, deformed arm, long arm, holding two phones";
     }
 
-    if (selfieNegatives) {
+    if (selfieNegatives && config.outputMode !== 'zimage') {
       if (data.result.includes('# Negative Prompts') || data.result.includes('# Negative Prompts:')) {
         data.result += `\n${selfieNegatives}`;
       } else {
@@ -2136,9 +2175,9 @@ async function checkAuthStatus() {
       UI.subGenBtn.innerText = (isAudioMode && !isLoggedIn) ? '🔒 로그인 필요' : (isAudioMode ? 'STT 자막 추출 시작' : 'AI 영상 자막 생성 (Timeline)');
     }
 
-    // 🎨 AI Image Studio (Nano Banana 2) - 로그인 상태 연동
+    // 🎨 AI Image Studio (Kie z-image) - 로그인 상태 연동
     const imageInput = document.getElementById('imagePromptInput');
-    const imageBtn = document.getElementById('n8n-generate-btn');
+    const imageBtn = document.getElementById('image-generate-btn');
     const ratioInput = document.getElementById('imageRatioInput');
     const imageUploadBtn = document.getElementById('image-upload-btn'); // 첨부 버튼
     if (imageInput) {
@@ -2242,7 +2281,7 @@ async function compressImage(base64Str) {
   });
 }
 
-// n8n 이미지 생성 통신 함수
+// 이미지 생성 통신 함수 (서버 /api/generate-image → Kie z-image, 실패 시 Pollinations)
 
 
 // ---------------------------------------------------------------------------------------------------
@@ -2539,8 +2578,8 @@ function calculateAspectRatio(base64Str) {
   });
 }
 
-// n8n 이미지 생성 통신 함수
-async function generateN8NImage() {
+// 이미지 생성 통신 함수 (서버 /api/generate-image → Kie z-image, 실패 시 Pollinations)
+async function generateImage() {
   if (!USER_LOGGED_IN) {
     const confirmLogin = await showSystemConfirm('🔒 권한 확인', '이미지 생성 서비스는 로그인이 필요합니다. 로그인 페이지로 이동할까요?', 'info');
     if (confirmLogin) window.location.href = '/auth/google';
@@ -2551,7 +2590,7 @@ async function generateN8NImage() {
   let ratioValue = document.getElementById('imageRatioInput')?.value || "3:4";
   const resultImage = document.getElementById('generatedImage');
   const placeholder = document.getElementById('image-placeholder');
-  const btn = document.getElementById('n8n-generate-btn');
+  const btn = document.getElementById('image-generate-btn');
   const choicePanel = document.getElementById('post-gen-choices');
 
   // UI 초기화: 이전 결과물(이미지 및 선택지)을 모두 숨기고 로딩상태 준비
@@ -2651,7 +2690,7 @@ async function generateN8NImage() {
     }
   }, 1500);
 
-  // 📏 비율 정제 로직 (Kie.ai 500 에러 방지)
+  // 📏 비율 정제 로직 (서버에서 모델별 지원 비율로 다시 매핑)
   const getCleanAspectRatio = (raw) => {
     const validMap = {
       '1:1': '1:1', '16:9': '16:9', '9:16': '9:16',
@@ -2770,7 +2809,7 @@ async function generateN8NImage() {
 
   } catch (error) {
     clearInterval(progressInterval);
-    console.error("n8n 통신 에러:", error);
+    console.error("이미지 생성 통신 에러:", error);
     placeholder.innerHTML = `<div style="color: var(--status-error); padding: 20px;">❌ 생성 중 오류가 발생했습니다.<br><small>${error.message}</small></div>`;
   } finally {
     btn.innerHTML = orgBtnText;
@@ -2778,14 +2817,14 @@ async function generateN8NImage() {
   }
 }
 
-// n8n 이미지 생성 버튼 이벤트 리스너 (CSP 준수: inline onclick 대신 JS에서 연결)
-const n8nBtn = document.getElementById('n8n-generate-btn');
-if (n8nBtn) {
-  n8nBtn.addEventListener('click', generateN8NImage);
+// 이미지 생성 버튼 이벤트 리스너 (CSP 준수: inline onclick 대신 JS에서 연결)
+const imageGenBtn = document.getElementById('image-generate-btn');
+if (imageGenBtn) {
+  imageGenBtn.addEventListener('click', generateImage);
 }
 
 /* ==========================================================================
-   KLING 3.0 VIDEO STUDIO LOGIC
+   AI VIDEO STUDIO LOGIC (Kie Seedance 1.0 Lite)
    ========================================================================== */
 
 let videoRefStartImage = null;
@@ -2903,7 +2942,7 @@ function setupVideoDragDrop(boxId, type) {
 setupVideoDragDrop('video-start-box', 'start');
 setupVideoDragDrop('video-end-box', 'end');
 
-// Kling 3.0 비디오 생성 함수
+// AI 비디오 생성 함수 (Kie Seedance 1.0 Lite · 작업 생성 → 상태 폴링)
 async function generateKlingVideo() {
   const btn = document.getElementById('generate-video-btn');
   const promptInput = document.getElementById('videoPromptInput');
@@ -2928,7 +2967,7 @@ async function generateKlingVideo() {
       <div style="height: 6px; background: rgba(255,255,255,0.1); border-radius: 10px; overflow: hidden;">
         <div id="video-progress-bar" style="width: 5%; height: 100%; background: linear-gradient(90deg, #6366f1, #c084fc); transition: width 0.4s ease;"></div>
       </div>
-      <div style="font-size: 0.7rem; margin-top: 12px; color: var(--fg-muted);">Kling 3.0 모델이 연산을 시작했습니다 (약 5분 소요)</div>
+      <div style="font-size: 0.7rem; margin-top: 12px; color: var(--fg-muted);">Seedance Lite 모델이 연산을 시작했습니다 (보통 1~3분)</div>
     </div>
   `;
   videoElement.style.display = "none";
@@ -2959,89 +2998,38 @@ async function generateKlingVideo() {
   if (videoRefStartImage) imageUrls.push(videoRefStartImage);
   if (videoRefEndImage) imageUrls.push(videoRefEndImage);
 
-  const payload = {
-    generate_video: true,         // 불리언 (n8n === true 대응)
-    generate_video_str: "true",   // 문자열
-    generate_video_num: 1,        // 숫자
-    direct_video: true,
-    is_video: true,
-    video: true,
-    is_direct_video: true,
-    prompt: videoPrompt,
-    video_duration: durationInput.value,
-    video_mode: modeInput.value,
-    // 단일 이미지(Start Frame) 전용으로 단순화
-    image: imageUrls[0] ? (imageUrls[0].startsWith("data:") ? imageUrls[0].split(',')[1] : imageUrls[0]) : null,
-    image_url: imageUrls[0] || null,
-    start_image: imageUrls[0] || null,
-    image_urls: imageUrls[0] ? [imageUrls[0]] : null
-  };
-
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 600000); // 10분 (600초) 타임아웃으로 확장
+  const startImage = imageUrls[0] || null;
 
   try {
-    const response = await fetch('/api/generate-image', { // 이미지 생성과 동일한 엔드포인트 사용 (n8n에서 flag로 분기)
+    // 1) 작업 생성 (서버가 Kie Seedance Lite에 요청 → taskId 즉시 반환)
+    const createRes = await fetch('/api/video/create', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      signal: controller.signal,
-      body: JSON.stringify(payload)
+      body: JSON.stringify({
+        prompt: videoPrompt,
+        image: startImage,
+        duration: durationInput.value,
+        resolution: modeInput.value
+      })
     });
-    clearTimeout(timeoutId);
+    const created = await createRes.json();
+    if (!createRes.ok) throw new Error(created.error || "영상 작업 생성에 실패했습니다.");
+    if (statusTxt) statusTxt.innerText = "🎬 렌더링 중... (보통 1~3분)";
 
-    clearInterval(progressInterval);
-    const result = await response.json();
-
-    if (!response.ok) throw new Error(result.error || "비디오 생성에 실패했습니다.");
-
-    // n8n 응답에서 비디오 URL 추출 (강화된 수색 로직 + 문자열 내 JSON 파싱)
-    const findVideoInObject = (obj, keyName = '') => {
-      if (!obj) return null;
-      
-      // 문자열인 경우
-      if (typeof obj === 'string') {
-        const lowerStr = obj.trim().toLowerCase();
-        const lowerKey = keyName.toLowerCase();
-
-        // 1. URL 여부 확인 및 비디오 관련 키워드 확인
-        if (lowerStr.startsWith('http://') || lowerStr.startsWith('https://')) {
-          if (lowerStr.match(/\.(mp4|mov|webm|mkv|avi|flv)/i) || 
-              lowerKey.includes('video') || 
-              lowerKey.includes('url') || 
-              lowerStr.includes('kling-video') || 
-              lowerStr.includes('kie.ai/') ||
-              lowerStr.includes('result')) {
-            return obj;
-          }
-        }
-
-        // 2. 문자열 내의 JSON 형태 수색 (escaped JSON 대응)
-        if (lowerStr.startsWith('{') || lowerStr.startsWith('[')) {
-          try {
-            const parsed = JSON.parse(obj);
-            const foundInParsed = findVideoInObject(parsed, keyName);
-            if (foundInParsed) return foundInParsed;
-          } catch (e) { /* ignore parse error */ }
-        }
-      }
-      
-      // 객체나 배열인 경우 재귀 탐색
-      if (typeof obj === 'object') {
-        for (let key in obj) {
-          const found = findVideoInObject(obj[key], key);
-          if (found) return found;
-        }
-      }
-      return null;
-    };
-
-    console.log("n8n Raw Response:", result); // 디버깅을 위한 로그 추가
-    const videoUrl = findVideoInObject(result.data || result);
-
-    if (!videoUrl) {
-      console.error("비디오 URL 추출 실패:", result);
-      throw new Error("응답에서 비디오 URL을 찾을 수 없습니다.");
+    // 2) 상태 폴링 (8초 간격, 최대 10분)
+    let videoUrl = null;
+    const deadline = Date.now() + 10 * 60 * 1000;
+    while (Date.now() < deadline) {
+      await new Promise(r => setTimeout(r, 8000));
+      const stRes = await fetch(`/api/video/status?taskId=${encodeURIComponent(created.taskId)}`);
+      if (stRes.status === 429) continue;
+      const st = await stRes.json();
+      if (st.state === 'success' && st.url) { videoUrl = st.url; break; }
+      if (st.state === 'fail') throw new Error(st.failMsg || "영상 생성에 실패했습니다.");
+      if (!stRes.ok) throw new Error(st.error || "상태 조회 실패");
     }
+    clearInterval(progressInterval);
+    if (!videoUrl) throw new Error("영상 생성 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요.");
 
     if (bar) bar.style.width = '100%';
     if (statusTxt) statusTxt.innerText = "✨ 생성 완료!";
@@ -3100,4 +3088,34 @@ if (imageUploadPreview) {
 }
 if (generatedImageResult) {
   generatedImageResult.addEventListener('click', () => openImageViewer(generatedImageResult.src));
+}
+
+// ===== Prompt Lab → AI Image Studio 연결 (최적화 프롬프트를 이미지 스튜디오로 전달) =====
+function toImagePrompt(raw) {
+  if (!raw) return '';
+  let text = raw.split(/#+\s*Negative Prompts?/i)[0];     // 네거티브 섹션 제거 (Z-Image는 미지원)
+  text = text.replace(/\*\*(.*?)\*\*\.?/g, '').replace(/[#*_`>]/g, ''); // 마크다운/헤더 제거
+  text = text.replace(/\s+/g, ' ').trim();
+  return text.length > 1000 ? text.slice(0, 1000).replace(/[^.]*$/, '').trim() || text.slice(0, 1000) : text;
+}
+
+const sendToStudioBtn = document.getElementById('send-to-studio-btn');
+if (sendToStudioBtn) {
+  sendToStudioBtn.addEventListener('click', () => {
+    const out = document.getElementById('optimized-output');
+    const raw = out ? out.innerText.trim() : '';
+    if (!raw || raw.startsWith('대기 중') || raw.startsWith('오류')) {
+      alert('먼저 "적용 후 프롬프트 생성"으로 프롬프트를 만들어 주세요.');
+      return;
+    }
+    const input = document.getElementById('imagePromptInput');
+    if (!input) return;
+    input.value = toImagePrompt(raw);
+    const studio = document.getElementById('image-studio');
+    if (studio) studio.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    input.style.transition = 'box-shadow 0.3s';
+    input.style.boxShadow = '0 0 0 3px var(--skills-cyan)';
+    setTimeout(() => { input.style.boxShadow = ''; }, 1500);
+    if (typeof addLog === 'function') addLog('→ 최적화 프롬프트를 이미지 스튜디오로 전달', 'success');
+  });
 }

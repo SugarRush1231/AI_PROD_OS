@@ -7,7 +7,7 @@
 
 | 영역 | 설명 |
 |---|---|
-| **One-Click Pipeline** | 목표를 한 번 입력하면 컨셉 → 스토리보드 → 숏리스트 → 장면 설계 → 장면 이미지 → 장면 영상 → BGM·제목/태그까지 자동 실행. 앞 단계 결과를 다음 단계 맥락으로 넘겨 톤을 유지하고, 주인공 묘사를 모든 장면에 고정해 캐릭터 일관성을 확보 |
+| **One-Click Pipeline** | 목표를 한 번 입력하면 컨셉 → 스토리보드 → 숏리스트 → 장면 설계 → 장면 이미지 → 내레이션(TTS) → 장면 영상 → BGM·제목/태그까지 자동 실행. 앞 단계 결과를 다음 단계 맥락으로 넘겨 톤을 유지하고, 주인공 묘사를 모든 장면에 고정해 캐릭터 일관성을 확보 |
 | **Prompt Architecture Lab** | 피사체·포즈·샷·구도·조명 등 구조화된 파라미터로 프롬프트를 설계. 이미지 생성용(단일 문단) / 상세 설계서 출력, 결과를 이미지 스튜디오로 바로 전달 |
 | **AI Image Studio** | 텍스트 → 이미지 (9:16 등 비율 지원) |
 | **AI Video Studio** | 이미지 → 영상 / 텍스트 → 영상, 비동기 작업 생성 후 상태 폴링 |
@@ -24,7 +24,8 @@ Express API (server.js) ── Google OAuth · Rate limit · Helmet CSP
    ├─ /api/whisper         → STT (Groq Whisper)
    ├─ /api/generate-image  → 이미지 API (1순위) → 무료 엔진 폴백
    ├─ /api/video/create    → 영상 작업 생성 (taskId 즉시 반환)
-   ├─ /api/video/status    → 작업 상태 조회 (브라우저 폴링)
+   ├─ /api/tts/create      → 장면별 한국어 내레이션 (TTS)
+   ├─ /api/task/status     → 영상·TTS 작업 상태 조회 (브라우저 폴링)
    └─ /api/presets 등      → PostgreSQL (사용자 프리셋·설정)
 ```
 
@@ -36,7 +37,7 @@ Express API (server.js) ── Google OAuth · Rate limit · Helmet CSP
 | 이름 | 용도 |
 |---|---|
 | `GROQ_API_KEY` (… `_6`) | 텍스트 생성 · STT |
-| `KIE_API_KEY` | 이미지 · 영상 생성 |
+| `KIE_API_KEY` | 이미지 · 영상 · TTS 생성 |
 | `DATABASE_URL` | PostgreSQL |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `CALLBACK_URL` | Google 로그인 |
 | `SESSION_SECRET`, `ALLOWED_ORIGIN`, `PORT` | 서버 설정 |

@@ -1046,8 +1046,8 @@
                 <label style="display: block; font-size: 0.75rem; color: var(--fg-muted); margin-bottom: 6px;">해상도
                   (Resolution)</label>
                 <select id="videoModeInput" class="lab-select" style="width: 100%; height: 36px;">
-                  <option value="480p" selected>480p (빠름)</option>
-                  <option value="720p">720p (선명)</option>
+                  <option value="720p" selected>720p (기본)</option>
+                  <option value="480p">480p (빠름)</option>
                 </select>
               </div>
             </div>
@@ -1165,6 +1165,14 @@
               <option value="4">4장면</option>
             </select>
           </div>
+          <div class="param-group" style="min-width: 130px;">
+            <label style="display:block; font-size: 0.75rem; color: var(--fg-muted); margin-bottom: 6px;">내레이션</label>
+            <select id="ap-voice" class="lab-select">
+              <option value="female" selected>여성 목소리</option>
+              <option value="male">남성 목소리</option>
+              <option value="none">내레이션 없음</option>
+            </select>
+          </div>
           <label style="display:flex; align-items:center; gap:6px; font-size: 0.8rem; color: var(--fg-muted); padding-bottom: 8px;">
             <input type="checkbox" id="ap-make-video" checked> 영상까지 생성
           </label>
@@ -1176,9 +1184,10 @@
           <div class="ap-step" data-step="storyboard">② 스토리보드</div>
           <div class="ap-step" data-step="shotlist">③ 숏 리스트</div>
           <div class="ap-step" data-step="scenes">④ 장면 설계</div>
-          <div class="ap-step" data-step="images">⑤ 장면 이미지</div>
-          <div class="ap-step" data-step="videos">⑥ 장면 영상</div>
-          <div class="ap-step" data-step="release">⑦ BGM · 제목/태그</div>
+          <div class="ap-step" data-step="release">⑤ BGM · 제목/태그</div>
+          <div class="ap-step" data-step="voice">⑥ 내레이션</div>
+          <div class="ap-step" data-step="images">⑦ 장면 이미지</div>
+          <div class="ap-step" data-step="videos">⑧ 장면 영상</div>
         </div>
 
         <div id="ap-scene-grid"
@@ -1186,8 +1195,9 @@
 
         <div id="ap-final" style="display: none; margin-top: 20px; text-align: center;">
           <div class="label-mono" style="margin-bottom: 8px;">🎬 완성본 미리보기 (장면 연속 재생)</div>
-          <video id="ap-final-player" controls playsinline
+          <video id="ap-final-player" controls playsinline muted
             style="max-width: 100%; max-height: 520px; border-radius: 10px; background: #000;"></video>
+          <audio id="ap-final-voice" preload="auto" style="display: none;"></audio>
           <div id="ap-final-note" style="font-size: 0.72rem; color: var(--fg-muted); margin-top: 8px;"></div>
         </div>
       </div>

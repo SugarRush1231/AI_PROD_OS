@@ -3189,11 +3189,12 @@ const AP = {
   async designScenes(goal, platform, count, storyboard, shotlist) {
     const systemPrompt = `You are a short-form video director. Turn the plan into exactly ${count} vertical (9:16) scenes for ${platform}.
 Return ONLY valid JSON, no markdown fences, in this shape:
-{"character":"one-sentence visual description of the main subject (age, look, hair, outfit)","scenes":[{"title":"short Korean title","image_prompt":"English, one paragraph, max 600 characters","motion_prompt":"English, max 200 characters"}]}
+{"character":"one-sentence visual description of the main subject (age, look, hair, outfit)","scenes":[{"title":"short Korean title","image_prompt":"English, one paragraph, max 600 characters","motion_prompt":"English, max 200 characters","narration":"Korean voice-over line"}]}
 RULES:
 - CHARACTER CONSISTENCY: copy the exact "character" sentence verbatim into every image_prompt so the same person/object appears in all scenes.
 - image_prompt: photorealistic still frame, subject + action, setting, lighting, camera shot, vertical composition. Plain text, no negative prompts, no buzzwords like 8k or masterpiece.
 - motion_prompt: what moves in 5 seconds (subject action + camera movement), simple and physically plausible.
+- narration: natural spoken Korean (구어체) voice-over for that scene, readable in about 4 seconds (max 30 Korean characters). The lines must flow as one story across scenes; the last line delivers the call-to-action.
 - Scene 1 must be a strong visual hook; the last scene should support the call-to-action.`;
     const intent = `[GOAL]\n${goal}\n\n[STORYBOARD]\n${(storyboard || '').slice(0, 1500)}\n\n[SHOT LIST]\n${(shotlist || '').slice(0, 1000)}`;
     const raw = await AP.engineer(intent, systemPrompt);
@@ -3211,6 +3212,8 @@ RULES:
       card.className = 'ap-scene';
       card.innerHTML = `<div class="ap-media" id="ap-media-${i}">대기 중</div>
         <div style="font-weight:600; color: var(--fg);">#${i + 1} ${sc.title || ''}</div>
+        ${sc.narration ? `<div style="margin-top:4px; color: var(--fg);">🎙 ${sc.narration}</div>` : ''}
+        <div id="ap-voice-${i}" style="margin-top:4px;"></div>
         <div id="ap-state-${i}" style="margin-top:4px;">준비</div>`;
       grid.appendChild(card);
     });
@@ -3238,29 +3241,63 @@ RULES:
     throw new Error('이미지 요청 한도 초과');
   },
 
-  async makeVideo(motionPrompt, imageUrl) {
-    const res = await fetch('/api/video/create', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt: motionPrompt, image: imageUrl, duration: '5', resolution: '480p' })
-    });
-    const created = await res.json();
-    if (!res.ok) throw new Error(created.error || '영상 작업 생성 실패');
-    const deadline = Date.now() + 12 * 60 * 1000;
+  async pollTask(taskId, timeoutMs) {
+    const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
-      await AP.sleep(10000);
-      const stRes = await fetch(`/api/video/status?taskId=${encodeURIComponent(created.taskId)}`);
+      await AP.sleep(6000);
+      const stRes = await fetch(`/api/task/status?taskId=${encodeURIComponent(taskId)}`);
       if (stRes.status === 429) continue;
       const st = await stRes.json();
       if (st.state === 'success' && st.url) return st.url;
-      if (st.state === 'fail') throw new Error(st.failMsg || '영상 생성 실패');
+      if (st.state === 'fail') throw new Error(st.failMsg || '작업 실패');
     }
-    throw new Error('영상 생성 시간 초과');
+    throw new Error('시간 초과');
   },
 
-  playSequence(urls) {
+  async makeVoice(text, voice) {
+    const res = await fetch('/api/tts/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, voice })
+    });
+    const created = await res.json();
+    if (!res.ok) throw new Error(created.error || 'TTS 실패');
+    return AP.pollTask(created.taskId, 3 * 60 * 1000);
+  },
+
+  // 실패 시 자동 재시도: 이미지→영상 480p → 이미지→영상 720p → 텍스트→영상 720p
+  async makeVideo(motionPrompt, imageUrl, onRetry, fallbackPrompt) {
+    const attempts = [
+      { resolution: '480p', image: imageUrl, prompt: motionPrompt },
+      { resolution: '720p', image: imageUrl, prompt: motionPrompt },
+      { resolution: '720p', image: null, prompt: `${fallbackPrompt || ''} ${motionPrompt}`.trim() }
+    ];
+    let lastErr = null;
+    for (let a = 0; a < attempts.length; a++) {
+      const at = attempts[a];
+      if (a > 0 && onRetry) onRetry(a, lastErr);
+      try {
+        const res = await fetch('/api/video/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt: at.prompt, image: at.image, duration: '5', resolution: at.resolution, aspect_ratio: '9:16' })
+        });
+        const created = await res.json();
+        if (!res.ok) throw new Error(created.error || '영상 작업 생성 실패');
+        return await AP.pollTask(created.taskId, 12 * 60 * 1000);
+      } catch (e) {
+        lastErr = e;
+        addLog(`!! 영상 시도 ${a + 1} 실패 (${at.image ? '이미지→영상' : '텍스트→영상'} ${at.resolution}): ${e.message}`, 'error');
+      }
+    }
+    throw lastErr || new Error('영상 생성 실패');
+  },
+
+  // 장면 클립 + 장면별 내레이션을 맞춰 연속 재생 (voices[k]가 없으면 영상만)
+  playSequence(urls, voices = []) {
     const wrap = document.getElementById('ap-final');
     const player = document.getElementById('ap-final-player');
+    const voiceEl = document.getElementById('ap-final-voice');
     const note = document.getElementById('ap-final-note');
     if (!urls.length) return;
     wrap.style.display = 'block';
@@ -3268,10 +3305,17 @@ RULES:
     const playAt = (k) => {
       idx = k;
       player.src = urls[k];
-      note.innerText = `장면 ${k + 1} / ${urls.length} 재생 중 · 클립은 각 장면 카드에서 개별 확인 가능`;
-      player.play().catch(() => {});
+      if (voiceEl) {
+        voiceEl.pause();
+        if (voices[k]) { voiceEl.src = voices[k]; voiceEl.currentTime = 0; }
+        else voiceEl.removeAttribute('src');
+      }
+      note.innerText = `장면 ${k + 1} / ${urls.length} 재생 중${voices.some(Boolean) ? ' · 내레이션 포함' : ''}`;
+      player.play().then(() => { if (voiceEl && voices[k]) voiceEl.play().catch(() => {}); }).catch(() => {});
     };
-    player.onended = () => { if (idx + 1 < urls.length) playAt(idx + 1); };
+    player.onended = () => { if (idx + 1 < urls.length) playAt(idx + 1); else if (voiceEl) voiceEl.pause(); };
+    player.onpause = () => { if (voiceEl && !player.ended) voiceEl.pause(); };
+    player.onplay = () => { if (voiceEl && voices[idx] && voiceEl.paused && voiceEl.currentTime > 0 && !voiceEl.ended) voiceEl.play().catch(() => {}); };
     playAt(0);
   },
 
@@ -3282,6 +3326,7 @@ RULES:
     const platform = platformSel.options[platformSel.selectedIndex].text;
     const count = parseInt(document.getElementById('ap-scenes').value, 10) || 3;
     const makeVideo = document.getElementById('ap-make-video').checked;
+    const voiceOpt = document.getElementById('ap-voice')?.value || 'female';
 
     if (typeof USER_LOGGED_IN !== 'undefined' && !USER_LOGGED_IN) { alert('로그인 후 사용할 수 있습니다.'); return; }
     if (!goal) { alert('목표(만들고 싶은 영상)를 한 줄 이상 입력해 주세요.'); return; }
@@ -3291,7 +3336,7 @@ RULES:
     btn.innerText = '⏳ 자동 제작 중...';
     const steps = document.getElementById('ap-steps');
     steps.style.display = 'grid';
-    ['concept', 'storyboard', 'shotlist', 'scenes', 'images', 'videos', 'release'].forEach(k => AP.setStep(k, null));
+    ['concept', 'storyboard', 'shotlist', 'scenes', 'images', 'voice', 'videos', 'release'].forEach(k => AP.setStep(k, null));
     document.getElementById('ap-final').style.display = 'none';
     document.getElementById('ap-scene-grid').innerHTML = '';
     updateStatusUI('vps', 'processing', '원클릭 파이프라인 실행 중...');
@@ -3325,7 +3370,28 @@ RULES:
       AP.renderScenes(scenes);
       AP.setStep('scenes', 'done');
 
-      // ⑦ BGM·SEO는 텍스트라 이미지/영상과 병렬 진행
+      // ⑥ 내레이션(TTS): 장면별 음성을 이미지/영상과 병렬 생성
+      let voicePromise = Promise.resolve([]);
+      if (voiceOpt !== 'none') {
+        AP.setStep('voice', 'running');
+        voicePromise = Promise.allSettled(scenes.map(async (sc, i) => {
+          if (!sc.narration) return null;
+          await AP.sleep(i * 1200);
+          const url = await AP.makeVoice(sc.narration, voiceOpt);
+          const slot = document.getElementById(`ap-voice-${i}`);
+          if (slot) slot.innerHTML = `<audio src="${url}" controls style="width:100%; height:28px;"></audio>`;
+          return url;
+        })).then(rs => {
+          const urls = rs.map(r => (r.status === 'fulfilled' ? r.value : null));
+          rs.forEach((r, i) => { if (r.status === 'rejected') addLog(`!! 내레이션 ${i + 1} 실패: ${r.reason.message}`, 'error'); });
+          AP.setStep('voice', urls.some(Boolean) ? 'done' : 'failed');
+          return urls;
+        });
+      } else {
+        AP.setStep('voice', 'skipped');
+      }
+
+      // ⑧ BGM·SEO는 텍스트라 이미지/영상과 병렬 진행
       AP.setStep('release', 'running');
       const releasePromise = (async () => {
         await AP.runTool('bgm', goalWithPlatform, concept);
@@ -3350,18 +3416,22 @@ RULES:
         const results = await Promise.allSettled(scenes.map(async (sc, i) => {
           await AP.sleep(i * 1500); // 동시 생성 요청 분산
           AP.setScene(i, null, '영상 렌더링 중 (1~3분)');
-          const url = await AP.makeVideo(sc.motion_prompt || sc.image_prompt, images[i]);
+          const url = await AP.makeVideo(sc.motion_prompt || sc.image_prompt, images[i],
+            (n) => AP.setScene(i, null, `영상 재시도 ${n}/2 중...`), sc.image_prompt);
           AP.setScene(i, `<video src="${url}" muted loop autoplay playsinline></video>`, '영상 완료');
           return url;
         }));
         results.forEach((r, i) => { if (r.status === 'rejected') AP.setScene(i, null, `영상 실패: ${r.reason.message}`); });
         clips = results.filter(r => r.status === 'fulfilled').map(r => r.value);
         AP.setStep('videos', clips.length === scenes.length ? 'done' : (clips.length ? 'done' : 'failed'));
-        AP.playSequence(clips);
+        const voiceUrls = await voicePromise;
+        const okIdx = results.map((r, i) => (r.status === 'fulfilled' ? i : -1)).filter(i => i >= 0);
+        AP.playSequence(clips, okIdx.map(i => voiceUrls[i] || null));
       } else {
         AP.setStep('videos', 'skipped');
       }
 
+      await voicePromise;
       await releasePromise;
       updateStatusUI('vps', 'idle', '원클릭 파이프라인 완료');
       addLog(`✓ 원클릭 파이프라인 완료 — 장면 ${scenes.length}개, 영상 ${clips.length}개`, 'success');

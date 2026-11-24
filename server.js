@@ -560,7 +560,8 @@ async function generateWithKie(apiKey, prompt, aspectRatio) {
 
 app.post('/api/generate-image', ensureAuthenticated, strictAiLimiter, async (req, res, next) => {
     try {
-        const { prompt, aspect_ratio } = req.body;
+        const { prompt } = req.body;
+        let { aspect_ratio } = req.body;
         if (!prompt) return res.status(400).json({ error: '프롬프트가 필요합니다.' });
 
         // 🎬 영상 생성: 렌더링 엔진 종료로 현재 비활성 (비용 절감)
@@ -571,6 +572,14 @@ app.post('/api/generate-image', ensureAuthenticated, strictAiLimiter, async (req
 
         // 🖼️ 이미지 생성 1순위: Kie.ai z-image (약 0.8크레딧/장) → 실패/키 없음 시 2순위: Pollinations(무료)
         const kieRatioMap = { '1:1': '1:1', '4:3': '4:3', '3:4': '3:4', '16:9': '16:9', '9:16': '9:16', '21:9': '16:9' };
+        // Auto: 프롬프트 내용으로 비율 추정 (풍경→가로, 전신/세로→9:16, 제품·아이콘→정사각, 그 외 인물→3:4)
+        if (!aspect_ratio || aspect_ratio === 'auto') {
+            const p = String(prompt).toLowerCase();
+            if (/(landscape|panoram|wide shot|cityscape|skyline|scenery|가로|풍경|16:9)/.test(p)) aspect_ratio = '16:9';
+            else if (/(vertical|9:16|reels?|shorts|tiktok|story|full[- ]body|full-length|standing|세로|전신|릴스|쇼츠)/.test(p)) aspect_ratio = '9:16';
+            else if (/(icon|logo|emblem|sticker|product shot|flat lay|top-down|아이콘|로고|정사각)/.test(p)) aspect_ratio = '1:1';
+            else aspect_ratio = '3:4';
+        }
         const kieKey = process.env.KIE_API_KEY;
         let fallbackReason = !kieKey ? 'KIE_API_KEY 미설정' : (!canUsePaid(req) ? '승인되지 않은 계정 (무료 엔진 사용)' : null);
         if (kieKey && canUsePaid(req)) {

@@ -3226,13 +3226,35 @@ function setVideoImageRef(url) {
   videoRefImages = [url, ...videoRefImages.filter(s => s !== url)].slice(0, VIDEO_REF_MAX);
   renderVideoRefs();
 }
+// 휴대폰 사진(수 MB·수천 px)은 그대로 보내면 영상 모델이 Internal error를 내기 쉬워서
+// 긴 변 1280px JPEG로 줄여서 넣음 (사진 방향 정보도 이때 반영됨)
+function shrinkImageFile(file, max = 1280) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onerror = () => resolve(null);
+    reader.onload = () => {
+    const url = reader.result; // data: URL (CSP가 blob: 이미지를 막아서 data:로 읽음)
+    const img = new Image();
+    img.onload = () => {
+      const k = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+      const w = Math.max(1, Math.round(img.naturalWidth * k)), h = Math.max(1, Math.round(img.naturalHeight * k));
+      const c = document.createElement('canvas'); c.width = w; c.height = h;
+      c.getContext('2d').drawImage(img, 0, 0, w, h);
+      resolve(c.toDataURL('image/jpeg', 0.9));
+    };
+    img.onerror = () => resolve(null);
+    img.src = url;
+    };
+    reader.readAsDataURL(file);
+  });
+}
 function readVideoRefFiles(files) {
-  const list = Array.from(files || []).filter(f => /^image\/(jpeg|png|webp)$/.test(f.type));
-  const tooBig = list.filter(f => f.size > 10 * 1024 * 1024);
-  if (tooBig.length) alert(`10MB가 넘는 파일 ${tooBig.length}개는 제외했습니다.`);
-  const ok = list.filter(f => f.size <= 10 * 1024 * 1024);
-  Promise.all(ok.map(f => new Promise(res => { const r = new FileReader(); r.onload = e => res(e.target.result); r.onerror = () => res(null); r.readAsDataURL(f); })))
-    .then(srcs => addVideoRefs(srcs.filter(Boolean)));
+  const list = Array.from(files || []).filter(f => /^image\//.test(f.type));
+  Promise.all(list.map(f => shrinkImageFile(f))).then(srcs => {
+    const ok = srcs.filter(Boolean);
+    if (ok.length < list.length) alert(`${list.length - ok.length}개 파일은 이 브라우저에서 열 수 없어 제외했습니다. (JPG·PNG·WEBP 권장)`);
+    addVideoRefs(ok);
+  });
 }
 (() => {
   const input = document.getElementById('video-ref-file');
@@ -3300,36 +3322,42 @@ async function generateVideo() {
 
   const refImages = videoRefImages.slice(0, VIDEO_REF_MAX);
 
-  try {
-    // 1) 작업 생성 (서버가 Kie Grok Imagine에 요청 → taskId 즉시 반환)
+  // 작업 1회 = 생성 요청 → 상태 확인. 'Internal error' 같은 일시 오류는 자동으로 다시 시도
+  const runOnce = async (images) => {
     const createRes = await fetch('/api/video/create', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        prompt: videoPrompt,
-        images: refImages,
-        duration: durationInput.value,
-        resolution: modeInput.value
-      })
+      body: JSON.stringify({ prompt: videoPrompt, images, duration: durationInput.value, resolution: modeInput.value })
     });
     const created = await createRes.json();
-    if (!createRes.ok) throw new Error(created.error || "영상 작업 생성에 실패했습니다.");
+    if (!createRes.ok) throw Object.assign(new Error(created.error || "영상 작업 생성에 실패했습니다."), { fatal: createRes.status === 403 || createRes.status === 400 });
     if (statusTxt) statusTxt.innerText = "🎬 렌더링 중... (보통 1~3분)";
-
-    // 2) 상태 폴링 (8초 간격, 최대 10분)
-    let videoUrl = null;
     const deadline = Date.now() + 10 * 60 * 1000;
     while (Date.now() < deadline) {
       await new Promise(r => setTimeout(r, 8000));
       const stRes = await fetch(`/api/video/status?taskId=${encodeURIComponent(created.taskId)}`);
       if (stRes.status === 429) continue;
       const st = await stRes.json();
-      if (st.state === 'success' && st.url) { videoUrl = st.url; break; }
+      if (st.state === 'success' && st.url) return st.url;
       if (st.state === 'fail') throw new Error(st.failMsg || "영상 생성에 실패했습니다.");
       if (!stRes.ok) throw new Error(st.error || "상태 조회 실패");
     }
+    throw new Error("영상 생성 시간이 초과되었습니다.");
+  };
+  // 시도 순서: 참고 이미지 그대로 → 한 번 더 → (이미지가 있었다면) 이미지 없이 프롬프트만
+  const plans = refImages.length
+    ? [{ images: refImages }, { images: refImages, note: '🔁 일시 오류로 다시 시도 중...' }, { images: [], note: '🔁 참고 이미지 없이 프롬프트만으로 다시 시도 중...' }]
+    : [{ images: [] }, { images: [], note: '🔁 일시 오류로 다시 시도 중...' }];
+
+  try {
+    let videoUrl = null, lastErr = null;
+    for (const plan of plans) {
+      if (plan.note && statusTxt) statusTxt.innerText = plan.note;
+      try { videoUrl = await runOnce(plan.images); break; }
+      catch (e) { lastErr = e; console.warn('[video attempt failed]', e.message); if (e.fatal) break; }
+    }
+    if (!videoUrl) throw lastErr || new Error("영상 생성에 실패했습니다.");
     clearInterval(progressInterval);
-    if (!videoUrl) throw new Error("영상 생성 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요.");
 
     if (bar) bar.style.width = '100%';
     if (statusTxt) statusTxt.innerText = "✨ 생성 완료!";

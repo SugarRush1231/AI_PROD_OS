@@ -2833,3 +2833,13 @@ footer a { display: inline-flex; align-items: center; min-height: 24px; }
 .vref-add span { font-size: 1.3rem; line-height: 1; }
 .vref-add small { font-size: .6rem; line-height: 1.35; }
 .vref-add:hover, .vref-add:focus-visible { border-color: var(--skills-cyan); color: var(--skills-cyan); }
+
+/* 휴대폰: 이미지·영상 스튜디오 2단 → 1단 (인라인 grid 1fr 1fr 덮어쓰기), 가로 넘침 방지 */
+#image-studio > .lab-card > *, #video-studio > .lab-card > * { min-width: 0; }
+#image-studio .studio-action-bar { flex-wrap: wrap; }
+@media (max-width: 900px) {
+  #image-studio > .lab-card, #video-studio > .lab-card { grid-template-columns: minmax(0, 1fr) !important; gap: 24px !important; padding: 20px !important; }
+  #image-studio .studio-action-bar { justify-content: flex-start !important; }
+  #image-studio .studio-action-bar .vertical-divider { display: none !important; }
+  #image-studio .studio-action-bar > * { white-space: normal; }
+}

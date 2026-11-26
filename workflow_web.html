@@ -73,8 +73,8 @@
             <div style="text-align: right; line-height: 1.1;">
               <div id="user-name-display" class="label-mono"
                 style="font-size: 0.65rem; color: var(--fg); font-weight: 700;">USER</div>
-              <a href="/logout" class="label-mono"
-                style="font-size: 0.55rem; color: var(--fg-dim); text-decoration: none;">로그아웃</a>
+              <button type="button" id="logout-btn" class="label-mono"
+                style="font-size: 0.55rem; color: var(--fg-dim); border: 0; background: transparent; cursor: pointer;">로그아웃</button>
             </div>
             <img id="user-avatar" src="" alt="U"
               style="width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--skills-purple); background: var(--bg-card);">
@@ -1357,6 +1357,15 @@
             <textarea id="imagePromptInput" class="lab-textarea" placeholder="예: 네온 사인이 빛나는 사이버펑크 도시, 비 오는 밤, 8k 해상도"
               style="height: 180px; font-size: 0.95rem; line-height: 1.6; background: var(--input-bg); border: 1px solid var(--border-strong);"></textarea>
 
+            <div id="spicy-image-controls" hidden>
+              <label for="image-provider" class="label-mono">이미지 모델</label>
+              <select id="image-provider" class="lab-select">
+                <option value="default">기본 (Kie.ai / Pollinations)</option>
+                <option value="spicy">SpicyAPI · Seedream 5.5 Edit</option>
+              </select>
+              <div id="spicy-image-balance" class="capacity-hint" role="status"></div>
+            </div>
+
             <div class="studio-action-bar"
               style="display: flex; gap: 12px; align-items: center; justify-content: flex-end; padding-top: 8px;">
               <div class="control-item" style="display: flex; align-items: center; gap: 8px;">
@@ -1384,7 +1393,7 @@
                 </svg>
                 <span>이미지 첨부</span>
               </button>
-              <div class="capacity-hint" style="font-size: 0.65rem; color: var(--fg-muted); opacity: 0.6;">(참고 이미지는 현재 미반영 · 텍스트 프롬프트로 생성)</div>
+              <div id="image-reference-hint" class="capacity-hint" style="font-size: 0.65rem; color: var(--fg-muted); opacity: 0.6;">(참고 이미지는 현재 미반영 · 텍스트 프롬프트로 생성)</div>
               <input type="file" id="image-file-input" accept="image/*" style="display: none;">
             </div>
 

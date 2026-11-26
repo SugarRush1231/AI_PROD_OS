@@ -9,14 +9,32 @@ const rateLimit = require('express-rate-limit');
 const morgan = require('morgan');
 const os = require('os');
 const session = require('express-session');
+const { Pool } = require('pg');
+const { pipeline } = require('node:stream/promises');
+const { Transform } = require('node:stream');
+const { SESSION_MS, SESSION_COOKIE, PostgresSessionStore, minimalGoogleProfile, publicProfile,
+    csrfToken, requireCsrf, quota } = require('./access-control');
 const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
+const { canUseSpicy, spicyImageRouter } = require('./spicy-image');
 const multer = require('multer');
 const axios = require('axios');
 const FormData = require('form-data');
 const fs_sync = require('fs');
 
-const upload = multer({ dest: 'uploads/' });
+const upload = multer({ dest: os.tmpdir(), limits: { fileSize: 25 * 1024 * 1024, files: 1, parts: 2 } });
+const production = process.env.NODE_ENV === 'production';
+const sessionSecret = process.env.SESSION_SECRET;
+if (!sessionSecret || sessionSecret.trim().length < 32) throw new Error('SESSION_SECRET must contain at least 32 characters');
+if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL is required');
+const databaseUrl = new URL(process.env.DATABASE_URL);
+for (const option of ['sslmode', 'sslcert', 'sslkey', 'sslrootcert']) databaseUrl.searchParams.delete(option);
+const localDatabase = !production && ['localhost', '127.0.0.1', '[::1]'].includes(databaseUrl.hostname);
+const pool = new Pool({
+    connectionString: databaseUrl.toString(),
+    ssl: localDatabase ? false : { rejectUnauthorized: true, ca: process.env.PG_CA_CERT?.replace(/\\n/g, '\n') }
+});
+pool.on('error', error => console.error('[DB_POOL]', error.message));
 
 // --- [MIDDLEWARE: AUTH CHECK] ---
 const ensureAuthenticated = (req, res, next) => {
@@ -26,12 +44,10 @@ const ensureAuthenticated = (req, res, next) => {
 
 // --- [유료 기능 허용 계정] ---
 // ALLOWED_EMAILS="a@gmail.com,b@gmail.com" → 이 계정만 유료 API(Kie 이미지·영상) 사용
-// 비워 두면 기존처럼 로그인한 모든 사용자 허용 (경고 로그 출력)
+// 비워 두면 Kie 유료 기능은 모든 계정에서 비활성화됩니다.
 const ALLOWED_EMAILS = (process.env.ALLOWED_EMAILS || '')
     .split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
-if (!ALLOWED_EMAILS.length) console.warn('[ACCESS] ALLOWED_EMAILS 미설정 — 로그인한 모든 사용자가 유료 기능을 사용할 수 있습니다.');
-const userEmails = (user) => ((user && user.emails) || []).map(e => String(e.value || '').toLowerCase());
-const canUsePaid = (req) => !!(req.user && (!ALLOWED_EMAILS.length || userEmails(req.user).some(e => ALLOWED_EMAILS.includes(e))));
+const canUsePaid = (req) => req.isAuthenticated() && ALLOWED_EMAILS.includes(req.user.verifiedEmail);
 const ensurePaidAccess = (req, res, next) => {
     if (!req.isAuthenticated()) return res.status(401).json({ error: '로그인 후 진행해 주세요.' });
     if (canUsePaid(req)) return next();
@@ -39,7 +55,8 @@ const ensurePaidAccess = (req, res, next) => {
 };
 
 const app = express();
-app.set('trust proxy', 1); // ✅ Railway 리버스 프록시 뒤에서 https를 올바르게 인식하도록 설정
+app.set('trust proxy', process.env.TRUST_PROXY_CIDRS?.split(',').map(x => x.trim()).filter(Boolean) || false);
+app.set('query parser', 'simple');
 const PORT = process.env.PORT || 3000;
 const SERVER_START_TIME = Date.now();
 
@@ -63,9 +80,10 @@ passport.use(new GoogleStrategy({
     clientID: process.env.GOOGLE_CLIENT_ID || 'NOT_SET',
     clientSecret: process.env.GOOGLE_CLIENT_SECRET || 'NOT_SET',
     callbackURL: callbackURL,
-    scope: ['profile', 'email']
+    scope: ['profile', 'email'],
+    state: true
 }, (accessToken, refreshToken, profile, done) => {
-    return done(null, profile);
+    return done(null, minimalGoogleProfile(profile));
 }));
 
 // 1. 보안 설정: 서버 시그니처 숨기기 및 CSP 보호
@@ -86,22 +104,20 @@ app.use(helmet({
 }));
 
 // 2. 세션 및 인증 미들웨어
+const cookieOptions = { secure: production, httpOnly: true, sameSite: 'lax', path: '/' };
 app.use(session({
-    secret: process.env.SESSION_SECRET || 'ai-prod-suite-secure-key',
+    name: SESSION_COOKIE,
+    secret: sessionSecret,
+    store: new PostgresSessionStore(pool),
     resave: false,
     saveUninitialized: false,
-    proxy: true, // ✅ Railway 리버스 프록시 허용
-    cookie: {
-        secure: process.env.NODE_ENV === 'production', // ✅ 배포(HTTPS)에서는 true, 로컬은 false
-        httpOnly: true,
-        sameSite: 'Lax', // ✅ 'Strict' → 'Lax' (구글 로그인 콜백 시 세션 쿠키 유지)
-        maxAge: 24 * 60 * 60 * 1000
-    }
+    cookie: { ...cookieOptions, maxAge: SESSION_MS }
 }));
 app.use(passport.initialize());
 app.use(passport.session());
 
 // 3. 로깅: 모든 HTTP 요청 추적
+morgan.token('url', req => req.originalUrl.split('?')[0]);
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 
 // --- [AUTH ROUTES] ---
@@ -112,17 +128,23 @@ app.get('/auth/google/callback',
     (req, res) => res.redirect('/')
 );
 
-app.get('/logout', (req, res, next) => {
+app.post('/logout', ensureAuthenticated, requireCsrf, (req, res, next) => {
     req.logout((err) => {
         if (err) return next(err);
-        res.redirect('/');
+        req.session.destroy((error) => {
+            if (error) return next(error);
+            res.clearCookie(SESSION_COOKIE, cookieOptions);
+            res.clearCookie('connect.sid', cookieOptions);
+            res.sendStatus(204);
+        });
     });
 });
 
 // 4. 속도 제한 및 교차 출처
 const apiLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: 100,
+    windowMs: 60 * 1000,
+    max: 240,
+    keyGenerator: (req) => req.user?.id || req.ip,
     standardHeaders: 'draft-7',
     legacyHeaders: false,
     message: { error: '시스템 과부하 방지를 위해 요청이 제한되었습니다. 잠시 후 다시 시도해주세요.' }
@@ -167,7 +189,9 @@ const dbApiLimiter = rateLimit({
 });
 
 app.get('/api/me', generalApiLimiter, (req, res) => {
-    res.json({ user: req.user || null, canUsePaid: canUsePaid(req) });
+    res.set('Cache-Control', 'no-store');
+    res.json({ user: publicProfile(req.user), canUsePaid: canUsePaid(req), canUseSpicy: canUseSpicy(req),
+        csrfToken: req.user ? csrfToken(req) : null });
 });
 
 // 4. 교차 출처 및 파싱 제한
@@ -178,7 +202,21 @@ const corsOptions = {
     optionsSuccessStatus: 200
 };
 app.use(cors(corsOptions));
-app.use(express.json({ limit: '50mb' }));
+const accountApiQuota = quota(pool, 'api', 1, 120);
+const generationQuota = quota(pool, 'generation', 1440, 60);
+app.use('/api', apiLimiter, (req, res, next) => {
+    if (req.user) return accountApiQuota(req, res, next);
+    next();
+}, (req, res, next) => {
+    if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
+    ensureAuthenticated(req, res, () => requireCsrf(req, res, next));
+});
+app.use('/api/spicy-image', (req, res, next) => {
+    if (!canUseSpicy(req)) return res.status(403).json({ error: '소유자 계정에서만 사용할 수 있습니다.' });
+    next();
+}, express.json({ limit: '14mb' }), spicyImageRouter(undefined, { pool, generationQuota }));
+app.use('/api/video/create', ensurePaidAccess, express.json({ limit: '32mb' }));
+app.use('/api', express.json({ limit: '1mb' }));
 // 🔄 캐시 문제 방지: 빌드 환경에서 파일 수정 시각이 1980년으로 고정돼 브라우저가 옛 파일을 재사용하는 일이 있어
 //    HTML은 매번 새로 받게 하고(no-store), JS·CSS 주소에는 배포(서버 시작) 시각을 버전으로 붙인다
 const ASSET_VERSION = String(SERVER_START_TIME);
@@ -198,7 +236,7 @@ app.get(['/', '/index.html', '/workflow_web.html'], (req, res) => {
     res.type('html').send(renderMainHtml());
 });
 
-app.use(express.static(path.join(__dirname), {
+const staticOptions = {
     index: false,
     etag: false,          // 수정 시각이 1980년 고정이라 크기만으로 비교 → 내용이 바뀌어도 304가 나는 문제 방지
     lastModified: false,
@@ -206,7 +244,16 @@ app.use(express.static(path.join(__dirname), {
         if (filePath.endsWith('.html')) res.setHeader('Cache-Control', 'no-store, max-age=0');
         else if (/\.(js|css)$/.test(filePath)) res.setHeader('Cache-Control', 'no-cache');   // 버전 주소 + 항상 재검증
     }
-}));
+};
+for (const dir of ['assets', 'ico', 'img', 'supertonic']) {
+    app.use(`/${dir}`, express.static(path.join(__dirname, dir), staticOptions));
+}
+app.get(['/script.js', '/lighting-lab.js', '/style.css'], (req, res, next) => {
+    res.set('Cache-Control', 'no-cache');
+    res.sendFile(path.join(__dirname, path.basename(req.path)), { etag: false, lastModified: false }, error => {
+        if (error) next(error);
+    });
+});
 
 // --- ROUTES ---
 
@@ -217,7 +264,7 @@ app.use(express.static(path.join(__dirname), {
  * Whisper STT API (Audio to Subtitles)
  * Only available for Authenticated Users + Rate Limiting
  */
-app.post('/api/whisper', ensureAuthenticated, strictAiLimiter, upload.single('audio'), async (req, res, next) => {
+app.post('/api/whisper', ensureAuthenticated, strictAiLimiter, generationQuota, upload.single('audio'), async (req, res, next) => {
     try {
         if (!req.file) return res.status(400).json({ error: 'No audio file' });
 
@@ -252,6 +299,7 @@ app.post('/api/whisper', ensureAuthenticated, strictAiLimiter, upload.single('au
                 formData.append('response_format', 'verbose_json');
 
                 const response = await axios.post('https://api.groq.com/openai/v1/audio/transcriptions', formData, {
+                    timeout: 45000,
                     headers: {
                         ...formData.getHeaders(),
                         'Authorization': `Bearer ${key}`
@@ -307,7 +355,7 @@ function addLogServer(msg) {
 /**
  * AI 엔지니어링 API
  */
-app.post('/api/engineer', ensureAuthenticated, textAiLimiter, async (req, res, next) => {
+app.post('/api/engineer', ensureAuthenticated, textAiLimiter, generationQuota, async (req, res, next) => {
     try {
         const { intent, systemPrompt } = req.body;
 
@@ -583,11 +631,11 @@ async function generateWithKie(apiKey, prompt, aspectRatio) {
     throw new Error('Kie 생성 시간 초과');
 }
 
-app.post('/api/generate-image', ensureAuthenticated, strictAiLimiter, async (req, res, next) => {
+app.post('/api/generate-image', ensureAuthenticated, strictAiLimiter, generationQuota, async (req, res, next) => {
     try {
         const { prompt } = req.body;
         let { aspect_ratio } = req.body;
-        if (!prompt) return res.status(400).json({ error: '프롬프트가 필요합니다.' });
+        if (typeof prompt !== 'string' || !prompt.trim()) return res.status(400).json({ error: '프롬프트가 필요합니다.' });
 
         // 🎬 영상 생성: 렌더링 엔진 종료로 현재 비활성 (비용 절감)
         const isVideo = req.body.generate_video || req.body.is_video || req.body.video;
@@ -656,7 +704,7 @@ async function uploadImageToKie(apiKey, dataOrBase64) {
     return url;
 }
 
-app.post('/api/video/create', ensurePaidAccess, strictAiLimiter, async (req, res) => {
+app.post('/api/video/create', ensurePaidAccess, strictAiLimiter, generationQuota, async (req, res) => {
     try {
         const apiKey = process.env.KIE_API_KEY;
         if (!apiKey) return res.status(503).json({ error: '영상 생성 키(KIE_API_KEY)가 설정되지 않았습니다.' });
@@ -686,18 +734,22 @@ app.post('/api/video/create', ensurePaidAccess, strictAiLimiter, async (req, res
         const createRes = await fetch('https://api.kie.ai/api/v1/jobs/createTask', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-            body: JSON.stringify({ model, input })
+            body: JSON.stringify({ model, input }),
+            timeout: 20000,
+            redirect: 'error'
         });
         const created = await createRes.json();
         if (created.code !== 200 || !created.data?.taskId) {
             console.error('[VIDEO_CREATE_FAIL]', created);
-            return res.status(502).json({ error: `영상 작업 생성 실패: ${created.msg || created.code}` });
+            return res.status(502).json({ error: '영상 작업 접수 여부를 확인할 수 없습니다.' });
         }
+        await pool.query('INSERT INTO video_tasks (task_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+            [created.data.taskId, req.user.id]);
         console.log(`[VIDEO] task ${created.data.taskId} (${model}, ${input.resolution}, ${input.duration}s, refs ${input.image_urls ? input.image_urls.length : 0})`);
         res.json({ taskId: created.data.taskId, model });
     } catch (err) {
         console.error('[VIDEO_CREATE_ERROR]', err.message);
-        res.status(500).json({ error: err.message || '영상 작업 생성 중 오류' });
+        res.status(502).json({ error: '영상 작업 접수 여부를 확인할 수 없습니다.' });
     }
 });
 
@@ -708,14 +760,27 @@ app.get('/api/media-proxy', ensurePaidAccess, async (req, res) => {
     try {
         let target;
         try { target = new URL(String(req.query.url || '')); } catch (e) { return res.status(400).json({ error: '잘못된 주소' }); }
-        const okHost = target.protocol === 'https:' &&
+        const okHost = target.protocol === 'https:' && !target.port && !target.username && !target.password &&
             MEDIA_HOST_ALLOW.some(h => target.hostname === h || target.hostname.endsWith('.' + h));
         if (!okHost) return res.status(403).json({ error: '허용되지 않은 주소' });
 
         const headers = {};
         if (req.headers.range) headers.Range = req.headers.range;
-        const upstream = await fetch(target.toString(), { headers, redirect: 'follow' });
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 30000);
+        const disconnect = () => controller.abort();
+        res.once('close', disconnect);
+        try {
+        const upstream = await fetch(target.toString(), { headers, redirect: 'error', signal: controller.signal, compress: false });
         if (!upstream.ok && upstream.status !== 206) return res.status(502).json({ error: `원본 응답 ${upstream.status}` });
+        const type = upstream.headers.get('content-type')?.split(';')[0].toLowerCase();
+        const maxBytes = 64 * 1024 * 1024;
+        if (upstream.headers.get('content-encoding') ||
+            !['video/mp4', 'video/webm', 'image/png', 'image/jpeg', 'image/webp'].includes(type) ||
+            Number(upstream.headers.get('content-length')) > maxBytes) {
+            upstream.body.destroy();
+            return res.status(502).json({ error: '허용되지 않은 미디어 응답입니다.' });
+        }
 
         res.status(upstream.status);
         ['content-type', 'content-length', 'content-range', 'accept-ranges'].forEach(h => {
@@ -723,10 +788,20 @@ app.get('/api/media-proxy', ensurePaidAccess, async (req, res) => {
             if (v) res.setHeader(h, v);
         });
         res.setHeader('Cache-Control', 'private, max-age=3600');
-        upstream.body.pipe(res);
-        upstream.body.on('error', () => res.end());
+        let received = 0;
+        await pipeline(upstream.body, new Transform({
+            transform(chunk, encoding, callback) {
+                received += chunk.length;
+                if (received > maxBytes) return callback(new Error('Media size limit exceeded'));
+                callback(null, chunk);
+            }
+        }), res);
+        } finally {
+            clearTimeout(timer);
+            res.removeListener('close', disconnect);
+        }
     } catch (err) {
-        if (!res.headersSent) res.status(500).json({ error: err.message });
+        if (!res.headersSent && !res.destroyed) res.status(502).json({ error: '미디어 원본을 가져올 수 없습니다.' });
     }
 });
 
@@ -738,9 +813,12 @@ app.get(['/api/video/status', '/api/task/status'], ensurePaidAccess, videoStatus
         const apiKey = process.env.KIE_API_KEY;
         const taskId = String(req.query.taskId || '');
         if (!apiKey || !/^[\w-]{4,200}$/.test(taskId)) return res.status(400).json({ error: '잘못된 요청입니다.' });
+        const owned = await pool.query('SELECT 1 FROM video_tasks WHERE task_id = $1 AND user_id = $2',
+            [taskId, req.user.id]);
+        if (!owned.rowCount) return res.status(404).json({ error: '영상 작업을 찾을 수 없습니다.' });
 
         const infoRes = await fetch(`https://api.kie.ai/api/v1/jobs/recordInfo?taskId=${encodeURIComponent(taskId)}`, {
-            headers: { 'Authorization': `Bearer ${apiKey}` }
+            headers: { 'Authorization': `Bearer ${apiKey}` }, timeout: 10000, redirect: 'error'
         });
         const info = await infoRes.json();
         const state = info.data?.state || 'unknown';
@@ -750,7 +828,7 @@ app.get(['/api/video/status', '/api/task/status'], ensurePaidAccess, videoStatus
         }
         res.json({ state, url, failMsg: info.data?.failMsg || null });
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        res.status(502).json({ error: '영상 상태를 조회할 수 없습니다.' });
     }
 });
 
@@ -776,19 +854,23 @@ app.get('/api/status', generalApiLimiter, async (req, res) => {
 
 // --- PRESET DATABASE API ---
 // --- [PERSISTENT POSTGRES STORAGE ENGINE] ---
-const { Pool } = require('pg');
-
-// Koyeb Managed Postgres: DATABASE_URL 환경변수를 사용합니다.
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: {
-    rejectUnauthorized: false // 외부 연결 및 Koyeb 환경용 (Self-signed 인증 허용)
-  }
-});
-
 // 데이터베이스 테이블 초기화 (최초 1회 실행)
 const initDb = async () => {
-  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS app_sessions (id TEXT PRIMARY KEY, data JSONB NOT NULL, expires_at TIMESTAMPTZ NOT NULL);
+      CREATE INDEX IF NOT EXISTS app_sessions_expires_idx ON app_sessions (expires_at);
+      CREATE TABLE IF NOT EXISTS api_usage (
+        user_id TEXT NOT NULL, bucket TEXT NOT NULL, window_id BIGINT NOT NULL, count INTEGER NOT NULL,
+        PRIMARY KEY (user_id, bucket, window_id)
+      );
+      CREATE INDEX IF NOT EXISTS api_usage_window_idx ON api_usage (window_id);
+      CREATE TABLE IF NOT EXISTS video_tasks (task_id TEXT PRIMARY KEY, user_id TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS spicy_operations (
+        user_id TEXT NOT NULL, fingerprint TEXT NOT NULL, submission_key TEXT NOT NULL,
+        token TEXT, task_id TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), finished_at TIMESTAMPTZ,
+        PRIMARY KEY (user_id, fingerprint)
+      );
+    `);
     await pool.query(`
       CREATE TABLE IF NOT EXISTS user_presets (
         id SERIAL PRIMARY KEY,
@@ -808,16 +890,12 @@ const initDb = async () => {
       );
     `);
     console.log('[DB] user_presets & user_vps_settings tables are ready.');
-  } catch (err) {
-    console.error('[DB_INIT_ERROR]', err.message);
-  }
 };
 
-// 서버 시작 시 DB 체크
-if (process.env.DATABASE_URL) {
-  initDb();
-} else {
-  console.warn('[DB_WARNING] DATABASE_URL is missing in .env. Persistence will fail.');
+async function pruneExpiredState() {
+    await pool.query('DELETE FROM app_sessions WHERE expires_at <= NOW()');
+    await pool.query('DELETE FROM api_usage WHERE window_id < extract(epoch FROM now()) - 172800');
+    await pool.query("DELETE FROM spicy_operations WHERE finished_at < NOW() - INTERVAL '2 days'");
 }
 
 // 프리셋 리스트 가져오기 (DB에서 내 user_id 데이터만)
@@ -839,7 +917,7 @@ app.get('/api/presets', ensureAuthenticated, dbApiLimiter, async (req, res) => {
     res.json(presets);
   } catch (e) {
     console.error('[DB_GET_ERROR]', e.message);
-    res.json([]);
+    res.status(503).json({ error: '프리셋을 조회할 수 없습니다.' });
   }
 });
 
@@ -890,7 +968,7 @@ app.get('/api/vps-settings', ensureAuthenticated, dbApiLimiter, async (req, res)
     res.json(result.rows[0]?.settings || null);
   } catch (e) {
     console.error('[VPS_SETTINGS_GET_ERROR]', e.message);
-    res.json(null);
+    res.status(503).json({ error: '서버 설정을 조회할 수 없습니다.' });
   }
 });
 
@@ -923,8 +1001,9 @@ app.use((req, res) => {
 app.use((err, req, res, next) => {
     // 1️⃣ Multer 파일 업로드 에러 방어
     if (err instanceof multer.MulterError) {
-        return res.status(400).json({ error: `파일 업로드 오류: ${err.message}` });
+        return res.status(err.code === 'LIMIT_FILE_SIZE' ? 413 : 400).json({ error: `파일 업로드 오류: ${err.message}` });
     }
+    if (err.status === 413) return res.status(413).json({ error: '요청이 최대 허용 크기를 초과했습니다.' });
     
     // 2️⃣ Body-parser (JSON) 문법 에러 방어 (해킹 시도나 엉뚱한 값 차단)
     if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
@@ -948,7 +1027,12 @@ app.use((err, req, res, next) => {
             : (err.message || 'Unknown Server Error')
     });
 });
-const server = app.listen(PORT, () => {
+async function start() {
+    await initDb();
+    await pruneExpiredState();
+    setInterval(() => pruneExpiredState().catch(error => console.error('[DB_CLEANUP]', error.message)),
+        60 * 60 * 1000).unref();
+    const server = app.listen(PORT, () => {
     console.log(`
     -------------------------------------------
     🚀 AI_PROD_OS BACKEND SECURED
@@ -956,7 +1040,17 @@ const server = app.listen(PORT, () => {
     🛡️  Shield Status: ACTIVE
     -------------------------------------------
     `);
+    });
+    server.on('error', error => {
+        console.error('[SERVER_START]', error.message);
+        process.exit(1);
+    });
+}
+if (require.main === module) start().catch(error => {
+    console.error('[SERVER_START]', error.message);
+    process.exit(1);
 });
+module.exports = { app, initDb };
 
 // --- [KEEP-ALIVE SELF-PING] ---
 // 외부 cron-job 서비스가 중단될 경우에만(10분 이상 유입이 없을 때만) 스스로 URL을 호출하여 깨어있는 상태를 유지합니다.
@@ -971,14 +1065,7 @@ setInterval(() => {
             .then(() => console.log(`[KEEP-ALIVE] cron-job missing for 10m. Emergency self-ping successful.`))
             .catch(err => console.log(`[KEEP-ALIVE] Emergency self-ping failed: ${err.message}`));
     }
-}, 1 * 60 * 1000); // 유휴 상태 여부는 매 1분마다 검사
-
-// 포트 중복 방지
-server.on('error', (e) => {
-    if (e.code === 'EADDRINUSE') {
-        process.exit(1);
-    }
-});
+}, 1 * 60 * 1000).unref();
 
 // ========================================================
 // 🚨 Node.js 치명적 시스템 에러 최후방 방어벽 (무중단 킵얼라이브)

@@ -41,10 +41,29 @@ Express API (server.js) ── Google OAuth · Rate limit · Helmet CSP
 |---|---|
 | `GROQ_API_KEY` (… `_6`) | 텍스트 생성 · STT |
 | `KIE_API_KEY` | 이미지 · 영상 생성 |
-| `DATABASE_URL` | PostgreSQL |
+| `SPICY_API_KEY` | SpicyAPI 서버 전용 키 |
+| `SPICY_OWNER_GOOGLE_ID` | Seedream 5.5 Edit를 사용할 단일 Google 계정 ID |
+| `DATABASE_URL` | 필수. 프리셋, 세션, 호출량, 작업 소유권을 저장하는 PostgreSQL |
+| `PG_CA_CERT` | PostgreSQL이 사설 CA를 사용하는 경우 신뢰할 CA 인증서 PEM |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `CALLBACK_URL` | Google 로그인 |
-| `ALLOWED_EMAILS` | 유료 기능(이미지·영상 API)을 쓸 수 있는 계정, 쉼표 구분. 비우면 로그인한 모든 사용자 허용 |
-| `SESSION_SECRET`, `ALLOWED_ORIGIN`, `PORT` | 서버 설정 |
+| `ALLOWED_EMAILS` | Kie 유료 이미지·영상 기능에 허용할 검증된 Google 이메일. 쉼표로 구분하며, 비우면 Kie 유료 기능이 비활성화됩니다. |
+| `SESSION_SECRET` | 필수. 무작위로 생성한 32자 이상의 세션 서명 키 |
+| `TRUST_PROXY_CIDRS` | HTTPS를 종료하는 배포 프록시의 신뢰 가능한 IP/CIDR 목록. 쉼표로 구분합니다. |
+| `ALLOWED_ORIGIN`, `PORT` | 서버 설정 |
+
+배포 전에 실제 프록시 주소를 `TRUST_PROXY_CIDRS`에 설정하고, 프록시가 전달 헤더를 덮어쓰며 앱이 프록시를 통해서만 접근 가능한지 확인합니다. 배포 DB는 인증서 검증이 가능한 TLS 연결과 앱 테이블 생성 권한이 필요합니다. 세션 쿠키 변경 후에는 Google에 다시 로그인합니다. 이 버전에서 생성되는 영상부터 앱에서 사용자별 결과 조회가 가능합니다.
+
+로그인 계정당 API 요청은 분당 120회, 생성·전사 요청은 UTC 기준 하루 60회로 제한합니다. 기존 기능별 분당 제한도 적용됩니다. 스토리지 연결이 실패하면 세션과 할당량을 검사해야 하는 요청을 거절합니다.
+
+### Seedream 5.5 Edit 활성화
+
+1. 앱에 본인 Google 계정으로 로그인하고 같은 사이트에서 `/api/me`의 `user.id`를 확인합니다.
+2. 서버에 그 값을 `SPICY_OWNER_GOOGLE_ID`로 설정합니다. `SPICY_API_KEY`와 무작위로 생성한 32자 이상의 `SESSION_SECRET`도 필요합니다.
+3. 서버 재시작 후 본인 계정으로 다시 로그인합니다. Image Studio에서 Seedream 5.5 Edit를 선택하고, 편집 지시와 참고 이미지 한 장을 넣고 비용을 확인합니다.
+
+편집에는 JPEG, PNG, WebP, GIF를 첨부할 수 있습니다. 업로드는 최대 10 MiB이며 모델 스키마에 더 낮은 제한이 있으면 그 제한이 우선합니다. 견적 단계에서 서버가 실시간 모델 스키마를 조회해 최대 5분간 캐시하고, 참고 이미지를 SpicyAPI에 업로드합니다. 비용 확인 후 제출할 때 유료 작업이 생성됩니다.
+
+요청 접수나 상태 조회가 끊기면 생성 버튼으로 기존 요청을 확인할 수 있습니다. Seedream은 진행 중 요청을 PostgreSQL에 저장합니다. 접수 여부가 불명확한 상태로 20시간이 지나면 SpicyAPI 콘솔에서 확인해야 합니다.
 
 ## 로컬 실행
 

@@ -1,3 +1,13 @@
+let csrfHeaderToken;
+let currentAccountId;
+
+function apiFetch(url, options = {}) {
+  if (!options.method || ['GET', 'HEAD'].includes(options.method)) return fetch(url, options);
+  const headers = new Headers(options.headers);
+  if (csrfHeaderToken) headers.set('X-CSRF-Token', csrfHeaderToken);
+  return fetch(url, { ...options, headers });
+}
+
 const UI = {
   intentInput: document.getElementById('intent-input'),
   engineerBtn: document.getElementById('engineer-btn'),
@@ -191,12 +201,11 @@ const MyPresets = {
         this.render();
         return;
       }
+      if (!res.ok) throw new Error('프리셋 조회 실패');
       this.data = await res.json();
       this.render();
     } catch (err) {
-      console.error('Failed to load presets or unauthorized');
-      this.data = [];
-      this.render();
+      addLog('! 서버 프리셋을 불러오지 못했습니다.', 'error');
     }
   },
 
@@ -316,11 +325,12 @@ const MyPresets = {
     };
 
     try {
-      await fetch('/api/presets', {
+      const response = await apiFetch('/api/presets', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(config)
       });
+      if (!response.ok) throw new Error('프리셋 저장 실패');
       addLog(`✓ 프리셋 [${name}] 서버 저장 완료`, 'success');
       this.fetchFromServer();
     } catch (err) {
@@ -338,7 +348,8 @@ const MyPresets = {
     if (!confirmed) return;
 
     try {
-      await fetch(`/api/presets/${id}`, { method: 'DELETE' });
+      const response = await apiFetch(`/api/presets/${id}`, { method: 'DELETE' });
+      if (!response.ok) throw new Error('프리셋 삭제 실패');
       if (this.activeId === id) this.resetForm();
       this.fetchFromServer();
       addLog('✓ 프리셋이 삭제되었습니다.', 'info');
@@ -732,7 +743,7 @@ if (UI.paramAngle && UI.angleInput) {
       updateStatusUI('vps', 'processing', `${tool.toUpperCase()} 생성 중...`);
 
       try {
-        const res = await fetch('/api/engineer', {
+        const res = await apiFetch('/api/engineer', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -952,9 +963,10 @@ function setLabLayer(i, st, text) {
   layer.style.borderColor = st === 'done' ? 'var(--skills-cyan)' : st === 'fail' ? '#ff5555' : '';
   if (!status) return;
   status.style.color = st === 'fail' ? '#ff5555' : '';
-  if (st === 'run') status.innerHTML = `<span class="spinner-icon"></span> ${text}`;
-  else if (st === 'done') status.innerHTML = `<svg viewBox="0 0 24 24" width="12" height="12" stroke="#10b981" stroke-width="3" fill="none" style="flex-shrink:0"><polyline points="20 6 9 17 4 12"></polyline></svg> ${text}`;
-  else status.textContent = text;
+  status.innerHTML = st === 'run' ? '<span class="spinner-icon"></span>'
+    : st === 'done' ? '<svg viewBox="0 0 24 24" width="12" height="12" stroke="#10b981" stroke-width="3" fill="none" style="flex-shrink:0"><polyline points="20 6 9 17 4 12"></polyline></svg>'
+    : '';
+  status.append(document.createTextNode(text ? ` ${text}` : ''));
 }
 
 const OPTION_DESC = {
@@ -1934,7 +1946,7 @@ RULES:
     }
     setLabLayer(1, 'run', 'LLM 요청 중…');
     addLog('> [L2] Style Consistency Refinement (LLM request)...', 'success');
-    const apiPromise = fetch('/api/engineer', {
+    const apiPromise = apiFetch('/api/engineer', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ intent: enrichedIntent, systemPrompt })
@@ -2074,7 +2086,7 @@ async function generateSubtitles() {
 
       addLog('>> [SYSTEM] Sending audio to Whisper AI...', 'primary');
 
-      const whisperRes = await fetch('/api/whisper', {
+      const whisperRes = await apiFetch('/api/whisper', {
         method: 'POST',
         body: formData
       });
@@ -2161,7 +2173,7 @@ ${context ? `[말투] ${context}` : ''}
 
 ${formatInstruction}`;
 
-    const res = await fetch('/api/engineer', {
+    const res = await apiFetch('/api/engineer', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ intent, systemPrompt })
@@ -2573,6 +2585,9 @@ async function checkAuthStatus() {
     const data = await res.json();
 
     window.CAN_USE_PAID = data.canUsePaid !== false;
+    csrfHeaderToken = data.csrfToken;
+    currentAccountId = data.user?.id;
+    if (data.canUseSpicy) initSpicyImageControls(data.user.id);
     if (data.user) {
       USER_LOGGED_IN = true;
       if (loginBtn) loginBtn.style.display = 'none';
@@ -2661,6 +2676,16 @@ document.querySelectorAll('a[href="#system-status"]').forEach(anchor => {
 
 // 초기 실행
 checkAuthStatus();
+document.getElementById('logout-btn')?.addEventListener('click', async () => {
+  try {
+    const response = await apiFetch('/logout', { method: 'POST' });
+    if (!response.ok) throw new Error('로그아웃 실패');
+    csrfHeaderToken = undefined;
+    location.assign('/');
+  } catch {
+    alert('로그아웃 요청을 완료하지 못했습니다. 페이지를 새로고침해 주세요.');
+  }
+});
 
 // ✅ 히어로 "시작하기" 버튼 → Prompt Lab으로 스크롤
 const heroStartBtn = document.getElementById('hero-start-btn');
@@ -2728,11 +2753,12 @@ function saveVpsSettings() {
     clearTimeout(vpsSaveTimer);
     vpsSaveTimer = setTimeout(async () => {
       try {
-        await fetch('/api/vps-settings', {
+        const response = await apiFetch('/api/vps-settings', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(settings)
         });
+        if (!response.ok) throw new Error('서버 설정 저장 실패');
         console.log('[VPS] Settings saved to server.');
       } catch (e) {
         console.warn('[VPS] Server save failed:', e.message);
@@ -2765,7 +2791,7 @@ async function syncVpsSettingsFromServer() {
         localStorage.setItem(VPS_SETTINGS_KEY, JSON.stringify(serverSettings));
         console.log('[VPS] Settings synced from server DB.');
       }
-    }
+    } else addLog('! 서버 설정을 불러오지 못했습니다.', 'error');
   } catch (e) {
     console.warn('[VPS] Failed to sync settings from server:', e);
   }
@@ -2930,6 +2956,109 @@ function calculateAspectRatio(base64Str) {
 }
 
 // 이미지 생성 통신 함수 (서버 /api/generate-image → Kie z-image, 실패 시 Pollinations)
+let spicyImageStorageKey;
+
+function initSpicyImageControls(ownerId) {
+  const controls = document.getElementById('spicy-image-controls');
+  const provider = document.getElementById('image-provider');
+  if (!controls || !provider) return;
+  spicyImageStorageKey = `spicy-image-pending:${ownerId}`;
+  controls.hidden = false;
+  provider.addEventListener('change', () => {
+    const isSpicy = provider.value === 'spicy';
+    document.getElementById('image-reference-hint').textContent = isSpicy
+      ? '편집할 참고 이미지 1장을 첨부하세요.'
+      : '(참고 이미지는 현재 미반영 · 텍스트 프롬프트로 생성)';
+    if (isSpicy) refreshSpicyBalance();
+  });
+  if (localStorage.getItem(spicyImageStorageKey)) {
+    provider.value = 'spicy';
+    provider.dispatchEvent(new Event('change'));
+  }
+}
+
+async function spicyImageRequest(path, body) {
+  const options = body === undefined ? {} : {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+  };
+  const response = await apiFetch(`/api/spicy-image/${path}`, {
+    ...options, signal: AbortSignal.timeout(path === 'quote' ? 120000 : 25000)
+  });
+  const data = await response.json();
+  if (!response.ok) throw Object.assign(new Error(data.error || 'SpicyAPI 요청에 실패했습니다.'), {
+    status: response.status, code: data.code
+  });
+  return data;
+}
+
+async function refreshSpicyBalance() {
+  const balance = document.getElementById('spicy-image-balance');
+  try {
+    const { available, prepaid } = await spicyImageRequest('balance');
+    balance.textContent = prepaid == null
+      ? `사용 가능 잔액 USD ${available}`
+      : `충전 잔액 USD ${prepaid} · 사용 가능 잔액 USD ${available}`;
+  } catch {
+    balance.textContent = 'SpicyAPI 잔액 조회 실패';
+  }
+}
+
+async function runSpicyEdit(prompt, image, ratio, status) {
+  let pending = await spicyImageRequest('pending');
+  pending ||= JSON.parse(localStorage.getItem(spicyImageStorageKey) || 'null');
+  if (!pending) {
+    if (!prompt) throw new Error('편집 프롬프트와 참고 이미지를 입력해 주세요.');
+    if (status) status.textContent = '참고 이미지 업로드 및 견적 조회 중...';
+    const quote = await spicyImageRequest('quote', { prompt, image, ratio });
+    const expires = new Date(quote.expiresAt).toLocaleTimeString();
+    const ratioNote = ratio !== 'auto' && quote.ratio !== ratio ? ' 모델의 기본 화면 비율을 적용합니다.' : '';
+    const confirmed = await showSystemConfirm('Seedream 5.5 Edit',
+      `예상 비용 USD ${quote.cost} · 견적 만료 ${expires}.${ratioNote} 이 이미지 편집을 제출할까요?`, 'info');
+    if (!confirmed) return null;
+    pending = { token: quote.token };
+    localStorage.setItem(spicyImageStorageKey, JSON.stringify(pending));
+  } else if (!pending.taskId) {
+    const confirmed = await showSystemConfirm('기존 Seedream 요청 확인',
+      '이전에 확인한 견적의 접수 상태를 같은 요청으로 확인할까요?', 'info');
+    if (!confirmed) return null;
+  }
+
+  try {
+    if (!pending.taskId) {
+      pending = await spicyImageRequest('create', pending);
+      localStorage.setItem(spicyImageStorageKey, JSON.stringify(pending));
+    }
+  } catch (error) {
+    if ([400, 402, 422].includes(error.status) || error.code === '40901') {
+      localStorage.removeItem(spicyImageStorageKey);
+    }
+    if (error.code === 'replay_expired') {
+      const resolved = await showSystemConfirm('이전 Seedream 요청 확인',
+        'SpicyAPI 콘솔에서 이전 요청의 접수 여부와 비용을 확인했다면 복구 기록을 정리할까요?', 'danger');
+      if (resolved) {
+        await spicyImageRequest('clear-expired', { token: pending.token });
+        localStorage.removeItem(spicyImageStorageKey);
+        return null;
+      }
+    }
+    throw error;
+  }
+
+  if (status) status.textContent = 'Seedream 이미지 편집 중...';
+  const until = Date.now() + 120000;
+  for (let delay = 2000; Date.now() < until; delay = Math.min(delay * 1.5, 10000)) {
+    await new Promise(resolve => setTimeout(resolve, delay));
+    const task = await spicyImageRequest(`task/${encodeURIComponent(pending.taskId)}`);
+    if (task.state === 'queued' || task.state === 'running' || task.pending) continue;
+    localStorage.removeItem(spicyImageStorageKey);
+    if (task.state === 'succeeded' && task.url) return { data: { url: task.url, provider: 'spicy:seedream-5.5-edit' } };
+    const reason = task.code === 'content_rejected' ? '콘텐츠가 거절되었습니다.' : '이미지 편집에 실패했습니다.';
+    const cost = task.settled && task.cost != null ? ` · 최종 비용 USD ${task.cost}` : '';
+    throw new Error(`${reason}${task.error ? ' ' + task.error : ''}${cost}`);
+  }
+  throw new Error('편집이 진행 중입니다. 생성 버튼을 다시 누르면 기존 작업의 결과를 조회합니다.');
+}
+
 async function generateImage() {
   if (!USER_LOGGED_IN) {
     const confirmLogin = await showSystemConfirm('🔒 권한 확인', '이미지 생성 서비스는 로그인이 필요합니다. 로그인 페이지로 이동할까요?', 'info');
@@ -2942,6 +3071,9 @@ async function generateImage() {
   const resultImage = document.getElementById('generatedImage');
   const placeholder = document.getElementById('image-placeholder');
   const btn = document.getElementById('image-generate-btn');
+  if (btn.disabled) return;
+  const useSpicy = Boolean(spicyImageStorageKey && document.getElementById('image-provider')?.value === 'spicy');
+  const resumeSpicy = useSpicy && localStorage.getItem(spicyImageStorageKey);
   const choicePanel = document.getElementById('post-gen-choices');
 
   // UI 초기화: 이전 결과물(이미지 및 선택지)을 모두 숨기고 로딩상태 준비
@@ -2952,10 +3084,10 @@ async function generateImage() {
   if (choicePanel) choicePanel.style.display = "none";
   if (placeholder) placeholder.style.display = "block";
 
-  if (!promptValue) { alert("그릴 내용을 입력해주세요!"); return; }
+  if (!promptValue && !resumeSpicy && !useSpicy) { alert("그릴 내용을 입력해주세요!"); return; }
 
   // 자동 비율 계산
-  if (ratioValue === 'auto' && currentImageBase64) {
+  if (!useSpicy && ratioValue === 'auto' && currentImageBase64) {
     try { ratioValue = await calculateAspectRatio(currentImageBase64); } catch (e) { ratioValue = "3:4"; }
   }
 
@@ -2997,7 +3129,7 @@ async function generateImage() {
         cleanPrompt = p.prompt || p.task || p.instruction || cleanPrompt;
       }
 
-      console.log("🛡️ [Prompt Final Cleaned]:", cleanPrompt.substring(0, 100) + "...");
+      if (!useSpicy) console.log("🛡️ [Prompt Final Cleaned]:", cleanPrompt.substring(0, 100) + "...");
     } catch (e) {
       console.warn("[Prompt Clean] JSON parse failed, using raw text.");
     }
@@ -3035,9 +3167,11 @@ async function generateImage() {
     if (progress < 90) {
       progress += (90 - progress) * 0.05; // 로그 곡선으로 부드럽게 상승
       if (bar) bar.style.width = `${progress}%`;
-      if (progress > 30 && statusTxt) statusTxt.innerText = "🤖 AI 이미지 모델 호출 중...";
-      if (progress > 60 && statusTxt) statusTxt.innerText = "🎨 AI 모델 연산 중... 거의 다 되었습니다!";
-      if (progress > 85 && statusTxt) statusTxt.innerText = "📦 결과 이미지 수신 대기 중...";
+      if (!useSpicy && statusTxt) {
+        if (progress > 30) statusTxt.innerText = "🤖 AI 이미지 모델 호출 중...";
+        if (progress > 60) statusTxt.innerText = "🎨 AI 모델 연산 중... 거의 다 되었습니다!";
+        if (progress > 85) statusTxt.innerText = "📦 결과 이미지 수신 대기 중...";
+      }
     }
   }, 1500);
 
@@ -3057,20 +3191,11 @@ async function generateImage() {
     aspect_ratio: finalizedRatio
   };
 
-  // 이미지 헤더가 있을 때만 image 필드 추가
-  if (processedBase64 && processedBase64.startsWith("data:image")) {
-    const base64Raw = processedBase64.split(',')[1];
-    requestBody.image = base64Raw;
-    requestBody.imageBase64 = base64Raw;
-  }
-
-  console.log("[Final Payload]:", { ...requestBody, image: requestBody.image ? "(Image Data)" : null });
-
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 180000); // 180초 타임아웃
 
   try {
-    const response = await fetch('/api/generate-image', {
+    const response = useSpicy ? null : await apiFetch('/api/generate-image', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       signal: controller.signal,
@@ -3079,9 +3204,17 @@ async function generateImage() {
     clearTimeout(timeoutId);
 
     clearInterval(progressInterval);
-    const responseData = await response.json();
+    const responseData = useSpicy
+      ? await (navigator.locks
+        ? navigator.locks.request(spicyImageStorageKey, { ifAvailable: true }, lock => {
+          if (!lock) throw new Error('다른 탭에서 Seedream 요청을 처리 중입니다.');
+          return runSpicyEdit(cleanPrompt, processedBase64, ratioValue, statusTxt);
+        })
+        : runSpicyEdit(cleanPrompt, processedBase64, ratioValue, statusTxt))
+      : await response.json();
+    if (!responseData) { if (statusTxt) statusTxt.textContent = '편집 제출을 취소했습니다.'; return; }
 
-    if (!response.ok) {
+    if (response && !response.ok) {
       console.error("이미지 생성 에러:", responseData);
       alert(`[생성 실패] ${responseData.error || '통신 오류'}`);
       throw new Error(responseData.error);
@@ -3133,7 +3266,7 @@ async function generateImage() {
     // 실제 사용된 엔진 표시 (Kie 실패 시 폴백 사유도 노출)
     const engineEl = document.getElementById('image-engine-status');
     const provider = responseData.data && responseData.data.provider;
-    if (engineEl) engineEl.innerText = 'API Active';
+    if (engineEl) engineEl.innerText = useSpicy ? 'SpicyAPI · Seedream 5.5 Edit' : 'API Active';
     if (responseData.data && responseData.data.fallbackReason) {
       console.warn('[IMAGE] 폴백 사유:', responseData.data.fallbackReason);
       if (typeof addLog === 'function') addLog(`!! 이미지 폴백: ${responseData.data.fallbackReason}`, 'error');
@@ -3170,8 +3303,13 @@ async function generateImage() {
   } catch (error) {
     clearInterval(progressInterval);
     console.error("이미지 생성 통신 에러:", error);
-    placeholder.innerHTML = `<div style="color: var(--status-error); padding: 20px;">❌ 생성 중 오류가 발생했습니다.<br><small>${error.message}</small></div>`;
+    const message = document.createElement('div');
+    message.style.cssText = 'color: var(--status-error); padding: 20px;';
+    message.textContent = `❌ 생성 중 오류가 발생했습니다. ${error.message}`;
+    placeholder.replaceChildren(message);
   } finally {
+    clearTimeout(timeoutId);
+    if (useSpicy) refreshSpicyBalance();
     btn.innerHTML = orgBtnText;
     btn.disabled = false;
   }
@@ -3271,13 +3409,16 @@ function readVideoRefFiles(files) {
 // AI 비디오 생성 함수 (Kie Grok Imagine · 작업 생성 → 상태 폴링)
 async function generateVideo() {
   const btn = document.getElementById('generate-video-btn');
+  if (btn.disabled) return;
   const promptInput = document.getElementById('videoPromptInput');
   const durationInput = document.getElementById('videoDurationInput');
   const modeInput = document.getElementById('videoModeInput');
   const placeholder = document.getElementById('video-placeholder');
   const videoElement = document.getElementById('generatedVideo');
   
-  if (!promptInput.value.trim()) {
+  const pendingKey = `kie-video-pending:${currentAccountId}`;
+  let taskId = localStorage.getItem(pendingKey);
+  if (!taskId && !promptInput.value.trim()) {
     alert("비디오 동작/연출 프롬프트를 입력해주세요.");
     return;
   }
@@ -3297,6 +3438,7 @@ async function generateVideo() {
     </div>
   `;
   videoElement.style.display = "none";
+  placeholder.style.display = "block";
 
   const bar = document.getElementById('video-progress-bar');
   const statusTxt = document.getElementById('video-progress-text');
@@ -3312,51 +3454,21 @@ async function generateVideo() {
     }
   }, 2000);
 
-  const videoPrompt = promptInput.value.trim();
-  if (!videoPrompt) {
-    alert("비디오 동작/연출 프롬프트를 입력해 주세요.");
-    btn.innerHTML = orgBtnText;
-    btn.disabled = false;
-    return;
-  }
-
-  const refImages = videoRefImages.slice(0, VIDEO_REF_MAX);
-
-  // 작업 1회 = 생성 요청 → 상태 확인. 'Internal error' 같은 일시 오류는 자동으로 다시 시도
-  const runOnce = async (images) => {
-    const createRes = await fetch('/api/video/create', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt: videoPrompt, images, duration: durationInput.value, resolution: modeInput.value })
-    });
-    const created = await createRes.json();
-    if (!createRes.ok) throw Object.assign(new Error(created.error || "영상 작업 생성에 실패했습니다."), { fatal: createRes.status === 403 || createRes.status === 400 });
-    if (statusTxt) statusTxt.innerText = "🎬 렌더링 중... (보통 1~3분)";
-    const deadline = Date.now() + 10 * 60 * 1000;
-    while (Date.now() < deadline) {
-      await new Promise(r => setTimeout(r, 8000));
-      const stRes = await fetch(`/api/video/status?taskId=${encodeURIComponent(created.taskId)}`);
-      if (stRes.status === 429) continue;
-      const st = await stRes.json();
-      if (st.state === 'success' && st.url) return st.url;
-      if (st.state === 'fail') throw new Error(st.failMsg || "영상 생성에 실패했습니다.");
-      if (!stRes.ok) throw new Error(st.error || "상태 조회 실패");
-    }
-    throw new Error("영상 생성 시간이 초과되었습니다.");
-  };
-  // 시도 순서: 참고 이미지 그대로 → 한 번 더 → (이미지가 있었다면) 이미지 없이 프롬프트만
-  const plans = refImages.length
-    ? [{ images: refImages }, { images: refImages, note: '🔁 일시 오류로 다시 시도 중...' }, { images: [], note: '🔁 참고 이미지 없이 프롬프트만으로 다시 시도 중...' }]
-    : [{ images: [] }, { images: [], note: '🔁 일시 오류로 다시 시도 중...' }];
-
   try {
-    let videoUrl = null, lastErr = null;
-    for (const plan of plans) {
-      if (plan.note && statusTxt) statusTxt.innerText = plan.note;
-      try { videoUrl = await runOnce(plan.images); break; }
-      catch (e) { lastErr = e; console.warn('[video attempt failed]', e.message); if (e.fatal) break; }
+    if (!taskId) {
+      const createRes = await apiFetch('/api/video/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: promptInput.value.trim(), images: videoRefImages.slice(0, VIDEO_REF_MAX),
+          duration: durationInput.value, resolution: modeInput.value })
+      });
+      const created = await createRes.json();
+      if (!createRes.ok) throw new Error(created.error || '영상 작업 접수 여부를 확인할 수 없습니다.');
+      taskId = created.taskId;
+      localStorage.setItem(pendingKey, taskId);
     }
-    if (!videoUrl) throw lastErr || new Error("영상 생성에 실패했습니다.");
+    const videoUrl = await AP.pollTask(taskId, 10 * 60 * 1000);
+    localStorage.removeItem(pendingKey);
     clearInterval(progressInterval);
 
     if (bar) bar.style.width = '100%';
@@ -3369,7 +3481,8 @@ async function generateVideo() {
   } catch (error) {
     clearInterval(progressInterval);
     console.error("Video Gen Error:", error);
-    placeholder.innerHTML = `<div style="color: #ff5555; padding: 20px;">❌ 비디오 생성 오류<br><small>${error.message}</small></div>`;
+    if (error.terminal) localStorage.removeItem(pendingKey);
+    placeholder.textContent = `❌ ${error.message}${taskId && !error.terminal ? ' 생성 버튼을 다시 누르면 기존 작업을 조회합니다.' : ''}`;
   } finally {
     btn.innerHTML = orgBtnText;
     btn.disabled = false;
@@ -3503,7 +3616,7 @@ const AP = {
 
   async engineer(intent, systemPrompt) {
     for (let attempt = 0; attempt < 3; attempt++) {
-      const res = await fetch('/api/engineer', {
+      const res = await apiFetch('/api/engineer', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ intent, systemPrompt })
@@ -3592,19 +3705,27 @@ RULES:
     });
   },
 
-  setScene(i, html, state) {
+  setScene(i, content, state) {
     const media = document.getElementById(`ap-media-${i}`);
     const st = document.getElementById(`ap-state-${i}`);
-    if (html !== null && media) media.innerHTML = html;
+    if (content !== null && media) media.replaceChildren(content);
     if (state && st) {
       if (/렌더링 중|재시도 중/.test(state)) { AP.startSceneTimer(i, state.replace(/\s*\(1~3분\)/, '')); }
       else { delete st.dataset.timing; st.innerText = state; }
     }
   },
 
+  sceneMedia(tag, url) {
+    const element = document.createElement(tag);
+    element.src = url;
+    if (tag === 'video') Object.assign(element, { muted: true, loop: true, autoplay: true, playsInline: true });
+    else element.alt = '장면 이미지';
+    return element;
+  },
+
   async makeImage(prompt) {
     for (let attempt = 0; attempt < 3; attempt++) {
-      const res = await fetch('/api/generate-image', {
+      const res = await apiFetch('/api/generate-image', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt, aspect_ratio: '9:16' })
@@ -3624,10 +3745,31 @@ RULES:
       const stRes = await fetch(`/api/task/status?taskId=${encodeURIComponent(taskId)}`);
       if (stRes.status === 429) continue;
       const st = await stRes.json();
+      if (!stRes.ok) throw new Error(st.error || '영상 상태를 조회할 수 없습니다.');
       if (st.state === 'success' && st.url) return st.url;
-      if (st.state === 'fail') throw new Error(st.failMsg || '작업 실패');
+      if (st.state === 'fail') throw Object.assign(new Error(st.failMsg || '작업 실패'), { terminal: true });
     }
     throw new Error('시간 초과');
+  },
+
+  showVideoResume(scene, taskId, message) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'btn-skills secondary';
+    button.textContent = '기존 영상 결과 조회';
+    button.onclick = async () => {
+      button.disabled = true;
+      AP.setScene(scene, null, '기존 영상 작업 조회 중');
+      try {
+        const url = await AP.pollTask(taskId, 6 * 60 * 1000);
+        AP.setScene(scene, AP.sceneMedia('video', url), '영상 완료');
+      } catch (error) {
+        AP.setScene(scene, error.terminal ? '영상 생성 실패' : null, error.message);
+      } finally {
+        button.disabled = false;
+      }
+    };
+    AP.setScene(scene, button, message);
   },
 
   // 🎙 Supertonic 3 (브라우저 실행, 무료). 모델은 첫 사용 때 한 번 받고 캐시
@@ -3653,18 +3795,21 @@ RULES:
     for (let a = 0; a < attempts.length; a++) {
       const at = attempts[a];
       if (a > 0 && onRetry) onRetry(a, lastErr);
+      let taskId;
       try {
-        const res = await fetch('/api/video/create', {
+        const res = await apiFetch('/api/video/create', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ prompt: at.prompt, image: at.image, duration: '6', resolution: at.resolution, aspect_ratio: '9:16' })
         });
         const created = await res.json();
         if (!res.ok) throw new Error(created.error || '영상 작업 생성 실패');
-        return await AP.pollTask(created.taskId, 6 * 60 * 1000);
+        taskId = created.taskId;
+        return await AP.pollTask(taskId, 6 * 60 * 1000);
       } catch (e) {
         lastErr = e;
         addLog(`!! 영상 시도 ${a + 1} 실패 (${at.image ? '이미지→영상' : '텍스트→영상'} ${at.resolution}): ${e.message}`, 'error');
+        if (!e.terminal) throw Object.assign(e, { taskId });
       }
     }
     throw lastErr || new Error('영상 생성 실패');
@@ -3957,7 +4102,12 @@ RULES:
               const slot = document.getElementById(`ap-voice-${i}`);
               if (slot) slot.innerText = '🎙 음성 생성 중...';
               const url = await AP.makeVoice(sc.narration, voiceOpt);
-              if (slot) slot.innerHTML = `<audio src="${url}" controls style="width:100%; height:28px;"></audio>`;
+              if (slot) {
+                const audio = new Audio(url);
+                audio.controls = true;
+                audio.style.cssText = 'width: 100%; height: 28px;';
+                slot.replaceChildren(audio);
+              }
               rs.push({ status: 'fulfilled', value: url });
             } catch (e) {
               rs.push({ status: 'rejected', reason: e });
@@ -3994,10 +4144,12 @@ RULES:
           AP.setScene(i, '⤵ 앞 장면에서 이어짐', '연장 대기');
           continue;
         }
-        AP.setScene(i, '<span class="spinner"></span>', '이미지 생성 중');
+        const spinner = document.createElement('span');
+        spinner.className = 'spinner';
+        AP.setScene(i, spinner, '이미지 생성 중');
         const img = await AP.makeImage(`${scenes[i].image_prompt} Clean photographic frame with no text, letters, logos or graphic overlays.`);
         images.push(img.url);
-        AP.setScene(i, `<img src="${img.url}" alt="scene ${i + 1}">`, '이미지 완료');
+        AP.setScene(i, AP.sceneMedia('img', img.url), '이미지 완료');
       }
       AP.setStep('images', 'done');
 
@@ -4018,13 +4170,13 @@ RULES:
                 if (!prevUrl) throw new Error('앞 장면 영상이 없어 이어 붙일 수 없습니다.');
                 AP.setScene(i, null, '앞 영상의 마지막 장면 캡처 중');
                 startImage = await AP.lastFrame(prevUrl);
-                AP.setScene(i, `<img src="${startImage}" alt="scene ${i + 1}">`, '영상 렌더링 중 (1~3분)');
+                AP.setScene(i, AP.sceneMedia('img', startImage), '영상 렌더링 중 (1~3분)');
               } else {
                 AP.setScene(i, null, '영상 렌더링 중 (1~3분)');
               }
               const url = await AP.makeVideo(sc.motion_prompt || sc.image_prompt, startImage,
                 (n) => AP.setScene(i, null, `영상 재시도 중 (텍스트→영상)...`), sc.image_prompt);
-              AP.setScene(i, `<video src="${url}" muted loop autoplay playsinline></video>`, '영상 완료');
+              AP.setScene(i, AP.sceneMedia('video', url), '영상 완료');
               prevUrl = url;
               results.push({ status: 'fulfilled', value: url });
             } catch (e) {
@@ -4038,11 +4190,15 @@ RULES:
             AP.setScene(i, null, '영상 렌더링 중 (1~3분)');
             const url = await AP.makeVideo(sc.motion_prompt || sc.image_prompt, images[i],
               (n) => AP.setScene(i, null, `영상 재시도 중 (텍스트→영상)...`), sc.image_prompt);
-            AP.setScene(i, `<video src="${url}" muted loop autoplay playsinline></video>`, '영상 완료');
+            AP.setScene(i, AP.sceneMedia('video', url), '영상 완료');
             return url;
           }));
         }
-        results.forEach((r, i) => { if (r.status === 'rejected') AP.setScene(i, null, `영상 실패: ${r.reason.message}`); });
+        results.forEach((r, i) => {
+          if (r.status !== 'rejected') return;
+          if (r.reason.taskId) AP.showVideoResume(i, r.reason.taskId, '영상 결과 확인 필요');
+          else AP.setScene(i, null, `영상 실패: ${r.reason.message}`);
+        });
         clips = results.filter(r => r.status === 'fulfilled').map(r => r.value);
         AP.setStep('videos', clips.length === scenes.length ? 'done' : (clips.length ? 'done' : 'failed'));
         const voiceUrls = await voicePromise;

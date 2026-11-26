@@ -1,0 +1,147 @@
+const assert = require('node:assert/strict');
+const { test } = require('node:test');
+const { minimalGoogleProfile, publicProfile, csrfToken, requireCsrf } = require('../access-control');
+
+test('Google profile and CSRF token are scoped to the login session', () => {
+    process.env.SESSION_SECRET = 'test-secret-with-more-than-32-characters';
+    const profile = minimalGoogleProfile({
+        id: 'google-id', displayName: 'Owner', _raw: 'private',
+        _json: { email: 'OWNER@example.org', email_verified: true, sub: 'google-id' }
+    });
+    assert.deepEqual(publicProfile(profile), { id: 'google-id', displayName: 'Owner', photos: undefined });
+    assert.equal(profile.verifiedEmail, 'owner@example.org');
+    assert.equal(profile._raw, undefined);
+    assert.equal(minimalGoogleProfile({ _json: { email: 'owner@example.org' } }).verifiedEmail, undefined);
+    const req = { sessionID: 'session-a', get: () => csrfToken({ sessionID: 'session-b' }) };
+    const res = { status: status => { assert.equal(status, 403); return { json() {} }; } };
+    requireCsrf(req, res, () => assert.fail('Token from another session passed'));
+    req.get = () => csrfToken(req);
+    let passed = false;
+    requireCsrf(req, {}, () => { passed = true; });
+    assert.equal(passed, true);
+});
+
+let PGlite;
+try { ({ PGlite } = require('@electric-sql/pglite')); } catch {}
+
+test('PostgreSQL-backed HTTP access, OAuth state, video ownership and logout', {
+    skip: !PGlite && 'Optional PostgreSQL integration runtime: @electric-sql/pglite'
+}, async (t) => {
+    const db = new PGlite();
+    process.env.DATABASE_URL = 'postgres://unused@localhost/unused';
+    process.env.SESSION_SECRET = 'test-secret-with-more-than-32-characters';
+    process.env.GOOGLE_CLIENT_ID = 'test-google-client';
+    process.env.GOOGLE_CLIENT_SECRET = 'test-google-secret';
+    process.env.KIE_API_KEY = 'mock-key';
+    process.env.SPICY_API_KEY = 'mock-spicy-key';
+    process.env.SPICY_OWNER_GOOGLE_ID = 'owner';
+    process.env.ALLOWED_EMAILS = 'owner@example.org,second@example.org';
+    process.env.NODE_ENV = 'test';
+    require('pg').Pool = class {
+        on() {}
+        async query(sql, args) {
+            if (!args && /^\s*CREATE TABLE/.test(sql)) return db.exec(sql);
+            const result = await db.query(sql, args);
+            return { ...result, rowCount: result.rows.length };
+        }
+    };
+    const upstream = [];
+    require('node-fetch');
+    require.cache[require.resolve('node-fetch')].exports = async (url) => {
+        upstream.push(url);
+        if (url.includes('spicyapi.ai') || url === 'https://spicy-upload.example.org/object') {
+            const model = 'bytedance/seedream-5.5/edit';
+            const response = data => ({ ok: true, json: async () => ({ code: 200, data }) });
+            if (url.includes('/models/')) return response({
+                model, enabled: true, available: true, inputSchema: { properties: {
+                    prompt: { type: 'string' }, image_urls: { type: 'array', items: { type: 'string' } }
+                } }
+            });
+            if (url.endsWith('/upload-url')) return response({
+                uploadUrl: 'https://spicy-upload.example.org/object', fileId: 'fil_mock', maxBytes: 10, headers: {}
+            });
+            if (url.endsWith('/object')) return { ok: true };
+            if (url.endsWith('/commit')) return response({ status: 'ready', uri: 'spicy://f/fil_mock' });
+            if (url.endsWith('/quote')) return response({ quoteId: 'quote_mock', estimatedCost: '0.05', currency: 'USD',
+                expiresAt: new Date(Date.now() + 300000).toISOString() });
+            if (url.endsWith('/createTask')) return response({ taskId: 'job_mock' });
+            assert.fail(url);
+        }
+        if (url.includes('/createTask')) return { json: async () => ({ code: 200, data: { taskId: 'test-task' } }) };
+        if (url.includes('/recordInfo')) {
+            return { json: async () => ({ data: { state: 'success', resultJson: '{"resultUrls":["https://example.org/video.mp4"]}' } }) };
+        }
+        assert.fail(url);
+    };
+    const { app, initDb } = require('../server');
+    await initDb();
+    const server = app.listen(0, '127.0.0.1');
+    await new Promise(resolve => server.once('listening', resolve));
+    t.after(async () => {
+        await new Promise(resolve => server.close(resolve));
+        await db.close();
+    });
+    const base = `http://127.0.0.1:${server.address().port}`;
+    const login = await fetch(base + '/auth/google', { redirect: 'manual' });
+    assert.equal(login.status, 302);
+    assert.ok(new URL(login.headers.get('location')).searchParams.get('state'));
+    const oauthCookie = login.headers.getSetCookie()[0].split(';')[0];
+    const oauthRows = await db.query('SELECT data FROM app_sessions');
+    assert.equal(oauthRows.rows.length, 1);
+    const badCallback = await fetch(base + '/auth/google/callback?state=incorrect&code=unused', {
+        redirect: 'manual', headers: { Cookie: oauthCookie }
+    });
+    assert.equal(badCallback.headers.get('location'), '/');
+
+    async function signedIn(id, email) {
+        const sid = `session-${id}`;
+        await db.query('INSERT INTO app_sessions (id,data,expires_at) VALUES ($1,$2,NOW() + INTERVAL \'1 day\')',
+            [sid, { cookie: { path: '/', originalMaxAge: 86400000, httpOnly: true },
+                passport: { user: { id, provider: 'google', displayName: id, verifiedEmail: email } } }]);
+        const signature = require('cookie-signature').sign(sid, process.env.SESSION_SECRET);
+        const cookie = 'ai-prod.sid=' + encodeURIComponent('s:' + signature);
+        const me = await (await fetch(base + '/api/me', { headers: { Cookie: cookie } })).json();
+        assert.equal(me.user.id, id);
+        assert.equal(me.user.verifiedEmail, undefined);
+        return { Cookie: cookie, 'X-CSRF-Token': me.csrfToken, 'Content-Type': 'application/json' };
+    }
+    const owner = await signedIn('owner', 'owner@example.org');
+    const second = await signedIn('second', 'second@example.org');
+    const free = await signedIn('free', 'free@example.org');
+    const create = headers => fetch(base + '/api/video/create', {
+        method: 'POST', headers, body: JSON.stringify({ prompt: 'Animate the scene' })
+    });
+    assert.equal((await create({ ...owner, 'X-CSRF-Token': second['X-CSRF-Token'] })).status, 403);
+    assert.equal((await create(free)).status, 403);
+    assert.equal(upstream.length, 0);
+    assert.equal((await create(owner)).status, 200);
+    const status = headers => fetch(base + '/api/video/status?taskId=test-task', { headers });
+    assert.equal((await status(second)).status, 404);
+    assert.equal(upstream.length, 1);
+    assert.equal((await status(owner)).status, 200);
+    await db.query("UPDATE api_usage SET count = 60 WHERE user_id = 'owner' AND bucket = 'generation'");
+    assert.equal((await create(owner)).status, 429);
+    assert.equal(upstream.length, 2);
+    await db.query("DELETE FROM api_usage WHERE user_id = 'owner' AND bucket = 'generation'");
+    const spicy = (path, data, headers = owner) => fetch(base + '/api/spicy-image/' + path, {
+        headers, method: data === undefined ? 'GET' : 'POST', body: JSON.stringify(data)
+    });
+    assert.equal((await spicy('pending', undefined, second)).status, 403);
+    const edit = { prompt: 'Edit the image', image: 'data:image/png;base64,aW1hZ2U=' };
+    const firstQuote = await (await spicy('quote', edit)).json();
+    const secondQuote = await (await spicy('quote', edit)).json();
+    assert.ok(firstQuote.token && secondQuote.token);
+    assert.notEqual(firstQuote.token, secondQuote.token);
+    assert.deepEqual(await (await spicy('create', { token: firstQuote.token })).json(), { taskId: 'job_mock' });
+    assert.deepEqual(await (await spicy('create', { token: secondQuote.token })).json(), { taskId: 'job_mock' });
+    assert.deepEqual(await (await spicy('pending')).json(), { taskId: 'job_mock' });
+    assert.equal(upstream.filter(url => url === 'https://api.spicyapi.ai/api/v1/jobs/createTask').length, 1);
+    for (const path of ['/server.js', '/package-lock.json', '/user_presets/private.json']) {
+        assert.equal((await fetch(base + path)).status, 404);
+    }
+    assert.equal((await fetch(base + '/script.js')).status, 200);
+    const logout = await fetch(base + '/logout', { method: 'POST', headers: owner });
+    assert.equal(logout.status, 204);
+    assert.match(logout.headers.get('set-cookie'), /ai-prod\.sid=;/);
+    assert.equal((await (await fetch(base + '/api/me', { headers: owner })).json()).user, null);
+});

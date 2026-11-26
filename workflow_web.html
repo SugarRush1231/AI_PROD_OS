@@ -1356,6 +1356,7 @@
 
             <textarea id="imagePromptInput" class="lab-textarea" placeholder="예: 네온 사인이 빛나는 사이버펑크 도시, 비 오는 밤, 8k 해상도"
               style="height: 180px; font-size: 0.95rem; line-height: 1.6; background: var(--input-bg); border: 1px solid var(--border-strong);"></textarea>
+            <div id="image-ref-chips" class="reference-chips" aria-label="Seedream 참고 이미지" hidden></div>
 
             <div id="spicy-image-controls" hidden>
               <label for="image-provider" class="label-mono">이미지 모델</label>
@@ -1364,6 +1365,7 @@
                 <option value="spicy">SpicyAPI · Seedream 5.5 Edit</option>
               </select>
               <div id="spicy-image-balance" class="capacity-hint" role="status"></div>
+              <div id="spicy-output-settings" class="capacity-hint" hidden>1K · PNG · 배경 자동</div>
             </div>
 
             <div class="studio-action-bar"
@@ -1495,7 +1497,7 @@
 
             <div class="video-frame-settings" style="margin-top: 16px;">
               <div class="label-mono" style="font-size: 0.7rem; color: var(--fg-dim); margin-bottom: 6px;">REFERENCE IMAGES · 최대 7장</div>
-              <p class="vref-hint">제품·인물·배경 사진을 함께 넣으면 영상에서 덜 바뀝니다. 프롬프트에서 <code>@image1</code>, <code>@image2</code>처럼 가리킬 수 있어요. (시작·끝 장면 지정이 아니라 <b>참고용</b>으로 쓰입니다)</p>
+              <p class="vref-hint">첨부 이미지의 번호를 누르면 프롬프트에 참조가 삽입됩니다.</p>
               <input type="file" id="video-ref-file" accept="image/jpeg,image/png,image/webp" multiple style="display: none;">
               <div id="video-ref-grid" class="vref-grid" aria-live="polite"></div>
             </div>

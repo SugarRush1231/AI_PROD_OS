@@ -17,27 +17,33 @@ test('owner-only upload, live schema, balance, quote, idempotent creation and po
         const path = new URL(url).pathname;
         calls.push({ path, options });
         const ok = (data) => ({ ok: true, json: async () => ({ code: 200, data }) });
-        if (path === '/upload') {
+        if (path.startsWith('/upload/')) {
             assert.equal(options.method, 'PUT');
             assert.equal(options.headers.Authorization, undefined);
-            assert.deepEqual(options.body, Buffer.from('image'));
+            assert.deepEqual(options.body, Buffer.from(path.endsWith('/fil_5') ? 'image' : 'second'));
             return { ok: true };
         }
         assert.equal(options.headers.Authorization, 'Bearer mock-spicy-key');
         if (path.includes('/models/')) return ok({
             model, enabled: true, available: true,
             inputSchema: { properties: {
-                prompt: { maxLength: 48 }, image_urls: { type: 'array', items: { type: 'string' } },
+                prompt: { maxLength: 48 }, image_urls: { type: 'array', maxItems: 2, items: { type: 'string' } },
+                resolution: { enum: ['1k', '2k'] }, output_format: { enum: ['png', 'jpeg'] },
+                background: { enum: ['auto'] },
                 aspect_ratio: { enum: ['1:1'] }
             } }
         });
         if (path.endsWith('/credit')) return ok({ available: '1.20', funding: { prepaidAvailableUsd: '1.10' } });
-        if (path.endsWith('/upload-url')) return ok({ uploadUrl: 'https://mock.invalid/upload',
-            fileId: 'fil_mock', maxBytes: 100, headers: { 'Content-Length': '5' } });
-        if (path.endsWith('/commit')) return ok({ status: 'ready', uri: 'spicy://f/fil_mock' });
+        if (path.endsWith('/upload-url')) {
+            const { bytes } = JSON.parse(options.body);
+            return ok({ uploadUrl: `https://mock.invalid/upload/fil_${bytes}`,
+                fileId: `fil_${bytes}`, maxBytes: 100, headers: { 'Content-Length': String(bytes) } });
+        }
+        if (path.endsWith('/commit')) return ok({ status: 'ready', uri: `spicy://f/${path.split('/').at(-2)}` });
         if (path.endsWith('/quote')) {
             assert.deepEqual(JSON.parse(options.body), {
-                model, input: { prompt: 'Edit', image_urls: ['spicy://f/fil_mock'], aspect_ratio: '1:1' }
+                model, input: { prompt: 'Combine Image 1 and Image 2', image_urls: ['spicy://f/fil_5', 'spicy://f/fil_6'],
+                    aspect_ratio: '1:1', resolution: '1k', output_format: 'png', background: 'auto' }
             });
             return ok({ quoteId: 'quote_mock', estimatedCost: '0.035', currency: 'USD',
                 expiresAt: new Date(Date.now() + 300000).toISOString() });
@@ -79,8 +85,12 @@ test('owner-only upload, live schema, balance, quote, idempotent creation and po
     assert.equal(calls.length, 0);
     assert.deepEqual(await (await call('balance')).json(), { available: '1.20', prepaid: '1.10' });
     assert.equal((await call('quote', { body: { prompt: 'Edit' } })).status, 400);
+    const images = ['data:image/png;base64,aW1hZ2U=', 'data:image/png;base64,c2Vjb25k'];
+    assert.equal((await call('quote', { body: { prompt: 'Use @image 3', images } })).status, 400);
+    assert.equal((await call('quote', { body: { prompt: 'Edit', images: [...images, images[0]] } })).status, 400);
+    assert.equal(calls.filter(x => x.path.endsWith('/upload-url')).length, 0);
     const quote = await (await call('quote', { body: {
-        prompt: 'Edit', ratio: '1:1', image: 'data:image/png;base64,aW1hZ2U='
+        prompt: 'Combine @image 1 and @image 2', ratio: '1:1', images
     } })).json();
     assert.equal(quote.cost, '0.035');
     assert.equal(calls.filter(x => x.path.includes('/models/')).length, 1);
@@ -94,6 +104,8 @@ test('owner-only upload, live schema, balance, quote, idempotent creation and po
     assert.ok(creates[0].options.headers['Idempotency-Key']);
     assert.deepEqual(creates[0].options, creates[1].options);
     assert.equal(JSON.parse(creates[0].options.body).expectedCost, '0.035');
+    const quoted = JSON.parse(calls.find(x => x.path.endsWith('/quote')).options.body);
+    assert.deepEqual(JSON.parse(creates[0].options.body).input, quoted.input);
     for (rejection of [40201, 40202]) {
         const before = calls.length;
         const result = await submit();
@@ -130,10 +142,10 @@ test('editor requires price confirmation and does not auto-resubmit rejected con
         }
     });
     vm.runInContext(snippet, context);
-    assert.equal(await context.runSpicyEdit('Edit', 'image', '1:1'), null);
+    assert.equal(await context.runSpicyEdit('Edit', ['image'], '1:1'), null);
     assert.deepEqual(calls.splice(0), ['pending', 'quote']);
     confirmed = true;
-    await assert.rejects(context.runSpicyEdit('Edit', 'image', '1:1'), /콘텐츠가 거절/);
+    await assert.rejects(context.runSpicyEdit('Edit', ['image'], '1:1'), /콘텐츠가 거절/);
     assert.deepEqual(calls, ['pending', 'quote', 'create', 'task/job_mock']);
     assert.equal(values.size, 0);
 });

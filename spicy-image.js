@@ -133,30 +133,61 @@ function spicyImageRouter(request = fetch, { pool, generationQuota } = {}) {
         const props = schema.properties;
         const imageField = ['image_urls', 'image_url', 'reference_image_urls'].find(name =>
             props[name]?.type === 'string' || (props[name]?.type === 'array' && props[name].items?.type === 'string'));
-        if (!imageField || props[imageField].minItems > 1) fail(503, '현재 스키마의 참고 이미지 형식을 지원할 수 없습니다.');
-        const { prompt, image, ratio } = req.body || {};
-        if (typeof prompt !== 'string' || !prompt.trim() || prompt.length > (props.prompt.maxLength ?? 10000)) {
+        if (!imageField) fail(503, '현재 스키마의 참고 이미지 형식을 지원할 수 없습니다.');
+        const { prompt: rawPrompt, image, images, ratio } = req.body || {};
+        const prompt = typeof rawPrompt === 'string' ? rawPrompt.replace(/@image\s*(\d+)\b/gi, 'Image $1') : '';
+        if (!prompt.trim() || prompt.length > (props.prompt.maxLength ?? 10000)) {
             fail(400, '모델의 길이 제한에 맞는 편집 프롬프트를 입력해 주세요.');
         }
-        const maxBytes = Math.min(MAX_IMAGE_BYTES, (props[imageField]['x-ui']?.max_size_mb || 10) * 1024 * 1024);
-        const match = typeof image === 'string' && image.length <= Math.ceil(maxBytes / 3) * 4 + 40 &&
-            /^data:(image\/(?:jpeg|png|webp|gif));base64,([A-Za-z0-9+/]+={0,2})$/.exec(image);
-        const bytes = match && Buffer.from(match[2], 'base64');
-        if (!bytes?.length || bytes.length > maxBytes) {
-            fail(400, `참고 이미지가 필요합니다. JPEG, PNG, WebP, GIF (${maxBytes / 1048576} MiB 이하).`);
+        const output = { resolution: '1k', output_format: 'png', background: 'auto' };
+        for (const [name, value] of Object.entries(output)) {
+            if (!props[name] || (props[name].enum && !props[name].enum.includes(value)) ||
+                (Object.hasOwn(props[name], 'const') && props[name].const !== value)) {
+                fail(503, '현재 스키마에서 1K PNG 자동 배경 출력을 사용할 수 없습니다.');
+            }
         }
-        const ticket = await api('/common/upload-url', { contentType: match[1], bytes: bytes.length });
-        if (!/^https:\/\//.test(ticket.uploadUrl) || !/^fil_[\w-]+$/.test(ticket.fileId) || bytes.length > ticket.maxBytes) {
-            fail(502, 'SpicyAPI 업로드 정보를 확인할 수 없습니다.');
+        const imageSchema = props[imageField];
+        const isArray = imageSchema.type === 'array';
+        const maxCount = isArray ? Math.min(10, imageSchema.maxItems ?? 10) : 1;
+        const minCount = isArray ? Math.max(1, imageSchema.minItems ?? 1) : 1;
+        const references = images ?? (image ? [image] : []);
+        if (!Array.isArray(references) || references.length < minCount || references.length > maxCount) {
+            fail(400, `참고 이미지는 ${minCount}~${maxCount}장 첨부해 주세요.`);
         }
-        const uploaded = await request(ticket.uploadUrl, {
-            method: 'PUT', headers: ticket.headers, body: bytes, redirect: 'error', timeout: 30000
+        for (const [, number] of prompt.matchAll(/\bImage\s+(\d+)\b/gi)) {
+            if (+number < 1 || +number > references.length) fail(400, `Image ${number}에 해당하는 첨부 이미지가 없습니다.`);
+        }
+        const maxBytes = Math.min(MAX_IMAGE_BYTES, (imageSchema['x-ui']?.max_size_mb || 10) * 1024 * 1024);
+        const files = references.map((reference, index) => {
+            const match = typeof reference === 'string' && reference.length <= Math.ceil(maxBytes / 3) * 4 + 40 &&
+                /^data:(image\/(?:jpeg|png|webp|gif));base64,([A-Za-z0-9+/]+={0,2})$/.exec(reference);
+            const bytes = match && Buffer.from(match[2], 'base64');
+            if (!bytes?.length || bytes.length > maxBytes) {
+                fail(400, `Image ${index + 1}의 형식 또는 용량을 확인해 주세요. JPEG, PNG, WebP, GIF (${maxBytes / 1048576} MiB 이하).`);
+            }
+            return { contentType: match[1], bytes };
         });
-        if (!uploaded.ok) fail(502, '참고 이미지 업로드에 실패했습니다.');
-        const asset = await api(`/files/${ticket.fileId}/commit`, null);
-        if (asset.status !== 'ready' || asset.uri !== `spicy://f/${ticket.fileId}`) fail(502, '참고 이미지 준비에 실패했습니다.');
+        if (files.reduce((total, file) => total + file.bytes.length, 0) > MAX_IMAGE_BYTES) {
+            fail(400, '참고 이미지 전체 용량은 10 MiB 이하여야 합니다.');
+        }
+        const uris = [];
+        for (let offset = 0; offset < files.length; offset += 3) {
+            uris.push(...await Promise.all(files.slice(offset, offset + 3).map(async ({ contentType, bytes }) => {
+                const ticket = await api('/common/upload-url', { contentType, bytes: bytes.length });
+                if (!/^https:\/\//.test(ticket.uploadUrl) || !/^fil_[\w-]+$/.test(ticket.fileId) || bytes.length > ticket.maxBytes) {
+                    fail(502, 'SpicyAPI 업로드 정보를 확인할 수 없습니다.');
+                }
+                const uploaded = await request(ticket.uploadUrl, {
+                    method: 'PUT', headers: ticket.headers, body: bytes, redirect: 'error', timeout: 30000
+                });
+                if (!uploaded.ok) fail(502, '참고 이미지 업로드에 실패했습니다.');
+                const asset = await api(`/files/${ticket.fileId}/commit`, null);
+                if (asset.status !== 'ready' || asset.uri !== `spicy://f/${ticket.fileId}`) fail(502, '참고 이미지 준비에 실패했습니다.');
+                return asset.uri;
+            })));
+        }
 
-        const input = { prompt, [imageField]: props[imageField].type === 'array' ? [asset.uri] : asset.uri };
+        const input = { prompt, [imageField]: isArray ? uris : uris[0], ...output };
         for (const name of schema.required || []) {
             if (!Object.hasOwn(input, name) && props[name]?.default !== undefined) input[name] = props[name].default;
         }
@@ -167,8 +198,12 @@ function spicyImageRouter(request = fetch, { pool, generationQuota } = {}) {
             quote.currency !== 'USD' || !Number.isFinite(Date.parse(quote.expiresAt))) {
             fail(502, 'SpicyAPI 견적을 확인할 수 없습니다.');
         }
-        const fingerprint = createHash('sha256')
-            .update(JSON.stringify([prompt, input.aspect_ratio ?? null, match[1]])).update(bytes).digest('hex');
+        const { [imageField]: uploadedReferences, ...fingerprintInput } = input;
+        const fingerprintHash = createHash('sha256').update(JSON.stringify([
+            fingerprintInput, files.map(file => [file.contentType, file.bytes.length])
+        ]));
+        for (const { bytes } of files) fingerprintHash.update(bytes);
+        const fingerprint = fingerprintHash.digest('hex');
         const token = sealQuote({
             input, quoteId: quote.quoteId, expectedCost: quote.estimatedCost,
             owner: req.user.id, issued: Date.now(), fingerprint

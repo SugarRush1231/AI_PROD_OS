@@ -723,6 +723,12 @@ app.post('/api/video/create', ensurePaidAccess, strictAiLimiter, generationQuota
         // 참고 이미지: images[] (최대 7장, Grok Imagine 한도) 또는 예전 방식 image 1장
         const refs = (Array.isArray(images) ? images : (image ? [image] : []))
             .filter(x => typeof x === 'string' && x).slice(0, 7);
+        for (const [mention, number] of prompt.matchAll(/@image\s*(\d+)\b/gi)) {
+            if (+number < 1 || +number > refs.length) {
+                return res.status(400).json({ error: `${mention}에 해당하는 첨부 이미지가 없습니다.` });
+            }
+        }
+        input.prompt = prompt.replace(/@image\s*(\d+)\b/gi, '@image$1').slice(0, 2000);
         if (refs.length) {
             input.image_urls = [];
             for (const ref of refs) input.image_urls.push(ref.startsWith('http') ? ref : await uploadImageToKie(apiKey, ref));

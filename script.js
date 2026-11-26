@@ -2529,6 +2529,7 @@ async function checkAuthStatus() {
     const imageUploadBtn = document.getElementById('image-upload-btn'); // 첨부 버튼
     if (imageInput) {
       imageInput.disabled = !isLoggedIn;
+      seedreamEditor.element.contentEditable = String(isLoggedIn && !seedreamEditor.element.hidden);
       imageInput.placeholder = isLoggedIn ? "그릴 내용을 상세하게 묘사해주세요 (예: 네온 사인이 빛나는 사이버펑크 도시...)" : "🔒 이미지 생성 기능을 사용하려면 로그인이 필요합니다.";
     }
     if (imageBtn) {
@@ -2546,6 +2547,7 @@ async function checkAuthStatus() {
     }
     const videoPrompt = document.getElementById('videoPromptInput');
     if (videoPrompt) videoPrompt.disabled = !paidOk;
+    videoReferenceEditor.element.contentEditable = String(paidOk && videoRefImages.length > 0);
     const apBtn = document.getElementById('ap-run-btn');
     if (apBtn) {
       apBtn.disabled = !isLoggedIn;
@@ -2839,6 +2841,191 @@ setTimeout(() => {
 }, 500);
 
 let currentImageBase64 = null;
+const spicyReferenceImages = [];
+const SPICY_REF_MAX = 10;
+const SPICY_REF_BYTES = 10 * 1024 * 1024;
+
+function createReferenceEditor(inputId, format, pattern) {
+  const input = document.getElementById(inputId);
+  const editor = document.createElement('div');
+  editor.className = 'lab-textarea reference-editor';
+  editor.hidden = true;
+  editor.setAttribute('role', 'textbox');
+  editor.setAttribute('aria-multiline', 'true');
+  editor.setAttribute('aria-label', input.placeholder);
+  editor.dataset.placeholder = input.placeholder;
+  input.after(editor);
+  let refs = [];
+  let caret;
+
+  function makeToken(src, index) {
+    const pill = document.createElement('span');
+    pill.className = 'reference-chip inline-reference';
+    pill.contentEditable = 'false';
+    const img = document.createElement('img');
+    img.src = src;
+    img.alt = '';
+    pill.append(img, format(index + 1));
+    return pill;
+  }
+
+  function render() {
+    editor.replaceChildren();
+    let offset = 0;
+    for (const match of input.value.matchAll(pattern)) {
+      editor.append(input.value.slice(offset, match.index));
+      const index = Number(match[1]) - 1;
+      editor.append(refs[index] ? makeToken(refs[index], index) : match[0]);
+      offset = match.index + match[0].length;
+    }
+    editor.append(input.value.slice(offset));
+    caret = null;
+  }
+
+  function rememberCaret() {
+    const selection = window.getSelection();
+    if (selection?.rangeCount && editor.contains(selection.anchorNode) && editor.contains(selection.focusNode)) {
+      caret = selection.getRangeAt(0).cloneRange();
+    }
+  }
+
+  function syncPrompt() {
+    function read(node) {
+      if (node.nodeType === Node.TEXT_NODE || node.classList?.contains('inline-reference')) return node.textContent;
+      if (node.nodeName === 'BR') return node.nextSibling ? '\n' : '';
+      const text = Array.from(node.childNodes, read).join('');
+      return ['DIV', 'P'].includes(node.nodeName) && node !== editor && node.previousSibling ? '\n' + text : text;
+    }
+    input.value = read(editor);
+  }
+
+  function insert(node, isReference = false) {
+    if (input.disabled) return;
+    const range = caret?.cloneRange() || document.createRange();
+    if (!caret || !editor.contains(range.commonAncestorContainer)) {
+      range.selectNodeContents(editor);
+      range.collapse(false);
+    }
+    range.deleteContents();
+    if (isReference) {
+      const leading = range.cloneRange();
+      leading.setStart(editor, 0);
+      const spacer = document.createTextNode(' ');
+      const fragment = document.createDocumentFragment();
+      if (/\S$/.test(leading.toString())) fragment.append(' ');
+      fragment.append(node, spacer);
+      range.insertNode(fragment);
+      range.setStartAfter(spacer);
+    } else {
+      range.insertNode(node);
+      range.setStartAfter(node);
+    }
+    range.collapse(true);
+    editor.focus();
+    const selection = window.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+    rememberCaret();
+    syncPrompt();
+  }
+
+  document.addEventListener('selectionchange', rememberCaret);
+  editor.addEventListener('input', syncPrompt);
+  editor.addEventListener('paste', event => {
+    event.preventDefault();
+    if (!event.clipboardData) return;
+    rememberCaret();
+    insert(document.createTextNode(event.clipboardData.getData('text/plain')));
+  });
+  editor.addEventListener('dragover', event => event.preventDefault());
+  editor.addEventListener('drop', event => event.preventDefault());
+  input.addEventListener('input', () => { if (!editor.hidden) render(); });
+  return {
+    update(nextRefs, active) {
+      refs = [...nextRefs];
+      input.hidden = active;
+      editor.hidden = !active;
+      editor.contentEditable = String(active && !input.disabled);
+      if (active) render();
+    },
+    insertReference(index) {
+      if (!refs[index]) return;
+      insert(makeToken(refs[index], index), true);
+    },
+    remap(nextRefs) {
+      input.value = input.value.replace(pattern, (token, number) => {
+        const old = refs[Number(number) - 1];
+        if (!old) return token;
+        const index = nextRefs.indexOf(old);
+        return index < 0 ? '' : format(index + 1);
+      });
+    },
+    element: editor
+  };
+}
+
+const seedreamEditor = createReferenceEditor('imagePromptInput', number => `@image ${number}`,
+  /(?:@image\s*|\bImage\s+)(\d+)\b/gi);
+
+function renderSeedreamRefs(active) {
+  seedreamEditor.update(spicyReferenceImages.map(ref => ref.src), active);
+  const chips = document.getElementById('image-ref-chips');
+  chips.hidden = !active || !spicyReferenceImages.length;
+  chips.replaceChildren();
+  if (!active) return;
+  spicyReferenceImages.forEach(({ src }, index) => {
+    const chip = document.createElement('span');
+    chip.className = 'reference-chip';
+    const insert = document.createElement('button');
+    insert.type = 'button';
+    insert.title = '프롬프트에 참고 이미지 삽입';
+    const img = document.createElement('img');
+    img.src = src;
+    img.alt = '';
+    insert.append(img, `@image ${index + 1}`);
+    insert.addEventListener('click', () => seedreamEditor.insertReference(index));
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.textContent = '×';
+    remove.setAttribute('aria-label', `참고 이미지 ${index + 1} 제거`);
+    remove.addEventListener('click', () => {
+      spicyReferenceImages.splice(index, 1);
+      seedreamEditor.remap(spicyReferenceImages.map(ref => ref.src));
+      renderSeedreamRefs(true);
+    });
+    chip.append(insert, remove);
+    chips.append(chip);
+  });
+}
+
+let spicyFileBatch = Promise.resolve();
+function addSeedreamFiles(files) {
+  const selected = Array.from(files);
+  spicyFileBatch = spicyFileBatch.then(async () => {
+    let total = spicyReferenceImages.reduce((sum, ref) => sum + ref.size, 0);
+    let skipped = 0;
+    for (const file of selected) {
+      if (!/^image\/(?:jpeg|png|webp|gif)$/.test(file.type) || !file.size ||
+          spicyReferenceImages.length >= SPICY_REF_MAX || total + file.size > SPICY_REF_BYTES) {
+        skipped++;
+        continue;
+      }
+      const src = await new Promise(resolve => {
+        const reader = new FileReader();
+        reader.onerror = () => resolve(null);
+        reader.onload = () => resolve(reader.result);
+        reader.readAsDataURL(file);
+      });
+      if (!src || spicyReferenceImages.some(ref => ref.src === src)) { skipped++; continue; }
+      spicyReferenceImages.push({ src, size: file.size });
+      total += file.size;
+    }
+    if (skipped) alert(`${skipped}개 파일을 추가하지 못했습니다. JPG·PNG·WebP·GIF, 최대 10장, 전체 10 MiB까지 첨부할 수 있습니다.`);
+    renderSeedreamRefs(document.getElementById('image-provider').value === 'spicy');
+  });
+}
+
+seedreamEditor.element.addEventListener('drop', event => addSeedreamFiles(event.dataTransfer.files));
 
 setTimeout(() => {
   const imageFileInput = document.getElementById('image-file-input');
@@ -2856,7 +3043,9 @@ setTimeout(() => {
 
     imageFileInput.addEventListener('change', (e) => {
       if (e.target.files && e.target.files[0]) {
-        handleImageSelection(e.target.files[0]);
+        if (document.getElementById('image-provider').value === 'spicy') addSeedreamFiles(e.target.files);
+        else handleImageSelection(e.target.files[0]);
+        e.target.value = '';
       }
     });
   }
@@ -2966,8 +3155,12 @@ function initSpicyImageControls(ownerId) {
   controls.hidden = false;
   provider.addEventListener('change', () => {
     const isSpicy = provider.value === 'spicy';
+    document.getElementById('spicy-output-settings').hidden = !isSpicy;
+    document.getElementById('image-file-input').multiple = isSpicy;
+    document.getElementById('image-preview-container').style.display = !isSpicy && currentImageBase64 ? 'block' : 'none';
+    renderSeedreamRefs(isSpicy);
     document.getElementById('image-reference-hint').textContent = isSpicy
-      ? '편집할 참고 이미지 1장을 첨부하세요.'
+      ? '최대 10장 · 전체 10 MiB. 첨부 이미지 번호를 눌러 프롬프트에 삽입하세요.'
       : '(참고 이미지는 현재 미반영 · 텍스트 프롬프트로 생성)';
     if (isSpicy) refreshSpicyBalance();
   });
@@ -3003,13 +3196,13 @@ async function refreshSpicyBalance() {
   }
 }
 
-async function runSpicyEdit(prompt, image, ratio, status) {
+async function runSpicyEdit(prompt, images, ratio, status) {
   let pending = await spicyImageRequest('pending');
   pending ||= JSON.parse(localStorage.getItem(spicyImageStorageKey) || 'null');
   if (!pending) {
     if (!prompt) throw new Error('편집 프롬프트와 참고 이미지를 입력해 주세요.');
     if (status) status.textContent = '참고 이미지 업로드 및 견적 조회 중...';
-    const quote = await spicyImageRequest('quote', { prompt, image, ratio });
+    const quote = await spicyImageRequest('quote', { prompt, images, ratio });
     const expires = new Date(quote.expiresAt).toLocaleTimeString();
     const ratioNote = ratio !== 'auto' && quote.ratio !== ratio ? ' 모델의 기본 화면 비율을 적용합니다.' : '';
     const confirmed = await showSystemConfirm('Seedream 5.5 Edit',
@@ -3135,9 +3328,6 @@ async function generateImage() {
     }
   }
 
-  // 0. 이미지 처리 (압축 제거 - 원본 전송)
-  let processedBase64 = currentImageBase64;
-
   // UI 초기화 (프로그레스 바 시작)
   const orgBtnText = btn.innerHTML;
   btn.innerHTML = '<span class="spinner"></span> AI 이미지 생성 중...';
@@ -3195,6 +3385,10 @@ async function generateImage() {
   const timeoutId = setTimeout(() => controller.abort(), 180000); // 180초 타임아웃
 
   try {
+    const editWithReferences = async () => {
+      await spicyFileBatch;
+      return runSpicyEdit(cleanPrompt, spicyReferenceImages.map(ref => ref.src), ratioValue, statusTxt);
+    };
     const response = useSpicy ? null : await apiFetch('/api/generate-image', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -3208,9 +3402,9 @@ async function generateImage() {
       ? await (navigator.locks
         ? navigator.locks.request(spicyImageStorageKey, { ifAvailable: true }, lock => {
           if (!lock) throw new Error('다른 탭에서 Seedream 요청을 처리 중입니다.');
-          return runSpicyEdit(cleanPrompt, processedBase64, ratioValue, statusTxt);
+          return editWithReferences();
         })
-        : runSpicyEdit(cleanPrompt, processedBase64, ratioValue, statusTxt))
+        : editWithReferences())
       : await response.json();
     if (!responseData) { if (statusTxt) statusTxt.textContent = '편집 제출을 취소했습니다.'; return; }
 
@@ -3328,18 +3522,26 @@ if (imageGenBtn) {
 // 🎬 영상 참고 이미지 (Grok Imagine: 최대 7장, 프롬프트에서 @image1… 로 지칭 가능)
 const VIDEO_REF_MAX = 7;
 let videoRefImages = [];
+const videoReferenceEditor = createReferenceEditor('videoPromptInput', number => `@image${number}`, /@image\s*(\d+)\b/gi);
 function renderVideoRefs() {
   const grid = document.getElementById('video-ref-grid');
   if (!grid) return;
+  videoReferenceEditor.update(videoRefImages, videoRefImages.length > 0);
   grid.innerHTML = '';
   videoRefImages.forEach((src, i) => {
     const tile = document.createElement('div');
     tile.className = 'vref-tile';
     const img = document.createElement('img'); img.src = src; img.alt = `참고 이미지 ${i + 1}`;
     img.addEventListener('click', () => openImageViewer(src));
-    const tag = document.createElement('span'); tag.className = 'vref-tag'; tag.textContent = `@image${i + 1}`;
+    const tag = document.createElement('button'); tag.type = 'button'; tag.className = 'vref-tag reference-insert'; tag.textContent = `@image${i + 1}`;
+    tag.title = '프롬프트에 참고 이미지 삽입';
+    tag.addEventListener('click', () => videoReferenceEditor.insertReference(i));
     const del = document.createElement('button'); del.type = 'button'; del.className = 'vref-del'; del.setAttribute('aria-label', `참고 이미지 ${i + 1} 빼기`); del.textContent = '×';
-    del.addEventListener('click', (e) => { e.stopPropagation(); videoRefImages.splice(i, 1); renderVideoRefs(); });
+    del.addEventListener('click', () => {
+      videoRefImages.splice(i, 1);
+      videoReferenceEditor.remap(videoRefImages);
+      renderVideoRefs();
+    });
     tile.append(img, tag, del);
     grid.appendChild(tile);
   });
@@ -3362,6 +3564,7 @@ function addVideoRefs(srcs) {
 function setVideoImageRef(url) {
   if (!url) return;
   videoRefImages = [url, ...videoRefImages.filter(s => s !== url)].slice(0, VIDEO_REF_MAX);
+  videoReferenceEditor.remap(videoRefImages);
   renderVideoRefs();
 }
 // 휴대폰 사진(수 MB·수천 px)은 그대로 보내면 영상 모델이 Internal error를 내기 쉬워서
@@ -3552,6 +3755,7 @@ if (sendToStudioBtn) {
     const input = document.getElementById('imagePromptInput');
     if (!input) return;
     input.value = toImagePrompt(raw);
+    input.dispatchEvent(new Event('input'));
     // 비율 자동: 세로형 기본 (숏폼)
     const ratioSel = document.getElementById('imageRatioInput');
     if (ratioSel && [...ratioSel.options].some(o => o.value === '9:16') && ratioSel.value === '1:1') ratioSel.value = '9:16';

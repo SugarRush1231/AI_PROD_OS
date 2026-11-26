@@ -47,14 +47,15 @@ test('PostgreSQL-backed HTTP access, OAuth state, video ownership and logout', {
     };
     const upstream = [];
     require('node-fetch');
-    require.cache[require.resolve('node-fetch')].exports = async (url) => {
+    require.cache[require.resolve('node-fetch')].exports = async (url, options) => {
         upstream.push(url);
         if (url.includes('spicyapi.ai') || url === 'https://spicy-upload.example.org/object') {
             const model = 'bytedance/seedream-5.5/edit';
             const response = data => ({ ok: true, json: async () => ({ code: 200, data }) });
             if (url.includes('/models/')) return response({
                 model, enabled: true, available: true, inputSchema: { properties: {
-                    prompt: { type: 'string' }, image_urls: { type: 'array', items: { type: 'string' } }
+                    prompt: { type: 'string' }, image_urls: { type: 'array', items: { type: 'string' } },
+                    resolution: { enum: ['1k'] }, output_format: { enum: ['png'] }, background: { enum: ['auto'] }
                 } }
             });
             if (url.endsWith('/upload-url')) return response({
@@ -67,7 +68,12 @@ test('PostgreSQL-backed HTTP access, OAuth state, video ownership and logout', {
             if (url.endsWith('/createTask')) return response({ taskId: 'job_mock' });
             assert.fail(url);
         }
-        if (url.includes('/createTask')) return { json: async () => ({ code: 200, data: { taskId: 'test-task' } }) };
+        if (url.includes('/createTask')) {
+            const { input } = JSON.parse(options.body);
+            assert.equal(input.prompt, 'Animate @image1 with @image2');
+            assert.deepEqual(input.image_urls, ['https://example.org/one.png', 'https://example.org/two.png']);
+            return { json: async () => ({ code: 200, data: { taskId: 'test-task' } }) };
+        }
         if (url.includes('/recordInfo')) {
             return { json: async () => ({ data: { state: 'success', resultJson: '{"resultUrls":["https://example.org/video.mp4"]}' } }) };
         }
@@ -109,7 +115,8 @@ test('PostgreSQL-backed HTTP access, OAuth state, video ownership and logout', {
     const second = await signedIn('second', 'second@example.org');
     const free = await signedIn('free', 'free@example.org');
     const create = headers => fetch(base + '/api/video/create', {
-        method: 'POST', headers, body: JSON.stringify({ prompt: 'Animate the scene' })
+        method: 'POST', headers, body: JSON.stringify({ prompt: 'Animate @image 1 with @image2',
+            images: ['https://example.org/one.png', 'https://example.org/two.png'] })
     });
     assert.equal((await create({ ...owner, 'X-CSRF-Token': second['X-CSRF-Token'] })).status, 403);
     assert.equal((await create(free)).status, 403);

@@ -147,6 +147,8 @@ test('PostgreSQL-backed HTTP access, OAuth state, video ownership and logout', {
         assert.equal((await fetch(base + path)).status, 404);
     }
     assert.equal((await fetch(base + '/script.js')).status, 200);
+    assert.equal((await fetch(base + '/prompt-catalog.js')).status, 200);
+    assert.equal((await fetch(base + '/prompt-rules.js')).status, 200);
     const logout = await fetch(base + '/logout', { method: 'POST', headers: owner });
     assert.equal(logout.status, 204);
     assert.match(logout.headers.get('set-cookie'), /ai-prod\.sid=;/);

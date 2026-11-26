@@ -1,5 +1,15 @@
+const promptCatalog = globalThis.PromptCatalog;
+const promptRules = globalThis.PromptRules;
+promptCatalog.mount(document, promptRules.opticsFields);
+
 let csrfHeaderToken;
 let currentAccountId;
+let mediaStorageEnabled = false;
+let mediaTab = 'recent';
+let savedMedia = [];
+let mediaQuota;
+const recentMedia = [];
+const CURRENT_MEDIA_LIMIT = 30;
 
 function apiFetch(url, options = {}) {
   if (!options.method || ['GET', 'HEAD'].includes(options.method)) return fetch(url, options);
@@ -7,6 +17,147 @@ function apiFetch(url, options = {}) {
   if (csrfHeaderToken) headers.set('X-CSRF-Token', csrfHeaderToken);
   return fetch(url, { ...options, headers });
 }
+
+function initMediaLibrary() {
+  document.getElementById('media-library').hidden = false;
+  document.getElementById('media-library-link').hidden = false;
+  renderMediaLibrary();
+}
+
+function recordGeneratedMedia(kind, url, token, blob) {
+  if (!currentAccountId || !url || recentMedia.some(entry => entry.url === url)) return;
+  recentMedia.unshift({ kind, url, token, blob, created_at: new Date().toISOString() });
+  if (recentMedia.length > CURRENT_MEDIA_LIMIT) recentMedia.pop();
+  if (mediaTab === 'recent') renderMediaLibrary();
+}
+
+function clearMediaView() {
+  document.getElementById('media-library-grid').replaceChildren();
+  recentMedia.length = 0;
+  savedMedia = [];
+  mediaQuota = undefined;
+  mediaTab = 'recent';
+}
+
+function mediaSize(bytes) {
+  return `${(Number(bytes) / (1024 * 1024)).toLocaleString(undefined, { maximumFractionDigits: 1 })} MiB`;
+}
+
+async function archiveRequest(path, options) {
+  const res = await apiFetch(`/api/media-archive${path}`, options);
+  if (res.status === 204) return null;
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || '보관함 요청에 실패했습니다.');
+  return data;
+}
+
+function mediaAction(label, handler) {
+  const button = document.createElement('button');
+  button.className = 'btn-skills secondary';
+  button.type = 'button';
+  button.textContent = label;
+  button.addEventListener('click', () => handler(button));
+  return button;
+}
+
+function renderMediaLibrary(message) {
+  const list = mediaTab === 'recent' ? recentMedia : savedMedia;
+  const grid = document.getElementById('media-library-grid');
+  const status = document.getElementById('media-library-status');
+  document.getElementById('media-recent-tab').setAttribute('aria-pressed', String(mediaTab === 'recent'));
+  document.getElementById('media-saved-tab').setAttribute('aria-pressed', String(mediaTab === 'saved'));
+  document.getElementById('media-library-quota').textContent = mediaTab === 'saved' && mediaQuota
+    ? `${mediaSize(savedMedia.reduce((total, item) => total + Number(item.bytes), 0))} / ${mediaSize(mediaQuota.limit)} · ${savedMedia.length}/${mediaQuota.maxItems}개` : '';
+  status.textContent = message || (mediaTab === 'recent'
+    ? list.length ? '페이지를 닫거나 로그아웃하면 이 기록이 사라집니다.' : '이번 세션에 생성한 이미지와 영상이 여기에 표시됩니다.'
+    : !mediaStorageEnabled ? '보관용 스토리지가 아직 연결되지 않았습니다.' : list.length ? '' : '아직 보관한 파일이 없습니다.');
+  grid.replaceChildren();
+  for (const entry of list) {
+    const card = document.createElement('article');
+    card.className = 'media-library-card';
+    const isVideo = entry.kind === 'video';
+    const title = isVideo ? '생성 영상' : '생성 이미지';
+    const media = document.createElement(isVideo ? 'video' : 'img');
+    media.src = entry.id ? `/api/media-archive/${entry.id}/file` : entry.url;
+    if (isVideo) {
+      media.controls = true;
+      media.playsInline = true;
+      media.preload = 'none';
+    } else {
+      media.loading = 'lazy';
+      media.alt = title;
+      media.tabIndex = 0;
+      const open = () => openImageViewer(media.src);
+      media.addEventListener('click', open);
+      media.addEventListener('keydown', event => { if (event.key === 'Enter') open(); });
+    }
+    const content = document.createElement('div');
+    content.className = 'media-library-entry';
+    const heading = document.createElement('strong');
+    heading.textContent = title;
+    const time = document.createElement('time');
+    time.dateTime = entry.created_at;
+    time.textContent = new Date(entry.created_at).toLocaleString() + (entry.id ? ` · ${mediaSize(entry.bytes)}` : '');
+    const actions = document.createElement('div');
+    actions.className = 'media-library-actions';
+    if (entry.id) {
+      actions.append(mediaAction('삭제', async button => {
+        if (!await showSystemConfirm('파일 삭제', '보관함에서 이 파일을 삭제할까요?', 'danger')) return;
+        button.disabled = true;
+        try {
+          await archiveRequest(`/${entry.id}`, { method: 'DELETE' });
+          savedMedia = savedMedia.filter(item => item.id !== entry.id);
+          for (const recent of recentMedia) if (recent.savedId === entry.id) recent.savedId = undefined;
+          renderMediaLibrary('보관 파일을 삭제했습니다.');
+        } catch (error) { status.textContent = error.message; button.disabled = false; }
+      }));
+    } else if (mediaStorageEnabled && (entry.token || entry.blob)) {
+      const save = mediaAction(entry.savedId ? '보관됨' : '보관', async button => {
+        button.disabled = true;
+        button.textContent = '보관 중…';
+        try {
+          if (entry.blob && entry.blob.size > 50 * 1024 * 1024) throw new Error('영상은 50 MiB까지 보관할 수 있습니다.');
+          const data = entry.blob ? new FormData() : JSON.stringify({ token: entry.token });
+          if (entry.blob) data.append('video', entry.blob, 'generated-video');
+          const item = await archiveRequest(entry.blob ? '/upload-video' : '', {
+            method: 'POST', body: data, headers: entry.blob ? undefined : { 'Content-Type': 'application/json' }
+          });
+          entry.savedId = item.id;
+          if (mediaTab === 'saved') await showSavedMedia();
+          else renderMediaLibrary('보관한 파일에 저장했습니다.');
+        } catch (error) {
+          status.textContent = error.message;
+          button.disabled = false;
+          button.textContent = '보관';
+        }
+      });
+      save.disabled = Boolean(entry.savedId);
+      actions.append(save);
+    }
+    content.append(heading, time, actions);
+    card.append(media, content);
+    grid.append(card);
+  }
+}
+
+async function showSavedMedia() {
+  mediaTab = 'saved';
+  renderMediaLibrary(mediaStorageEnabled ? '보관 파일을 불러오는 중…' : undefined);
+  if (!mediaStorageEnabled) return;
+  try {
+    mediaQuota = await archiveRequest('');
+    savedMedia = mediaQuota.items;
+    if (mediaTab === 'saved') renderMediaLibrary();
+  } catch (error) { if (mediaTab === 'saved') renderMediaLibrary(error.message); }
+}
+
+document.getElementById('media-recent-tab').addEventListener('click', () => {
+  mediaTab = 'recent';
+  renderMediaLibrary();
+});
+document.getElementById('media-saved-tab').addEventListener('click', showSavedMedia);
+window.addEventListener('pagehide', clearMediaView);
+window.addEventListener('pageshow', event => { if (event.persisted) location.reload(); });
 
 const UI = {
   intentInput: document.getElementById('intent-input'),
@@ -21,6 +172,8 @@ const UI = {
   ],
   paramType: document.getElementById('param-type'),
   paramStyle: document.getElementById('param-style'),
+  paramMood: document.getElementById('param-mood'),
+  paramPalette: document.getElementById('param-palette'),
   paramAngle: document.getElementById('param-angle'),
   paramHumanCamAngle: document.getElementById('param-human-cam-angle'),
   paramAnimalCamAngle: document.getElementById('param-animal-cam-angle'),
@@ -188,6 +341,21 @@ function showSystemConfirm(title, message, type = 'info', showInput = false) {
 }
 
 // --- CUSTOM PRESET SYSTEM (SERVER SYNC) ---
+function renderPalettePreview() {
+  const preview = document.getElementById('param-palette-preview');
+  const colors = promptCatalog.paletteColors(UI.paramPalette.value);
+  const swatches = colors.map(color => {
+    const swatch = document.createElement('span');
+    swatch.style.backgroundColor = color;
+    swatch.title = color;
+    return swatch;
+  });
+  preview.replaceChildren(...swatches);
+  preview.hidden = swatches.length === 0;
+}
+
+UI.paramPalette.addEventListener('change', renderPalettePreview);
+
 const MyPresets = {
   data: [],
   activeId: null, // 현재 활성화된 프리셋 추적
@@ -216,6 +384,8 @@ const MyPresets = {
     const defaults = {
       paramType: 'human',
       paramStyle: 'none',
+      paramMood: 'none',
+      paramPalette: 'none',
       paramAngle: '0',
       angleInput: '0',
       paramHumanCamAngle: 'none',
@@ -251,6 +421,7 @@ const MyPresets = {
         if (key === 'paramType') el.dispatchEvent(new Event('change'));
       }
     });
+    renderPalettePreview();
 
     // 2. 인풋 및 칩 초기화
     if (UI.paramCustom) UI.paramCustom.value = '';
@@ -290,6 +461,8 @@ const MyPresets = {
       params: {
         paramType: UI.paramType?.value,
         paramStyle: UI.paramStyle?.value,
+        paramMood: UI.paramMood?.value,
+        paramPalette: UI.paramPalette?.value,
         paramAngle: UI.paramAngle?.value,
         paramHumanCamAngle: UI.paramHumanCamAngle?.value,
         paramAnimalCamAngle: UI.paramAnimalCamAngle?.value,
@@ -370,6 +543,8 @@ const MyPresets = {
 
     this.activeId = id;
 
+    UI.paramMood.value = 'none';
+    UI.paramPalette.value = 'none';
     // 1. 기본적인 파라미터 복구
     Object.entries(p.params).forEach(([key, val]) => {
       const el = UI[key];
@@ -380,6 +555,7 @@ const MyPresets = {
         }
       }
     });
+    renderPalettePreview();
 
     // 1-b. 조명/광학 복구 (없는 구버전 프리셋은 기본값으로 마이그레이션)
     if (window.LightingLab) window.LightingLab.load(p.params.lighting, p.params.optics, p.params.lightingPanels);
@@ -969,101 +1145,6 @@ function setLabLayer(i, st, text) {
   status.append(document.createTextNode(text ? ` ${text}` : ''));
 }
 
-const OPTION_DESC = {
-  "k-drama": "Korean drama cinematography: soft warm grading, gentle backlight, romantic mood",
-  "film-35mm": "35mm analog film photo, natural grain, slightly faded colors",
-  "magazine": "high-end fashion magazine editorial photo, clean styling, crisp detail",
-  "product-ad": "premium commercial product advertisement photo, flawless lighting, sharp focus",
-  "y2k": "Y2K aesthetic, glossy flash photography, playful early-2000s colors",
-  "webtoon": "Korean webtoon digital illustration, clean line art, flat cel shading",
-  "watercolor": "soft watercolor painting, gentle color bleeding, paper texture",
-  "clay-3d": "cute 3D clay render, soft rounded shapes, pastel colors",
-  "pixel-art": "detailed pixel art, limited color palette, crisp pixels",
-  "walking": "walking naturally mid-stride",
-  "looking-back": "glancing back over the shoulder toward the viewer",
-  "hair-touch": "tucking hair behind the ear with one hand",
-  "chin-rest": "resting chin on one hand, elbow on a table",
-  "laughing": "laughing naturally, candid joyful moment",
-  "holding-cup": "holding a drink cup with both hands near the chest",
-  "using-phone": "looking down at a smartphone held in one hand",
-  "leaning-wall": "leaning casually against a wall",
-  "sitting-chair": "sitting relaxed on a chair",
-  "v-sign": "making a playful V-sign with fingers near the face",
-  "jumping": "jumping in mid-air",
-  "vlog-cam": "vlog-style self-filming angle, camera held slightly above at arm length (phone not visible)",
-  "through-window": "shot through a window glass with soft reflections",
-  "idol": "K-pop idol visual: flawless skin, defined features, polished styling",
-  "fresh": "fresh innocent look, minimal makeup, clear skin",
-  "chic": "chic cool expression, sharp eyeliner, confident gaze",
-  "mature": "elegant mature look, refined makeup",
-  "no-makeup": "effortless natural look, barely-there makeup",
-  "office-look": "smart office outfit: blouse or shirt with tailored trousers",
-  "athleisure": "athleisure: fitted sports top and leggings or joggers",
-  "knit-daily": "cozy oversized knit sweater with simple bottoms",
-  "dress": "simple elegant one-piece dress",
-  "denim": "denim jacket or jeans casual look",
-  "suit": "well-fitted modern suit",
-  "summer-linen": "light summer linen shirt and shorts or skirt",
-  "winter-coat": "long wool winter coat with a scarf",
-  "modern-hanbok": "modern minimal hanbok-inspired outfit",
-  "streetwear": "trendy streetwear: oversized top, wide pants, sneakers",
-  "techwear": "techwear: black technical fabrics, straps and utility pockets",
-  "luxury": "luxury designer look with refined tailoring and premium fabrics",
-  "academic": "neat preppy look: knit vest or cardigan over a collared shirt",
-  "vintage": "retro vintage outfit with classic cuts and muted colors",
-  "casual-chic": "relaxed casual-chic outfit: simple knit or shirt with clean trousers",
-  "minimal-basic": "minimal basic outfit in neutral tones: plain tee or shirt with clean-cut trousers",
-  "old-money": "quiet-luxury old-money style: cashmere knit, crisp shirt, tailored pleated trousers in cream and navy",
-  "gorpcore": "gorpcore outdoor style: technical shell jacket, fleece, cargo pants and trail shoes",
-  "y2k": "Y2K fashion: cropped top, low-rise jeans, small shoulder bag, playful accessories",
-  "preppy-uniform": "Korean school-uniform style: blazer, white shirt, tie and pleated skirt or trousers",
-  "trench-coat": "classic beige trench coat over simple layers",
-  "leather-jacket": "black leather biker jacket with dark jeans",
-  "blazer-casual": "relaxed blazer over a tee with straight trousers, smart-casual",
-  "cardigan-soft": "soft pastel cardigan with a long skirt or wide trousers",
-  "hoodie-comfy": "comfortable oversized hoodie and sweatpants",
-  "sporty-tennis": "tennis outfit: white pleated skirt or shorts, polo top, sneakers",
-  "golf-wear": "modern golf wear: fitted polo, pleated skirt or slim trousers, cap",
-  "yoga-wear": "fitted yoga wear in muted tones",
-  "swimwear-resort": "resort look: modest swimsuit with a linen cover-up",
-  "party-dress": "elegant evening party dress with subtle shine",
-  "wedding-guest": "refined wedding-guest outfit: soft-colored midi dress or light suit",
-  "pajama-home": "soft cotton pajama set, cozy home loungewear",
-  "chef-uniform": "white chef jacket and apron",
-  "doctor-gown": "clean white doctor's coat over scrubs",
-  "barista-apron": "barista look: simple shirt with a canvas apron",
-  "military-cargo": "military-inspired utility jacket and cargo pants in olive",
-  "boho": "bohemian style: flowing patterned maxi dress, layered jewelry",
-  "grunge": "90s grunge: flannel shirt, band-free plain tee, ripped jeans, boots",
-  "punk-rock": "punk rock style: studded leather, plaid, combat boots",
-  "k-idol-stage": "K-pop stage outfit: coordinated sparkly jacket or crop set, stage styling",
-  "traditional-hanbok": "traditional Korean hanbok with jeogori and chima in harmonious colors",
-  "kimono": "traditional Japanese kimono with obi",
-  "ski-wear": "insulated ski jacket and pants, goggles on the head",
-  "rain-gear": "glossy raincoat and rain boots",
-  "tuxedo": "classic black tuxedo with bow tie",
-  "extreme-close-up": "extreme close-up on the eyes and face details",
-  "medium-close-up": "medium close-up from chest up",
-  "negative-space": "subject small on one side with generous empty space",
-  "frame-in-frame": "subject framed by a doorway, window or arch",
-  "leading-lines": "strong lines in the scene leading the eye to the subject",
-  "head-tilt": "tilting the head curiously",
-  "belly-up": "lying on its back showing the belly",
-  "eating": "eating a treat",
-  "looking-up": "looking up at the camera with big eyes",
-  "petals": "flower petals drifting through the air",
-  "bokeh": "soft bokeh light orbs in the background",
-  "light-rays": "visible rays of light streaming through the scene",
-  "leaf-shadow": "dappled leaf shadows cast across the surface",
-  "ice-frost": "fresh ice cubes and frost condensation",
-  "ripples": "gentle water ripples around the subject",
-  "golden-hour": "warm low golden-hour sunlight",
-  "rim-backlight": "strong backlight creating a glowing rim outline",
-  "moody-dark": "dark moody low-key lighting with deep shadows",
-  "pastel-soft": "soft even pastel-toned lighting",
-  "hard-flash": "direct on-camera flash with crisp shadows"
-};
-const optDesc = (v) => (v && OPTION_DESC[v]) ? OPTION_DESC[v] : v;
 
 // ===== 수평 회전 각도 → 8방향 (이미지 모델은 숫자 각도를 못 알아들어서 말로 변환) =====
 function angleToDirection(val) {
@@ -1080,185 +1161,6 @@ function angleToDirection(val) {
   ];
   return dirs[Math.round(n / 45) % 8];
 }
-
-const BACKGROUND_REGISTRY = {
-  'han-river': "Han River park in Seoul at sunset, riverside grass and city bridges glowing in warm light.",
-  'seongsu-alley': "A trendy Seongsu-dong alley in Seoul with red-brick cafes and warm street lights.",
-  'hanok': "A traditional Korean hanok courtyard with wooden beams and tiled roofs.",
-  'cherry-blossom': "A street lined with blooming cherry blossom trees, soft pink petals.",
-  'rooftop-night': "A city rooftop at night with glittering skyline lights in the background.",
-  'subway': "A clean modern subway platform with soft fluorescent light.",
-  'office': "A bright modern office with desks, plants and large windows.",
-  'convenience-store': "In front of a Korean convenience store at night, glowing storefront light.",
-  'home-kitchen': "A cozy home kitchen with warm light and simple wooden cabinets.",
-  'bedroom': "A cozy bedroom with white bedding and morning sunlight through sheer curtains.",
-  'beach-sunset': "A calm beach at sunset with soft waves and an orange sky.",
-  'snowy-street': "A quiet street with gently falling snow and warm shop lights.",
-  'library': "A quiet bookstore or library with tall wooden bookshelves.",
-  'gym': "A modern gym with equipment softly blurred in the background.",
-  'white-seamless': "A plain seamless pure-white background, evenly lit, no props.",
-  'pastel-backdrop': "A plain seamless pastel-colored backdrop, evenly lit, no props.",
-  'snowy-field': "A snow-covered open field with soft winter light.",
-  'beach-dog': "A sandy beach with gentle waves.",
-  'sofa-blanket': "A soft sofa with a cozy knitted blanket in a warm living room.",
-  'flower-garden': "A colorful flower garden in soft daylight.",
-  'autumn-leaves': "A path covered in red and orange autumn leaves.",
-  'pet-cafe': "A bright pet cafe with wooden floors and toys.",
-  'white-backdrop': "A plain seamless pure-white background, evenly lit.",
-  'white-desk-sun': "A clean white desk with warm sunlight streaming from a window and soft shadows.",
-  'marble-vanity': "A white marble vanity countertop with a softly blurred mirror behind.",
-  'kitchen-counter': "A clean kitchen counter with natural light.",
-  'bathroom-shelf': "A minimal bathroom shelf with soft tiles and natural light.",
-  'cafe-wood-table': "A warm wooden cafe table with soft window light.",
-  'picnic': "A picnic blanket on green grass in sunlight.",
-  'water-surface': "A calm water surface with gentle reflections.",
-  'stone-podium': "A minimal natural stone podium with a soft seamless background.",
-  'gradient-studio': "A smooth color-gradient studio background.",
-  'hanok-interior': "A traditional Korean hanok interior with hanji paper doors and wooden floor.",
-  'night-city-window': "A window ledge overlooking a glittering night city.",
-
-  'life4cut': (poses) => `A 2x2 grid collage (4-split photo booth style). Background: A clean, minimalist studio with a solid, soft pastel-colored background (e.g., muted pink, blue, or lavender) to keep the focus on the subject. Each of the four panels MUST show a different unique pose: Panel 1: ${poses[0]}; Panel 2: ${poses[1]}; Panel 3: ${poses[2]}; Panel 4: ${poses[3]}. Upper-body centric. High-quality Photo Booth aesthetic.`,
-  'living-room': 'A cozy, modern indoor living room or room with natural soft lighting and elegant interior details.',
-  'mountain-stars': 'A breathtaking vast mountain range at night under a brilliant galaxy of stars, with soft celestial glow and deep cinematic depth.',
-  'empty-beach': 'A serene and empty tropical beach with gentle waves, soft white sand, and a clear horizontal view, evoking solitude and peace.',
-  'vast-nature': 'A broad, expansive natural landscape with rolling hills, distant forests, and epic lighting, capturing the scale of the wilderness.',
-  'cosmetic-studio': 'A high-end, luxury cosmetic advertising studio. Focus on the subject placed on a clean marble or glass pedestal, surrounded by soft ripples of water, elegant refractive lighting, and a minimalist pastel silk backdrop. Professional product photography.',
-  'green-chroma': "A flat, evenly lit chroma-key green screen background (pure #00B140 green), no shadows or wrinkles on the backdrop, clean edges around the subject for easy keying, no green spill on the subject.",
-  'blue-chroma': "A flat, evenly lit chroma-key blue screen background (pure #0047BB blue), no shadows on the backdrop, clean subject edges for easy keying.",
-  'black-seamless': "A plain seamless deep-black background, subject isolated with no visible backdrop texture.",
-  'gray-seamless': "A plain seamless mid-gray studio backdrop, evenly lit, no props.",
-  'beige-seamless': "A plain seamless warm beige backdrop, soft and evenly lit, no props.",
-  'sky-blue-seamless': "A plain seamless soft sky-blue backdrop, evenly lit, no props.",
-  'color-block': "A bold two-tone color-block backdrop with clean geometric shapes, pop editorial look.",
-  'paper-texture': "A plain off-white textured paper backdrop with subtle fibers.",
-  'concrete-wall': "A smooth raw exposed-concrete wall as a minimal backdrop.",
-  'brick-wall': "A red brick wall as a casual backdrop.",
-  'bokeh-lights': "A dark background filled with soft out-of-focus bokeh light circles.",
-  'idol-stage': "A K-pop concert stage with colorful stage lights, LED screens and haze.",
-  'photo-studio-backdrop': "A Korean profile-photo studio with a clean mottled gray canvas backdrop.",
-  'hair-salon': "A bright modern hair salon with mirrors and styling chairs.",
-  'department-store': "An elegant department store floor with polished displays and warm lighting.",
-  'airport': "A bright airport departure hall with large windows and departure boards.",
-  'airplane-window': "An airplane window seat with soft daylight and clouds outside.",
-  'train-window': "A train seat by the window with countryside scenery passing outside.",
-  'car-interior': "Inside a modern car, driver or passenger seat, daylight through the windows.",
-  'bus-stop': "A Korean city bus stop shelter with street traffic in the background.",
-  'crosswalk': "A busy downtown crosswalk with city buildings.",
-  'gangnam-street': "A wide Gangnam boulevard with glass office towers.",
-  'myeongdong': "The bustling Myeongdong shopping street with shop signs.",
-  'hongdae': "A lively Hongdae street with murals, small shops and young crowds.",
-  'traditional-market': "A lively Korean traditional market with food stalls and hanging lights.",
-  'pojangmacha': "Inside an orange-tented Korean street food bar (pojangmacha) at night.",
-  'korean-bbq': "A Korean BBQ restaurant table with a grill and side dishes.",
-  'bakery': "A cozy bakery with bread on wooden shelves and warm light.",
-  'bar-lounge': "A dim upscale cocktail bar with backlit bottles.",
-  'fine-dining': "An elegant fine-dining restaurant with white tablecloths and soft candlelight.",
-  'museum-gallery': "A minimalist white art gallery with framed works on the walls.",
-  'classroom': "A Korean school classroom with desks, a blackboard and windows.",
-  'university-campus': "A green university campus with old stone buildings.",
-  'hospital': "A clean bright medical clinic room.",
-  'hotel-room': "A luxurious hotel room with crisp white bedding and city view.",
-  'hotel-lobby': "A grand hotel lobby with marble floors and chandeliers.",
-  'pool-side': "A sunny resort poolside with loungers and turquoise water.",
-  'tropical-resort': "A tropical resort with palm trees and white sand.",
-  'jeju-coast': "The Jeju Island coastline with black volcanic rocks and blue sea.",
-  'mountain-peak': "A mountain summit overlooking layered ridges and clouds.",
-  'camping': "A campsite with a tent, camping chairs and a small fire at dusk.",
-  'forest-path': "A sunlit forest path with tall trees.",
-  'flower-field': "A wide field of yellow rapeseed flowers under a blue sky.",
-  'autumn-park': "A park full of red and yellow autumn leaves.",
-  'rainy-street': "A rainy city street with reflections on wet pavement and umbrellas.",
-  'night-market-neon': "A night market with string lights and food stalls.",
-  'amusement-park': "An amusement park with a carousel and colorful lights.",
-  'basketball-court': "An outdoor basketball court with a chain-link fence.",
-  'running-track': "A red running track in a stadium.",
-  'yoga-studio': "A calm yoga studio with wooden floor and plants.",
-  'recording-studio': "A music recording studio with a microphone and acoustic panels.",
-  'home-office': "A tidy home office desk with a laptop, lamp and bookshelf.",
-  'livingroom-sofa': "A cozy living room with a sofa and soft daylight.",
-  'wedding-hall': "An elegant wedding hall with white flowers and soft lighting.",
-  'church-chapel': "A quiet chapel with wooden pews and stained-glass light.",
-  'palace': "Gyeongbokgung palace with traditional Korean architecture.",
-  'vintage-80s-room': "A 1980s retro room with wood paneling and vintage furniture.",
-  'y2k-room': "A Y2K-style room with translucent gadgets, pastel colors and posters without text.",
-  'dog-park': "A fenced grassy dog park on a sunny day.",
-  'vet-clinic': "A clean bright veterinary clinic room.",
-  'grooming-salon': "A pet grooming salon with a grooming table.",
-  'cat-tower': "A carpeted cat tower beside a sunny window.",
-  'windowsill-sun': "A sunny windowsill with soft curtains.",
-  'bed-duvet': "A soft white duvet on a bed in morning light.",
-  'kitchen-floor': "A clean kitchen floor near the counter.",
-  'car-seat-pet': "The back seat of a car with a window view.",
-  'camping-pet': "A campsite with a tent and camping chairs.",
-  'river-side': "A riverside walking path with grass and trees.",
-  'city-sidewalk': "A clean city sidewalk with shop fronts.",
-  'pet-cafe-play': "A colorful soft play mat with toys.",
-  'pumpkin-patch': "A pumpkin patch in autumn.",
-  'christmas-tree': "Next to a decorated Christmas tree with warm fairy lights.",
-  'birthday-party': "A birthday party setup with balloons and a small cake.",
-  'aquarium-wall': "In front of a large blue aquarium tank.",
-  'farm-barn': "A rustic farm barn with hay bales.",
-  'lake-dock': "A wooden lake dock in calm morning light.",
-  'desert-dune': "Golden sand dunes under a clear sky.",
-  'mountain-trail': "A rocky mountain trail with a valley view.",
-  'bathroom-tile': "A clean bathroom with white tiles and soft daylight.",
-  'vanity-mirror': "A vanity table in front of a round mirror with soft light.",
-  'bed-linen': "Rumpled white linen bedding in morning light.",
-  'terrazzo': "A terrazzo stone surface with colorful chips.",
-  'wood-shelf': "A light oak wooden shelf against a plain wall.",
-  'glass-shelf': "A glass shelf with soft reflections.",
-  'acrylic-blocks': "Clear acrylic blocks and geometric shapes on a pastel surface.",
-  'silk-fabric': "Flowing satin silk fabric draped softly around the product.",
-  'sand-beach-product': "Fine beach sand with gentle ripples and shadows.",
-  'pebbles': "Smooth river pebbles arranged around the product.",
-  'moss-forest': "Green moss and small ferns on a forest floor.",
-  'flowers-around': "Fresh flowers and petals arranged around the product.",
-  'fruit-splash': "Fresh sliced fruit and water droplets splashing around the product.",
-  'ice-cubes': "Clear ice cubes and frost with cold condensation.",
-  'snow-surface': "A clean fresh snow surface.",
-  'smoke-dark': "A dark background with soft drifting smoke.",
-  'neon-sign-wall': "A dark wall with glowing abstract neon tubes (no letters).",
-  'mirror-reflection': "A glossy mirror-like surface reflecting the product.",
-  'cylinder-podium': "A minimalist cylinder podium with soft shadows and a pastel wall.",
-  'arch-podium': "A minimalist arch backdrop with a round podium.",
-  'tech-desk': "A clean desk setup with a keyboard, monitor glow and cables tidy.",
-  'gaming-rgb': "A dark gaming desk with RGB lighting.",
-  'cafe-counter': "A cafe counter with an espresso machine in the background.",
-  'dining-table': "A dining table set with plates and linen napkins.",
-  'bbq-table': "An outdoor BBQ table with grill smoke in the background.",
-  'picnic-blanket': "A checkered picnic blanket on grass.",
-  'gym-floor': "A rubber gym floor with dumbbells nearby.",
-  'car-dashboard': "A car dashboard with the road visible ahead.",
-  'office-desk': "A tidy office desk with documents and a laptop.",
-  'kids-room': "A bright kids room with soft toys.",
-  'christmas-scene': "A cozy Christmas setting with pine branches and warm fairy lights.",
-  'autumn-leaves-table': "A wooden table with scattered autumn leaves.",
-  'spring-blossom': "Cherry blossom branches with soft pink petals.",
-  'summer-pool': "Turquoise pool water with caustic light patterns.",
-  'rooftop-city': "A rooftop ledge with a city skyline behind.",
-  'street-night': "A wet city street at night with colorful reflections.",
-  'forest-mist': "A misty pine forest at dawn.",
-  'waterfall': "A lush waterfall with spray and green rocks.",
-  'aurora': "A snowy landscape under a green aurora sky.",
-  'underwater': "An underwater scene with light rays and bubbles.",
-  'cloud-sky': "Soft white clouds in a bright blue sky.",
-  'abstract-gradient': "A smooth abstract color gradient with soft shapes.",
-  'neon-street': "A city street at night glowing with colorful neon signs (no readable text) reflecting on wet pavement.",
-  'cozy-cafe': "A cozy cafe interior with warm wood, plants and soft window light.",
-  'minimal-studio': "A minimalist photo studio with a plain light backdrop and soft even light.",
-  'cyber-penthouse': "A futuristic penthouse at night with floor-to-ceiling windows over a neon city.",
-  'rainy-window': "Beside a window with raindrops on the glass and soft gray daylight.",
-  'sunny-park': "A sunny park lawn with trees and soft dappled light.",
-  'cozy-livingroom': "A cozy living room with a rug, sofa and warm afternoon light.",
-  'forest-trail': "A lush forest trail with tall trees and sunbeams.",
-  'pet-hotel': "A luxurious pet hotel room with a plush bed and elegant decor.",
-  'green-meadow': "A wide green meadow under a clear blue sky.",
-  'rainy-yard': "A backyard on a rainy day with wet grass and puddles.",
-  'cyber-city': "A futuristic megacity of glowing skyscrapers at night.",
-  'deep-space': "Deep space with stars, nebulae and distant galaxies.",
-  'surreal-desert': "A surreal desert with smooth dunes and dreamlike pastel sky.",
-  'floating-island': "A floating island above the clouds with waterfalls pouring off its edges."
-};
 
 let loadingInterval = null;
 
@@ -1513,29 +1415,24 @@ async function applyEngineering() {
     const config = {
       type: subjectType,
       outputMode: document.getElementById('param-output-mode')?.value || 'zimage',
-      style: (() => {
-        const v = UI.paramStyle ? UI.paramStyle.value : 'none';
-        if (v === 'none') return 'Natural photorealistic photo (infer the look from the core intent; no heavy stylization)';
-        if (v === 'photo') return 'Candid real-life smartphone snapshot, true-to-life colors';
-        return optDesc(v);
-      })(),
+      style: promptCatalog.describe('param-style', UI.paramStyle?.value || 'none'),
       angle: UI.paramAngle ? UI.paramAngle.value : '0',
       camAngle: selectedCamAngle,
       bg: selectedBg,
-      pose: optDesc(UI.paramPose ? UI.paramPose.value : 'dynamic'),
+      pose: promptCatalog.describe('param-pose', UI.paramPose ? UI.paramPose.value : 'dynamic'),
       pov: UI.paramPov ? UI.paramPov.value : 'standard',
-      face: optDesc(UI.paramFace ? UI.paramFace.value : 'natural'),
-      outfit: optDesc(UI.paramOutfit ? UI.paramOutfit.value : 'reference'),
+      face: promptCatalog.describe('param-face', UI.paramFace ? UI.paramFace.value : 'natural'),
+      outfit: promptCatalog.describe('param-outfit', UI.paramOutfit ? UI.paramOutfit.value : 'reference'),
       humanRef: UI.paramHumanRef ? UI.paramHumanRef.value : 'strict',
       dogBreed: UI.paramDogBreed ? UI.paramDogBreed.value : 'none',
       catBreed: UI.paramCatBreed ? UI.paramCatBreed.value : 'none',
-      animalPose: optDesc(UI.paramAnimalPose ? UI.paramAnimalPose.value : 'none'),
+      animalPose: promptCatalog.describe('param-animal-pose', UI.paramAnimalPose ? UI.paramAnimalPose.value : 'none'),
       animalPov: UI.paramAnimalPov ? UI.paramAnimalPov.value : 'none',
-      sceneEffect: optDesc(UI.paramSceneEffect ? UI.paramSceneEffect.value : 'none'),
-      sceneLight: optDesc(UI.paramSceneLight ? UI.paramSceneLight.value : 'commercial'),
+      sceneEffect: promptCatalog.describe('param-scene-effect', UI.paramSceneEffect ? UI.paramSceneEffect.value : 'none'),
+      sceneLight: promptCatalog.describe('param-scene-light', UI.paramSceneLight ? UI.paramSceneLight.value : 'commercial'),
       sceneRef: UI.paramSceneRef ? UI.paramSceneRef.value : 'strict',
-      humanShot: optDesc(UI.paramHumanShot ? UI.paramHumanShot.value : 'none'),
-      humanComp: optDesc(UI.paramHumanComp ? UI.paramHumanComp.value : 'none'),
+      humanShot: promptCatalog.describe('param-human-shot', UI.paramHumanShot ? UI.paramHumanShot.value : 'none'),
+      humanComp: promptCatalog.describe('param-human-comp', UI.paramHumanComp ? UI.paramHumanComp.value : 'none'),
       animalShot: UI.paramAnimalShot ? UI.paramAnimalShot.value : 'none',
       animalComp: UI.paramAnimalComp ? UI.paramAnimalComp.value : 'none',
       sceneShot: UI.paramSceneShot ? UI.paramSceneShot.value : 'none',
@@ -1588,46 +1485,17 @@ async function applyEngineering() {
     const startTime = Date.now();
 
     // Construct Context-Aware Intent
-    const povDescription = config.pov === 'arm-extended'
-      ? 'Mode: First-Person Selfie. It looks like a photo taken with an outstretched arm. Intimate connection.'
-      : config.pov === 'selfie'
-        ? 'Mode: Mirror Selfie or Handheld Selfie. The subject is holding a smartphone or camera visibly in the frame, taking a picture (e.g., looking into a mirror).'
-        : `Mode: Standard third-person view${config.pov && config.pov !== 'standard' ? ` (${optDesc(config.pov)})` : ''}. Not a selfie: no arms reaching toward the lens. Do not describe cameras, tripods, lights or any filming equipment.`;
+    const povDescription = promptRules.perspective(config.pov, promptCatalog.describe('param-pov', config.pov));
 
-    let poseDescription = config.pose || 'none';
-    let outfitText = config.outfit || 'none';
-
-    const boothPoses = [
-      'making a cute V-sign with fingers',
-      'a bright warm smile',
-      'playfully sticking out the tongue',
-      'winking at the camera',
-      'making a small finger heart',
-      'puffing out cheeks cutely',
-      'poking one cheek with a finger',
-      'looking surprised with hands on cheeks',
-      'a shy and candid laugh',
-      'blowing a heart-shaped kiss',
-      'pouting with a grumpy yet cute face',
-      'looking upwards dreamily'
-    ];
+    const poseDescription = config.type === 'human' ? promptRules.pose(config.pose) : config.pose || 'none';
+    const outfitText = config.type === 'human' ? promptRules.outfit(config.outfit) : config.outfit || 'none';
 
     // Randomly pick 4 unique poses
-    const selectedBoothPoses = [...boothPoses]
+    const selectedBoothPoses = [...promptRules.boothPoses]
       .sort(() => 0.5 - Math.random())
       .slice(0, 4);
 
-    let bgDescription = config.bg;
-    const registryEntry = BACKGROUND_REGISTRY[config.bg];
-    if (typeof registryEntry === 'function') {
-      bgDescription = registryEntry(selectedBoothPoses);
-    } else if (typeof registryEntry === 'string') {
-      bgDescription = registryEntry;
-    }
-    if (!config.bg || config.bg === 'none') {
-      // 기본(None) = "배경 없음"이 아니라 "아이디어에 맞게 자동"
-      bgDescription = 'If the core intent names or clearly implies a place, use exactly that place. Otherwise use a simple, uncluttered neutral background (soft plain tone or gentle blur). Do NOT invent a specific location (no cafe, kitchen, street, etc. unless the intent says so) and no visible studio equipment.';
-    }
+    const bgDescription = promptRules.background(config.bg, selectedBoothPoses);
 
     let enrichedIntent = `
         ### CORE DATA ###
@@ -1642,25 +1510,6 @@ async function applyEngineering() {
     `;
 
     if (config.type === 'human') {
-      outfitText = config.outfit;
-      if (config.outfit === 'reference') {
-        outfitText = 'STRICT OUTFIT TRANSFERS: Perfectly replicate the garment from the reference image. Maintain identical color, fabric texture, cut, and specific clothing patterns. Do not add or subtract any clothing elements.';
-      } else if (config.outfit === 'none') {
-        outfitText = 'Outfit that naturally fits the subject, setting and mood described in the core intent (do not force a fashion style)';
-      }
-
-      poseDescription = config.pose;
-      if (config.pose === 'relaxed') {
-        poseDescription = 'Relaxed candid everyday moment, natural unposed body language, as if caught mid-action';
-      }
-      if (config.pose === 't-pose') {
-        poseDescription = 'STRICT TECHNICAL T-POSE: Arms fully extended horizontally to the sides at 90 degrees from the torso, palms down or forward, standing perfectly upright, legs straight together, facing front, symmetrical, character sheet orthographic style.';
-      } else if (config.pose === 'a-pose') {
-        poseDescription = 'STRICT TECHNICAL A-POSE: Standing with a significant gap between the legs, feet spread wide to shoulder-width apart to form a literal "A" shape with the entire body. Legs must NOT touch. Arms extended downwards at a 45-degree angle away from the body, standing perfectly upright, facing front, symmetrical, character sheet orthographic reference style.';
-      } else if (config.pose === 'arm-extended') {
-        poseDescription = 'SELFIE PERSPECTIVE: POV selfie style, the subject is holding the camera with one arm visibly extended out of the frame towards the lens, forearm reaching towards the camera, wide angle lens effect, perspective from a handheld camera in hand, close-up intimacy.';
-      }
-
       enrichedIntent += `
         Character Pose: ${poseDescription}
         Facial Style: ${config.face}
@@ -1668,7 +1517,7 @@ async function applyEngineering() {
         ${config.humanComp !== 'none' ? `Composition: ${config.humanComp}` : ''}
         
         ### IDENTITY CONTROL ###
-        Identity Strategy: ${config.humanRef === 'strict' ? 'STRICTLY MAINTAIN the face and unique identity of the reference human.' : config.humanRef === 'selective' ? 'Focus on key facial features and vibe from reference, but allow minor variations.' : 'Generate a completely new and independent character identity.'}
+        Identity Strategy: ${promptRules.humanIdentity(config.humanRef)}
 
         ### OUTFIT & STYLING CONTROL ###
         Outfit Instruction: ${outfitText}
@@ -1687,9 +1536,7 @@ async function applyEngineering() {
         ${config.sceneComp !== 'none' ? `Composition: ${config.sceneComp}` : ''}
         
         ### FORM & REFERENCE CONTROL ###
-        Reference Integrity Strategy: ${config.sceneRef === 'strict'
-          ? 'STRICTLY PRESERVE the exact geometry, branding, and structural details of the reference object. Do not allow any structural hallucinations or modifications.'
-          : 'Allow for artistic reinterpretation and creative structural/stylistic changes to the reference object.'}
+        Reference Integrity Strategy: ${promptRules.objectIntegrity(config.sceneRef)}
         `;
     }
 
@@ -1735,11 +1582,7 @@ async function applyEngineering() {
       };
     } else {
       // Human (default)
-      const identityDescription = config.humanRef === 'strict'
-        ? 'STRICTLY MAINTAIN the face and unique identity of the reference human.'
-        : config.humanRef === 'selective'
-          ? 'Focus on key facial features and vibe from reference, but allow minor variations.'
-          : 'Generate a completely new and independent character identity.';
+      const identityDescription = promptRules.humanIdentity(config.humanRef);
 
       PromptContext.core = {
         subject: intent,
@@ -1832,6 +1675,11 @@ ${PromptContext.visual.camera.composition !== 'none' ? `- Composition: ${PromptC
       `;
     }
 
+    if (config.type !== 'none') {
+      const mood = promptCatalog.describe('param-mood', UI.paramMood.value);
+      const palette = promptCatalog.describe('param-palette', UI.paramPalette.value);
+      enrichedIntent += promptRules.artDirection(mood, palette);
+    }
     const finalDirectives = [config.chips, config.custom].map(x => (x || '').trim()).filter(Boolean).join(', ');
     if (finalDirectives) enrichedIntent += `\n[FINAL DIRECTIVES]\n${finalDirectives}`;
     // 03 조명 · 04 카메라/광학 → 구조화 제약 (L1~L3 및 최종 프롬프트에 반영)
@@ -1843,106 +1691,11 @@ ${PromptContext.visual.camera.composition !== 'none' ? `- Composition: ${PromptC
     enrichedIntent = enrichedIntent.replace(/\n\s*\n\s*\n+/g, '\n\n');
     setLabLayer(0, 'done', '완료');
 
-    let systemPrompt;
-    if (config.type === 'animal') {
-      systemPrompt = `You are a High-End AI Prompt Architect specialized in animal photography and illustration.
-      TASK: Convert the [DESIGN SPECIFICATIONS] into a structured 4-paragraph English prompt for professional animal image generation.
-      
-      STRUCTURE RULES:
-      1. Paragraph 1: **Subject & Style**. Describe the animal species/breed and the ${PromptContext.visual.style} aesthetic.
-      2. Paragraph 2: **Physical Features**. Detail the animal's fur texture, markings, eye color, build, and breed-specific characteristics with extreme photographic detail.
-      3. Paragraph 3: **Pose & Environment**. CRITICAL: The animal MUST be in a "${PromptContext.core.pose}" pose. Describe the pose with specific body positioning (legs, tail, head direction, ear position). Place the animal in the ${PromptContext.visual.background} with perfect spatial awareness.
-      4. Paragraph 4: **Technical Architecture**. Detail pro-lighting (rim, volumetric), high-end camera specs, and 8k ray-tracing rendering.
-      5. Footer: Add a "# Negative Prompts" section for professional-grade exclusion.
-
-      STRICT RULES:
-      - DO NOT explain anything. Start the prompt immediately.
-      - DO NOT add titles like "Paragraph 1:". Use the bold headers directly.
-      - HIGHEST PRIORITY: The animal MUST be "${PromptContext.core.pose}". This pose instruction must be followed with 100% fidelity and described in vivid detail.`;
-    } else if (config.type === 'scene') {
-      systemPrompt = `You are a High-End AI Prompt Architect specialized in product photography, commercial advertising, and cinematic landscape composition.
-      TASK: Convert the [DESIGN SPECIFICATIONS] into a structured 4-paragraph English prompt for professional scene/object image generation.
-      
-      STRUCTURE RULES:
-      1. Paragraph 1: **Subject & Style**. Describe the object/scene and the ${PromptContext.visual.style} aesthetic with commercial-grade precision.
-      2. Paragraph 2: **Material & Surface Detail**. Detail textures, materials, reflections, surface quality, branding elements, and color accuracy with extreme photographic detail.
-      3. Paragraph 3: **Environment & Composition**. Place the subject in ${PromptContext.visual.background}. Apply "${PromptContext.core.sceneEffect}" effects and "${PromptContext.core.sceneLight}" lighting concept with perfect spatial awareness.
-      4. Paragraph 4: **Technical Architecture**. Detail pro-lighting (rim, volumetric, ${PromptContext.core.sceneLight}), high-end camera specs, and 8k ray-tracing rendering.
-      5. Footer: Add a "# Negative Prompts" section for professional-grade exclusion.
-
-      STRICT RULES:
-      - DO NOT explain anything. Start the prompt immediately.
-      - DO NOT add titles like "Paragraph 1:". Use the bold headers directly.
-      - PRIORITY: Follow the lighting ("${PromptContext.core.sceneLight}") and effect ("${PromptContext.core.sceneEffect}") instructions with 100% fidelity.`;
-    } else if (config.type === 'human') {
-      systemPrompt = `You are a High-End AI Prompt Architect.
-      TASK: Convert the [DESIGN SPECIFICATIONS] into a structured 4-paragraph English prompt for professional image generation.
-      
-      STRUCTURE RULES:
-      1. Paragraph 1: **Identity & Style**. Focus on the subject and the ${PromptContext.visual.style} aesthetic.
-      2. Paragraph 2: **Physical Attributes**. Describe facial features, skin texture, and identity with extreme cinematic detail.
-      3. Paragraph 3: **Pose & Context**. Detail the ${PromptContext.core.pose} and the ${PromptContext.visual.background} with perfect spatial awareness.
-      4. Paragraph 4: **Technical Architecture**. Detail pro-lighting (rim, volumetric), high-end camera specs, and 8k ray-tracing rendering.
-      5. Footer: Add a "# Negative Prompts" section for professional-grade exclusion.
-
-      STRICT RULES:
-      - DO NOT explain anything. Start the prompt immediately.
-      - DO NOT add titles like "Paragraph 1:". Use the bold headers directly.
-      - PRIORITY: Follow the ${PromptContext.core.pose} instructions with 100% fidelity.`;
-    } else if (config.type === 'none') {
-      systemPrompt = `You are a Universal Prompt Engineer.
-      TASK: Convert the [DESIGN SPECIFICATIONS] into an English structured prompt for high-fidelity image generation.
-      
-      Since no specific category was selected, you must strictly preserve the literal intent of the user's input. Avoid adding abstract "luxury," "futuristic," or "sophisticated" flowery prose unless specifically requested by the user. 
-      
-      STRUCTURE RULES:
-      1. Paragraph 1: **Subject Formulation**. State the primary subject clearly based on the user's literal keywords. Define the core aesthetic (e.g., Flat, 3D, Minimalist, Sketch) derived ONLY from the intent.
-      2. Paragraph 2: **Structural Features**. Describe the physical or graphic properties—shapes, line weights, color palette, and textures from the user's intent. Do not add complex lighting effects to simple 2D icons.
-      3. Paragraph 3: **Contextual Layout**. Describe the positioning, background, and spatial arrangement. If the intent is an icon, keep the background clean (white/isolated) as typically expected for icons.
-      4. Paragraph 4: **Technical Specification**. ADAPT based on the subject:
-         - IF ICON/GUI: Use terms like "Vector quality," "Ultra-crisp edges," "Digital illustration," "Uniform line weight," "SVG style."
-         - IF PHOTO/SCENE: Use "8k resolution," "Ray-tracing," "Photorealistic textures," "Cinema-grade lighting."
-      5. Footer: Add a "# Negative Prompts" section.
-      
-      STRICT RULES:
-      - DO NOT add abstract marketing fluff (Elegance, Innovation, High-tech) unless mentioned in the intent.
-      - DO NOT explain anything. Start the prompt immediately.
-      - PRIORITY: Maximum fidelity to the user's literal prompt while providing professional engineering depth.`;
-    } else {
-      // General Fallback
-      systemPrompt = `You are a High-End AI Prompt Architect. Provide a professional 4-paragraph prompt based on [DESIGN SPECIFICATIONS].`;
-    }
-
-    // 🎯 출력 모드: 이미지 생성용(Z-Image) — 단일 문단 · 1000자 이내 · 네거티브 없음(긍정형으로 변환)
-    if (config.outputMode === 'zimage') {
-      const constraintHints = config.pov === 'arm-extended'
-        ? 'No phone or camera visible in frame; anatomically correct arms and hands.'
-        : config.pov === 'selfie'
-          ? 'Exactly two natural arms, one phone, natural fingers.'
-          : 'Natural anatomy and realistic hands.';
-      const textHint = ' Clothing and props without printed text or logos (plain or simple patterns).';
-      enrichedIntent += `\n[CONSTRAINTS]\n${constraintHints}${textHint}`;
-      systemPrompt = `You are a prompt engineer for Z-Image, a fast photorealistic text-to-image model.
-Convert the [DESIGN SPECIFICATIONS] into ONE English prompt paragraph.
-
-RULES:
-- Plain text only. No markdown, no headers, no bullet points, no quotes.
-- 60 to 140 words, and never more than 900 characters.
-- Order: main subject and action -> appearance and outfit -> environment/background -> lighting -> camera (shot size, angle, lens feel) -> overall style/mood.
-- Use concrete visual nouns and adjectives. Avoid empty buzzwords such as 8k, masterpiece, ultra-detailed, ray-tracing, award-winning.
-- There is NO negative prompt field. Express every exclusion positively (e.g. "clean background" instead of "no clutter").
-- Follow pose, shot, composition, camera angle and lighting specifications with full fidelity.
-- VIEWING DIRECTION: if the horizontal camera angle is not a front view, state it in plain words in the first or second sentence (e.g. "seen from behind, facing away from the viewer", "in side profile", "from a three-quarter angle"). Never write degree numbers.
-- Do not invent a location that the specifications do not give.
-- CONCRETE OVER ABSTRACT: turn every abstract word into visible details — exact colors (e.g. "dusty pink and lavender"), specific garments and materials, a specific action with hands/gaze, specific props and setting objects.
-- Put the main subject and its most important attributes in the first sentence.
-- Where a specification says it is inferred/automatic, choose ONE simple, plausible option that fits the core intent instead of stacking many trendy details.
-- Never mention cameras, tripods, lenses as objects, studio lights or other equipment as things visible in the image.
-- Output only the prompt itself, nothing else.`;
-    }
+    let systemPrompt = promptRules.systemPrompt(config.type, config.outputMode, PromptContext);
+    if (config.outputMode === 'zimage') enrichedIntent += `\n[CONSTRAINTS]\n${promptRules.imageConstraints(config.pov)}`;
 
     if (loSer.text) {
-      systemPrompt += `\n\nLIGHTING & OPTICS: The [LIGHTING & OPTICS CONSTRAINTS] block is authoritative. Describe that light direction (camera-frame left/right/front/back), height, intensity, quality, color temperature, atmosphere and the camera/lens look exactly as given, and keep these exact terms: ${loSer.keys.join(', ')}. They describe the photographic look, not objects visible in the image.${config.outputMode === 'zimage' ? '' : ' Put them in the technical paragraph.'}`;
+      systemPrompt += promptRules.opticsInstruction(loSer.keys, config.outputMode);
     }
     setLabLayer(1, 'run', 'LLM 요청 중…');
     addLog('> [L2] Style Consistency Refinement (LLM request)...', 'success');
@@ -1959,22 +1712,16 @@ RULES:
     });
 
     const data = await apiPromise; // Wait purely for the true API response
+    if (typeof data.result !== 'string' || !data.result.trim()) {
+      throw new Error('프롬프트 응답이 비어 있습니다.');
+    }
     const endTime = Date.now();
     setLabLayer(1, 'done', '응답 수신');
     setLabLayer(2, 'run', '제약 검증 중…');
     addLog('> [L3] Semantic Expansion & Constraint Check...', 'success');
 
-    // [하드코딩] 셀카 POV별 기형 / 기기 노출 분기 처리
-    let selfieNegatives = "";
-    if (config.pov === 'arm-extended') {
-      // 1인칭 순수 시점 (스마트폰/기기 노출 금지 + 신체 기형 방지)
-      selfieNegatives = "- Smartphone, Camera, Hand holding device, Mobile phone, Selfie stick, monopod, extra hands, multiple arms, floating limbs, disconnected arms, weird fingers, deformed arm, long arm, deformed phone, holding two phones";
-    } else if (config.pov === 'selfie') {
-      // 거울 셀카 등 (뷰어 상 기기 노출 허용, 신체 기형만 엄격 방지)
-      selfieNegatives = "- extra hands, multiple arms, floating limbs, disconnected arms, weird fingers, deformed arm, long arm, holding two phones";
-    }
-
-    if (selfieNegatives && config.outputMode !== 'zimage') {
+    const selfieNegatives = promptRules.negativePrompt(config.pov, config.outputMode);
+    if (selfieNegatives) {
       if (data.result.includes('# Negative Prompts') || data.result.includes('# Negative Prompts:')) {
         data.result += `\n${selfieNegatives}`;
       } else {
@@ -2534,7 +2281,9 @@ async function checkAuthStatus() {
     }
     if (imageBtn) {
       imageBtn.disabled = !isLoggedIn;
-      imageBtn.innerText = isLoggedIn ? "✨ 이미지 생성하기" : "🔒 로그인 필요";
+      imageBtn.innerText = isLoggedIn
+        ? (document.getElementById('image-provider').value === 'spicy' ? '편집 견적 확인' : '이미지 생성')
+        : '로그인 필요';
     }
     if (ratioInput) ratioInput.disabled = !isLoggedIn;
 
@@ -2589,6 +2338,7 @@ async function checkAuthStatus() {
     window.CAN_USE_PAID = data.canUsePaid !== false;
     csrfHeaderToken = data.csrfToken;
     currentAccountId = data.user?.id;
+    mediaStorageEnabled = data.mediaLibraryEnabled === true;
     if (data.canUseSpicy) initSpicyImageControls(data.user.id);
     if (data.user) {
       USER_LOGGED_IN = true;
@@ -2605,6 +2355,7 @@ async function checkAuthStatus() {
       // 로그인 성공 시 프리셋 새로고침
       MyPresets.fetchFromServer();
       updateAuthUIInputs(true);
+      initMediaLibrary();
       if (typeof syncVpsSettingsFromServer === 'function') {
         syncVpsSettingsFromServer();
       }
@@ -2682,6 +2433,7 @@ document.getElementById('logout-btn')?.addEventListener('click', async () => {
   try {
     const response = await apiFetch('/logout', { method: 'POST' });
     if (!response.ok) throw new Error('로그아웃 실패');
+    clearMediaView();
     csrfHeaderToken = undefined;
     location.assign('/');
   } catch {
@@ -2970,6 +2722,7 @@ const seedreamEditor = createReferenceEditor('imagePromptInput', number => `@ima
 function renderSeedreamRefs(active) {
   seedreamEditor.update(spicyReferenceImages.map(ref => ref.src), active);
   const chips = document.getElementById('image-ref-chips');
+  document.getElementById('spicy-reference-count').textContent = `${spicyReferenceImages.length}/${SPICY_REF_MAX}`;
   chips.hidden = !active || !spicyReferenceImages.length;
   chips.replaceChildren();
   if (!active) return;
@@ -3027,7 +2780,7 @@ function addSeedreamFiles(files) {
 
 seedreamEditor.element.addEventListener('drop', event => addSeedreamFiles(event.dataTransfer.files));
 
-setTimeout(() => {
+(() => {
   const imageFileInput = document.getElementById('image-file-input');
   const imageRemoveBtn = document.getElementById('image-file-remove');
   const imagePreview = document.getElementById('image-upload-preview');
@@ -3113,7 +2866,7 @@ setTimeout(() => {
       }
     });
   }
-}, 500);
+})();
 
 function calculateAspectRatio(base64Str) {
   return new Promise((resolve, reject) => {
@@ -3156,18 +2909,23 @@ function initSpicyImageControls(ownerId) {
   provider.addEventListener('change', () => {
     const isSpicy = provider.value === 'spicy';
     document.getElementById('spicy-output-settings').hidden = !isSpicy;
+    document.getElementById('spicy-image-wallet').hidden = !isSpicy;
+    document.getElementById('spicy-reference-count').hidden = !isSpicy;
+    document.getElementById('image-reference-panel').classList.toggle('is-seedream', isSpicy);
+    document.getElementById('image-generate-btn').textContent = isSpicy ? '편집 견적 확인' : '이미지 생성';
+    document.getElementById('image-engine-status').textContent = isSpicy ? 'Seedream 5.5 Edit' : 'API Active';
+    seedreamEditor.element.dataset.placeholder = '바꿀 내용을 입력하세요. 아래 참고 이미지 번호를 눌러 프롬프트에 넣을 수 있어요.';
+    seedreamEditor.element.setAttribute('aria-labelledby', 'image-prompt-label');
     document.getElementById('image-file-input').multiple = isSpicy;
     document.getElementById('image-preview-container').style.display = !isSpicy && currentImageBase64 ? 'block' : 'none';
     renderSeedreamRefs(isSpicy);
     document.getElementById('image-reference-hint').textContent = isSpicy
-      ? '최대 10장 · 전체 10 MiB. 첨부 이미지 번호를 눌러 프롬프트에 삽입하세요.'
-      : '(참고 이미지는 현재 미반영 · 텍스트 프롬프트로 생성)';
+      ? '최대 10장 · 전체 10 MiB'
+      : '기본 모델은 텍스트 프롬프트로 생성합니다.';
     if (isSpicy) refreshSpicyBalance();
   });
-  if (localStorage.getItem(spicyImageStorageKey)) {
-    provider.value = 'spicy';
-    provider.dispatchEvent(new Event('change'));
-  }
+  provider.value = 'spicy';
+  provider.dispatchEvent(new Event('change'));
 }
 
 async function spicyImageRequest(path, body) {
@@ -3186,13 +2944,15 @@ async function spicyImageRequest(path, body) {
 
 async function refreshSpicyBalance() {
   const balance = document.getElementById('spicy-image-balance');
+  const prepaidBalance = document.getElementById('spicy-prepaid-balance');
   try {
     const { available, prepaid } = await spicyImageRequest('balance');
-    balance.textContent = prepaid == null
-      ? `사용 가능 잔액 USD ${available}`
-      : `충전 잔액 USD ${prepaid} · 사용 가능 잔액 USD ${available}`;
+    balance.textContent = `USD ${available}`;
+    prepaidBalance.hidden = prepaid == null || Number(prepaid) === Number(available);
+    if (!prepaidBalance.hidden) prepaidBalance.textContent = `충전 잔액 USD ${prepaid}`;
   } catch {
-    balance.textContent = 'SpicyAPI 잔액 조회 실패';
+    balance.textContent = '조회 실패';
+    prepaidBalance.hidden = true;
   }
 }
 
@@ -3244,7 +3004,9 @@ async function runSpicyEdit(prompt, images, ratio, status) {
     const task = await spicyImageRequest(`task/${encodeURIComponent(pending.taskId)}`);
     if (task.state === 'queued' || task.state === 'running' || task.pending) continue;
     localStorage.removeItem(spicyImageStorageKey);
-    if (task.state === 'succeeded' && task.url) return { data: { url: task.url, provider: 'spicy:seedream-5.5-edit' } };
+    if (task.state === 'succeeded' && task.url) return { data: {
+      url: task.url, provider: 'spicy:seedream-5.5-edit', archiveToken: task.archiveToken
+    } };
     const reason = task.code === 'content_rejected' ? '콘텐츠가 거절되었습니다.' : '이미지 편집에 실패했습니다.';
     const cost = task.settled && task.cost != null ? ` · 최종 비용 USD ${task.cost}` : '';
     throw new Error(`${reason}${task.error ? ' ' + task.error : ''}${cost}`);
@@ -3330,6 +3092,8 @@ async function generateImage() {
 
   // UI 초기화 (프로그레스 바 시작)
   const orgBtnText = btn.innerHTML;
+  const providerSelect = document.getElementById('image-provider');
+  providerSelect.disabled = true;
   btn.innerHTML = '<span class="spinner"></span> AI 이미지 생성 중...';
   btn.disabled = true;
 
@@ -3456,6 +3220,7 @@ async function generateImage() {
       console.error("최종 이미지 추출 실패. 응답 원본:", responseData);
       throw new Error("서버 응답에서 이미지 URL을 찾지 못했습니다.");
     }
+    recordGeneratedMedia('image', finalImageUrl, responseData.data?.archiveToken);
 
     // 실제 사용된 엔진 표시 (Kie 실패 시 폴백 사유도 노출)
     const engineEl = document.getElementById('image-engine-status');
@@ -3504,6 +3269,7 @@ async function generateImage() {
   } finally {
     clearTimeout(timeoutId);
     if (useSpicy) refreshSpicyBalance();
+    providerSelect.disabled = false;
     btn.innerHTML = orgBtnText;
     btn.disabled = false;
   }
@@ -3937,6 +3703,7 @@ RULES:
       if (res.status === 429) { await AP.sleep(20000); continue; }
       const data = await res.json();
       if (!res.ok || !data.data?.url) throw new Error(data.error || '이미지 생성 실패');
+      recordGeneratedMedia('image', data.data.url, data.data.archiveToken);
       return data.data;
     }
     throw new Error('이미지 요청 한도 초과');
@@ -3950,7 +3717,10 @@ RULES:
       if (stRes.status === 429) continue;
       const st = await stRes.json();
       if (!stRes.ok) throw new Error(st.error || '영상 상태를 조회할 수 없습니다.');
-      if (st.state === 'success' && st.url) return st.url;
+      if (st.state === 'success' && st.url) {
+        recordGeneratedMedia('video', st.url, st.archiveToken);
+        return st.url;
+      }
       if (st.state === 'fail') throw Object.assign(new Error(st.failMsg || '작업 실패'), { terminal: true });
     }
     throw new Error('시간 초과');
@@ -4195,6 +3965,7 @@ RULES:
     player.onended = null; player.onpause = null; player.onplay = null;
     player.muted = false;
     player.src = merged.url;
+    recordGeneratedMedia('video', merged.url, undefined, merged.blob);
     wrap.style.display = 'block';
     if (note) note.innerText = `완성본 · 장면 ${n}개 · ${merged.ext.toUpperCase()} · ${(merged.blob.size / 1e6).toFixed(1)}MB`;
     if (dl) {

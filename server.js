@@ -17,6 +17,7 @@ const { SESSION_MS, SESSION_COOKIE, PostgresSessionStore, minimalGoogleProfile, 
 const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const { canUseSpicy, spicyImageRouter } = require('./spicy-image');
+const { archiveSource, initMediaDb, mediaLibrary } = require('./media-library');
 const multer = require('multer');
 const axios = require('axios');
 const FormData = require('form-data');
@@ -35,6 +36,7 @@ const pool = new Pool({
     ssl: localDatabase ? false : { rejectUnauthorized: true, ca: process.env.PG_CA_CERT?.replace(/\\n/g, '\n') }
 });
 pool.on('error', error => console.error('[DB_POOL]', error.message));
+const archive = mediaLibrary(pool);
 
 // --- [MIDDLEWARE: AUTH CHECK] ---
 const ensureAuthenticated = (req, res, next) => {
@@ -191,7 +193,7 @@ const dbApiLimiter = rateLimit({
 app.get('/api/me', generalApiLimiter, (req, res) => {
     res.set('Cache-Control', 'no-store');
     res.json({ user: publicProfile(req.user), canUsePaid: canUsePaid(req), canUseSpicy: canUseSpicy(req),
-        csrfToken: req.user ? csrfToken(req) : null });
+        csrfToken: req.user ? csrfToken(req) : null, mediaLibraryEnabled: Boolean(req.user && archive.enabled) });
 });
 
 // 4. 교차 출처 및 파싱 제한
@@ -217,6 +219,7 @@ app.use('/api/spicy-image', (req, res, next) => {
 }, express.json({ limit: '14mb' }), spicyImageRouter(undefined, { pool, generationQuota }));
 app.use('/api/video/create', ensurePaidAccess, express.json({ limit: '32mb' }));
 app.use('/api', express.json({ limit: '1mb' }));
+app.use('/api/media-archive', archive.router);
 // 🔄 캐시 문제 방지: 빌드 환경에서 파일 수정 시각이 1980년으로 고정돼 브라우저가 옛 파일을 재사용하는 일이 있어
 //    HTML은 매번 새로 받게 하고(no-store), JS·CSS 주소에는 배포(서버 시작) 시각을 버전으로 붙인다
 const ASSET_VERSION = String(SERVER_START_TIME);
@@ -226,6 +229,8 @@ const renderMainHtml = () => {
     const raw = fs_sync.readFileSync(path.join(__dirname, 'workflow_web.html'), 'utf8');
     MAIN_HTML = raw
         .replace(/src="script\.js"/g, `src="script.js?v=${ASSET_VERSION}"`)
+        .replace(/src="prompt-rules\.js"/g, `src="prompt-rules.js?v=${ASSET_VERSION}"`)
+        .replace(/src="prompt-catalog\.js"/g, `src="prompt-catalog.js?v=${ASSET_VERSION}"`)
         .replace(/href="style\.css(\?v=[^"]*)?"/g, `href="style.css?v=${ASSET_VERSION}"`)
         .replace(/src="supertonic\/tts\.js"/g, `src="supertonic/tts.js?v=${ASSET_VERSION}"`)
         .replace(/src="lighting-lab\.js"/g, `src="lighting-lab.js?v=${ASSET_VERSION}"`);
@@ -248,7 +253,7 @@ const staticOptions = {
 for (const dir of ['assets', 'ico', 'img', 'supertonic']) {
     app.use(`/${dir}`, express.static(path.join(__dirname, dir), staticOptions));
 }
-app.get(['/script.js', '/lighting-lab.js', '/style.css'], (req, res, next) => {
+app.get(['/script.js', '/prompt-rules.js', '/prompt-catalog.js', '/lighting-lab.js', '/style.css'], (req, res, next) => {
     res.set('Cache-Control', 'no-cache');
     res.sendFile(path.join(__dirname, path.basename(req.path)), { etag: false, lastModified: false }, error => {
         if (error) next(error);
@@ -658,7 +663,8 @@ app.post('/api/generate-image', ensureAuthenticated, strictAiLimiter, generation
         if (kieKey && canUsePaid(req)) {
             try {
                 const kieUrl = await generateWithKie(kieKey, String(prompt).slice(0, 1000), kieRatioMap[aspect_ratio] || '1:1');
-                return res.status(200).json({ data: { url: kieUrl, provider: 'kie:z-image' } });
+                return res.status(200).json({ data: { url: kieUrl, provider: 'kie:z-image',
+                    archiveToken: archiveSource(req.user, 'image', kieUrl) } });
             } catch (kieErr) {
                 console.warn('[KIE_FALLBACK] Kie 실패 → Pollinations로 전환:', kieErr.message);
                 fallbackReason = `Kie 실패: ${kieErr.message}`.slice(0, 300);
@@ -674,7 +680,8 @@ app.post('/api/generate-image', ensureAuthenticated, strictAiLimiter, generation
         const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(String(prompt).slice(0, 1500))}`
             + `?width=${width}&height=${height}&seed=${seed}&model=flux&nologo=true`;
 
-        res.status(200).json({ data: { url, provider: 'pollinations', fallbackReason } });
+        res.status(200).json({ data: { url, provider: 'pollinations', fallbackReason,
+            archiveToken: archiveSource(req.user, 'image', url) } });
     } catch (error) {
         console.error('[IMAGE_GEN_ERROR]', error.message);
         res.status(500).json({ error: '이미지 생성 요청에 실패했습니다.' });
@@ -832,7 +839,7 @@ app.get(['/api/video/status', '/api/task/status'], ensurePaidAccess, videoStatus
         if (state === 'success') {
             try { url = JSON.parse(info.data.resultJson || '{}').resultUrls?.[0] || null; } catch (e) { }
         }
-        res.json({ state, url, failMsg: info.data?.failMsg || null });
+        res.json({ state, url, failMsg: info.data?.failMsg || null, archiveToken: archiveSource(req.user, 'video', url) });
     } catch (err) {
         res.status(502).json({ error: '영상 상태를 조회할 수 없습니다.' });
     }
@@ -862,6 +869,7 @@ app.get('/api/status', generalApiLimiter, async (req, res) => {
 // --- [PERSISTENT POSTGRES STORAGE ENGINE] ---
 // 데이터베이스 테이블 초기화 (최초 1회 실행)
 const initDb = async () => {
+    await initMediaDb(pool);
     await pool.query(`
       CREATE TABLE IF NOT EXISTS app_sessions (id TEXT PRIMARY KEY, data JSONB NOT NULL, expires_at TIMESTAMPTZ NOT NULL);
       CREATE INDEX IF NOT EXISTS app_sessions_expires_idx ON app_sessions (expires_at);
@@ -902,6 +910,7 @@ async function pruneExpiredState() {
     await pool.query('DELETE FROM app_sessions WHERE expires_at <= NOW()');
     await pool.query('DELETE FROM api_usage WHERE window_id < extract(epoch FROM now()) - 172800');
     await pool.query("DELETE FROM spicy_operations WHERE finished_at < NOW() - INTERVAL '2 days'");
+    await archive.prune();
 }
 
 // 프리셋 리스트 가져오기 (DB에서 내 user_id 데이터만)

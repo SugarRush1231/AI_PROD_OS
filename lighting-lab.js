@@ -14,51 +14,10 @@
   const HEAD_URL = 'assets/models/lee-perry-smith-head.glb';
   const HEAD_Y = -0.06;
 
-  const LIGHT_PRESETS = {
-    'auto': { label: 'Auto' },
-    'natural': { label: 'Natural Light', azimuth: 30, elevation: 25, intensity: 55, distance: 3, source: 'sunlight', quality: 'soft', tonalStyle: 'balanced', fillLight: 'medium', colorTemperatureK: 5600 },
-    'soft': { label: 'Soft Light', azimuth: 35, elevation: 30, intensity: 50, distance: 1.5, source: 'led', quality: 'soft', tonalStyle: 'balanced', fillLight: 'medium', colorTemperatureK: 5000 },
-    'hard': { label: 'Hard Light', azimuth: 45, elevation: 35, intensity: 80, distance: 2.5, source: 'strobe', quality: 'hard', tonalStyle: 'high-contrast', fillLight: 'low', colorTemperatureK: 5500 },
-    'direct-flash': { label: 'Direct Flash', azimuth: 0, elevation: 5, intensity: 90, distance: 1, source: 'strobe', quality: 'hard', tonalStyle: 'high-contrast', fillLight: 'off', colorTemperatureK: 5500 },
-    'rim': { label: 'Rim Lighting', azimuth: 160, elevation: 20, intensity: 75, distance: 2, source: 'led', quality: 'hard', tonalStyle: 'low-key', fillLight: 'low', colorTemperatureK: 6000 },
-    'rembrandt': { label: 'Rembrandt', azimuth: 315, elevation: 40, intensity: 70, distance: 1.5, source: 'led', quality: 'soft', tonalStyle: 'low-key', fillLight: 'low', colorTemperatureK: 4500 },
-    'butterfly': { label: 'Butterfly', azimuth: 0, elevation: 50, intensity: 65, distance: 1.5, source: 'strobe', quality: 'soft', tonalStyle: 'balanced', fillLight: 'medium', colorTemperatureK: 5500 },
-    'split': { label: 'Split', azimuth: 270, elevation: 0, intensity: 75, distance: 1.2, source: 'led', quality: 'hard', tonalStyle: 'low-key', fillLight: 'off', colorTemperatureK: 5000 },
-    'loop': { label: 'Loop', azimuth: 330, elevation: 30, intensity: 65, distance: 1.5, source: 'led', quality: 'soft', tonalStyle: 'balanced', fillLight: 'medium', colorTemperatureK: 5200 },
-    'neon': { label: 'Neon', azimuth: 100, elevation: 10, intensity: 70, distance: 1, source: 'led', quality: 'soft', tonalStyle: 'low-key', fillLight: 'low', colorTemperatureK: 8000 },
-    'golden-hour': { label: 'Golden Hour', azimuth: 250, elevation: 8, intensity: 60, distance: 10, source: 'sunlight', quality: 'soft', tonalStyle: 'balanced', fillLight: 'low', colorTemperatureK: 3200 },
-    'ambient': { label: 'Ambient', azimuth: 0, elevation: 45, intensity: 35, distance: 5, source: 'auto', quality: 'soft', tonalStyle: 'low-contrast', fillLight: 'high', colorTemperatureK: 'auto' },
-    'studio': { label: 'Studio', azimuth: 30, elevation: 35, intensity: 70, distance: 2, source: 'strobe', quality: 'soft', tonalStyle: 'balanced', fillLight: 'medium', colorTemperatureK: 5500 },
-    'custom': { label: 'Custom' }
-  };
-  const PRESET_FIELDS = ['azimuth', 'elevation', 'intensity', 'distance', 'source', 'quality', 'tonalStyle', 'fillLight', 'colorTemperatureK'];
-
-  const SOURCE_TEXT = { sunlight: 'sunlight', led: 'LED panel', fluorescent: 'fluorescent tube', tungsten: 'tungsten lamp', strobe: 'studio strobe' };
-  const TONAL_TEXT = { balanced: 'balanced tonal range', 'high-key': 'bright high-key tones', 'low-key': 'dark low-key tones', 'high-contrast': 'high contrast', 'low-contrast': 'low contrast, flat tones' };
-  const FILL_TEXT = { off: 'no fill light, deep shadows', low: 'low fill light', medium: 'moderate fill light', high: 'strong fill light, open shadows' };
-  const VOL_TYPE_TEXT = { haze: 'haze', fog: 'fog', dust: 'floating dust particles', smoke: 'smoke' };
-
-  const CAMERA_TYPES = { auto: 'Auto', smartphone: 'Smartphone', 'ccd-compact': 'CCD Compact', dslr: 'DSLR', mirrorless: 'Mirrorless', cinema: 'Cinema', 'film-35mm': '35mm Film', 'medium-format': 'Medium Format' };
-  const CAMERA_TEXT = { smartphone: 'a smartphone main camera', 'ccd-compact': 'an early-2000s CCD compact digital camera', dslr: 'a DSLR', mirrorless: 'a full-frame mirrorless camera', cinema: 'a digital cinema camera', 'film-35mm': '35mm film', 'medium-format': 'a medium format camera' };
-  const FOCALS = ['14', '24', '28', '35', '50', '85', '105', '135', '200'];
-  const APERTURES = ['1.2', '1.4', '1.8', '2', '2.8', '4', '5.6', '8', '11', '16'];
-  const LENS_PRESETS = {
-    'auto': { label: 'Auto' },
-    'canon-r5ii-rf50': { label: 'Canon EOS R5 Mark II + RF 50mm F1.8 STM', text: 'Canon EOS R5 Mark II with an RF 50mm F1.8 STM lens', cameraType: 'mirrorless', focal: '50', aperture: '1.8', maxAperture: 1.8, fixedFocal: '50' },
-    'sony-a7iv-fe85': { label: 'Sony A7 IV + FE 85mm F1.8', text: 'Sony A7 IV with an FE 85mm F1.8 lens', cameraType: 'mirrorless', focal: '85', aperture: '1.8', maxAperture: 1.8, fixedFocal: '85' },
-    'fuji-x100vi': { label: 'Fujifilm X100VI (23mm ≈ 35mm 환산)', text: 'Fujifilm X100VI (23mm lens, about 35mm full-frame equivalent)', cameraType: 'mirrorless', focal: '35', aperture: '2', maxAperture: 2, fixedFocal: '35' },
-    'smartphone-main': { label: 'Smartphone Main Camera', text: 'a smartphone main camera', cameraType: 'smartphone', focal: '24', aperture: '1.8', maxAperture: 1.8, fixedFocal: '24' },
-    'vintage-ccd': { label: 'Vintage CCD Compact', text: 'a vintage early-2000s CCD compact camera', cameraType: 'ccd-compact', focal: '35', aperture: '2.8', maxAperture: 2.8 },
-    'custom': { label: 'Custom' }
-  };
-
-  const DEFAULT_LIGHTING = () => ({
-    enabled: true, preset: 'auto', originPreset: null,
-    azimuth: 45, elevation: 30, intensity: 60, distance: 2,
-    source: 'auto', quality: 'auto', shadowHardness: 50, tonalStyle: 'auto', fillLight: 'auto', colorTemperatureK: 'auto',
-    volumetric: { enabled: false, type: 'haze', density: 30, visibility: 'subtle' }
-  });
-  const DEFAULT_OPTICS = () => ({ lensPreset: 'auto', originPreset: null, cameraType: 'auto', focal: 'auto', aperture: 'auto', whiteBalanceK: 'auto' });
+  const {
+    LIGHT_PRESETS, PRESET_FIELDS, SOURCE_TEXT, TONAL_TEXT, FILL_TEXT, VOL_TYPE_TEXT, CAMERA_TYPES, CAMERA_TEXT,
+    FOCALS, APERTURES, LENS_PRESETS, DEFAULT_LIGHTING, DEFAULT_OPTICS
+  } = globalThis.PromptRules.optics;
 
   // ── 2. 유효성 검사 · 마이그레이션 ──────────────────────────────────────────
   const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));

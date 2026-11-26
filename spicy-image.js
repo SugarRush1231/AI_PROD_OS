@@ -1,5 +1,6 @@
 const express = require('express');
 const fetch = require('node-fetch');
+const { archiveSource } = require('./media-library');
 const { createHash, createHmac, createCipheriv, createDecipheriv, randomBytes } = require('node:crypto');
 
 const MODEL = 'bytedance/seedream-5.5/edit';
@@ -265,11 +266,12 @@ function spicyImageRouter(request = fetch, { pool, generationQuota } = {}) {
             await pool.query('UPDATE spicy_operations SET finished_at = NOW() WHERE user_id = $1 AND task_id = $2 AND finished_at IS NULL',
                 [req.user.id, req.params.id]);
         }
+        const url = assets.find(asset => /^https:\/\//.test(asset.url) &&
+            (!asset.mime || asset.mime.startsWith('image/')))?.url;
         return {
             state: task.state, settled: task.settled, cost: task.cost, code: task.errorCode,
             pending,
-            url: assets.find(asset => /^https:\/\//.test(asset.url) &&
-                (!asset.mime || asset.mime.startsWith('image/')))?.url,
+            url, archiveToken: archiveSource(req.user, 'image', url),
             error: task.errorMessage
         };
     }));

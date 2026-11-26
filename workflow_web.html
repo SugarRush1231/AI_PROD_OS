@@ -40,10 +40,11 @@
         </a>
       </div>
       <div class="nav-center">
-        <a href="#autopilot-card" class="nav-link">Autopilot</a>
         <a href="#prompt-lab" class="nav-link">프롬프트 랩</a>
         <a href="#image-studio" class="nav-link">이미지</a>
         <a href="#video-studio" class="nav-link">영상</a>
+        <a href="#media-library" id="media-library-link" class="nav-link" hidden>보관함</a>
+        <a href="#autopilot-card" class="nav-link">Autopilot</a>
         <a href="#video-production-suite" class="nav-link">기획 도구</a>
       </div>
       <div class="nav-right" style="display: flex; align-items: center; gap: 15px;">
@@ -441,259 +442,41 @@
 
           <div class="param-group full-width" style="margin-bottom: 16px;">
             <label>피사체 유형 (Category)</label>
-            <select id="param-type" class="lab-select">
-              <option value="none">😶 선택 안함 (None / Raw Input)</option>
-              <option value="human" selected>👤 인물 (Human)</option>
-              <option value="animal">🐾 동물 (Animal)</option>
-              <option value="scene">🏙️ 배경/사물 (Scene/Object)</option>
-            </select>
+            <select id="param-type" class="lab-select"></select>
           </div>
 
           <div id="all-params-container">
             <div class="params-grid">
               <div class="param-group">
                 <label>비주얼 스타일</label>
-                <select id="param-style" class="lab-select">
-                  <option value="none" selected>기본 (자연스러운 사진)</option>
-                    <option value="photo">실사 스냅 (Photo)</option>
-                    <option value="cinematic">시네마틱 마스터피스</option>
-                  <option value="studio">프로페셔널 스튜디오</option>
-                  <option value="anime">고퀄리티 애니메이션</option>
-                  <option value="cyberpunk">사이버펑크 / 테크누아르</option>
-                  <option value="oil-painting">고전 유화 스타일</option>
-                  <option value="unreal-engine">3D 렌더링 (UE5 스타일)</option>
-                  <option value="minimalist">미니멀리즘 디자인</option>
-                  <option value="polaroid">레트로 폴라로이드</option>
-                  <option value="gothic">다크 판타지 / 고딕</option>
-                  <option value="pencil-sketch">정밀 연필 스케치</option>
-                  <option value="k-drama">K-드라마 감성</option>
-                  <option value="film-35mm">35mm 필름 사진</option>
-                  <option value="magazine">패션 화보</option>
-                  <option value="product-ad">제품 광고컷</option>
-                  <option value="y2k">Y2K 레트로</option>
-                  <option value="webtoon">웹툰 스타일</option>
-                  <option value="watercolor">수채화</option>
-                  <option value="clay-3d">클레이 3D</option>
-                  <option value="pixel-art">픽셀 아트</option>
-                </select>
+                <select id="param-style" class="lab-select"></select>
               </div>
 
               <!-- Backgrounds -->
               <div class="param-group" id="bg-human-container">
                 <label>인물 배경 (Background)</label>
-                <select id="param-bg-human" class="lab-select">
-                  <option value="none">기본 (None)</option>
-                  <option value="life4cut">한국 포토부스 (Life4Cut)</option>
-                  <option value="neon-street">네온 사인 밤거리 (Neon Street)</option>
-                  <option value="cozy-cafe">감성적인 카페 (Cozy Cafe)</option>
-                  <option value="minimal-studio">미니멀 스튜디오 (Studio)</option>
-                  <option value="cyber-penthouse">사이버펑크 펜트하우스</option>
-                  <option value="rainy-window">비 내리는 창가 (Rainy Window)</option>
-                  <option value="han-river">한강 공원 노을 (Han River)</option>
-                  <option value="seongsu-alley">성수동 감성 골목 (Seongsu)</option>
-                  <option value="hanok">한옥 마당 (Hanok)</option>
-                  <option value="cherry-blossom">벚꽃길 (Cherry Blossom)</option>
-                  <option value="rooftop-night">루프탑 야경 (Rooftop)</option>
-                  <option value="subway">지하철 플랫폼 (Subway)</option>
-                  <option value="office">모던 오피스 (Office)</option>
-                  <option value="convenience-store">밤 편의점 앞 (Convenience Store)</option>
-                  <option value="home-kitchen">아늑한 주방 (Kitchen)</option>
-                  <option value="bedroom">햇살 드는 침실 (Bedroom)</option>
-                  <option value="beach-sunset">노을 해변 (Sunset Beach)</option>
-                  <option value="snowy-street">눈 오는 거리 (Snowy Street)</option>
-                  <option value="library">조용한 서점/도서관 (Library)</option>
-                  <option value="gym">헬스장 (Gym)</option>
-                  <option value="white-seamless">화이트 배경 (누끼용)</option>
-                  <option value="pastel-backdrop">파스텔 단색 배경</option>
-                    <option value="green-chroma">🟩 그린 크로마키 (Green Screen)</option>
-                    <option value="blue-chroma">🟦 블루 크로마키 (Blue Screen)</option>
-                    <option value="black-seamless">블랙 단색 배경 (Black)</option>
-                    <option value="gray-seamless">그레이 단색 배경 (Gray)</option>
-                    <option value="beige-seamless">베이지 단색 배경 (Beige)</option>
-                    <option value="sky-blue-seamless">하늘색 단색 배경 (Sky Blue)</option>
-                    <option value="color-block">컬러 블록 배경 (Color Block)</option>
-                    <option value="paper-texture">종이 질감 배경 (Paper)</option>
-                    <option value="concrete-wall">노출 콘크리트 벽 (Concrete)</option>
-                    <option value="brick-wall">붉은 벽돌 벽 (Brick)</option>
-                    <option value="bokeh-lights">보케 조명 배경 (Bokeh)</option>
-                    <option value="idol-stage">K-팝 무대 (Concert Stage)</option>
-                    <option value="photo-studio-backdrop">프로필 사진관 (Profile Studio)</option>
-                    <option value="hair-salon">미용실 (Hair Salon)</option>
-                    <option value="department-store">백화점 매장 (Department Store)</option>
-                    <option value="airport">공항 출국장 (Airport)</option>
-                    <option value="airplane-window">비행기 창가석 (Airplane)</option>
-                    <option value="train-window">KTX 기차 창가 (Train)</option>
-                    <option value="car-interior">자동차 안 (Car Interior)</option>
-                    <option value="bus-stop">버스 정류장 (Bus Stop)</option>
-                    <option value="crosswalk">도심 횡단보도 (Crosswalk)</option>
-                    <option value="gangnam-street">강남 대로 (Gangnam)</option>
-                    <option value="myeongdong">명동 쇼핑거리 (Myeongdong)</option>
-                    <option value="hongdae">홍대 거리 (Hongdae)</option>
-                    <option value="traditional-market">전통 시장 (Market)</option>
-                    <option value="pojangmacha">포장마차 (Street Tent Bar)</option>
-                    <option value="korean-bbq">고깃집 (Korean BBQ)</option>
-                    <option value="bakery">베이커리 (Bakery)</option>
-                    <option value="bar-lounge">바 라운지 (Bar)</option>
-                    <option value="fine-dining">파인다이닝 레스토랑 (Fine Dining)</option>
-                    <option value="museum-gallery">미술관 갤러리 (Gallery)</option>
-                    <option value="classroom">학교 교실 (Classroom)</option>
-                    <option value="university-campus">대학 캠퍼스 (Campus)</option>
-                    <option value="hospital">병원 진료실 (Clinic)</option>
-                    <option value="hotel-room">호텔 객실 (Hotel Room)</option>
-                    <option value="hotel-lobby">호텔 로비 (Hotel Lobby)</option>
-                    <option value="pool-side">수영장 선베드 (Poolside)</option>
-                    <option value="tropical-resort">열대 리조트 (Tropical)</option>
-                    <option value="jeju-coast">제주 해안 (Jeju)</option>
-                    <option value="mountain-peak">산 정상 (Mountain Top)</option>
-                    <option value="camping">캠핑장 (Camping)</option>
-                    <option value="forest-path">숲길 (Forest Path)</option>
-                    <option value="flower-field">유채꽃밭 (Flower Field)</option>
-                    <option value="autumn-park">단풍 공원 (Autumn)</option>
-                    <option value="rainy-street">비 오는 거리 (Rain)</option>
-                    <option value="night-market-neon">야시장 (Night Market)</option>
-                    <option value="amusement-park">놀이공원 (Amusement Park)</option>
-                    <option value="basketball-court">농구장 (Basketball Court)</option>
-                    <option value="running-track">육상 트랙 (Running Track)</option>
-                    <option value="yoga-studio">요가 스튜디오 (Yoga)</option>
-                    <option value="recording-studio">녹음실 (Recording Studio)</option>
-                    <option value="home-office">홈오피스 (Home Office)</option>
-                    <option value="livingroom-sofa">거실 소파 (Living Room)</option>
-                    <option value="wedding-hall">웨딩홀 (Wedding Hall)</option>
-                    <option value="church-chapel">채플 (Chapel)</option>
-                    <option value="palace">경복궁 (Palace)</option>
-                    <option value="vintage-80s-room">80년대 레트로 방 (Retro Room)</option>
-                    <option value="y2k-room">Y2K 방 (Y2K Room)</option>
-                </select>
+                <select id="param-bg-human" class="lab-select"></select>
               </div>
 
               <div class="param-group" id="bg-animal-container" style="display: none;">
                 <label>동물 배경 (Background)</label>
-                <select id="param-bg-animal" class="lab-select">
-                  <option value="none">기본 (None)</option>
-                  <option value="sunny-park">햇살 가득한 공원 (Sunny Park)</option>
-                  <option value="cozy-livingroom">안락한 거실 (Living Room)</option>
-                  <option value="forest-trail">울창한 숲길 (Forest)</option>
-                  <option value="pet-hotel">럭셔리 펫 호텔 (Pet Hotel)</option>
-                  <option value="green-meadow">푸른 들판 (Meadow)</option>
-                  <option value="rainy-yard">비 내리는 마당 (Rainy Yard)</option>
-                  <option value="snowy-field">눈 덮인 들판 (Snow)</option>
-                  <option value="beach-dog">바닷가 모래사장 (Beach)</option>
-                  <option value="sofa-blanket">소파 위 담요 (Sofa)</option>
-                  <option value="flower-garden">꽃밭 정원 (Flower Garden)</option>
-                  <option value="autumn-leaves">가을 낙엽길 (Autumn)</option>
-                  <option value="pet-cafe">펫 카페 (Pet Cafe)</option>
-                  <option value="white-backdrop">화이트 배경 (누끼용)</option>
-                    <option value="green-chroma">🟩 그린 크로마키 (Green Screen)</option>
-                    <option value="blue-chroma">🟦 블루 크로마키 (Blue Screen)</option>
-                    <option value="black-seamless">블랙 단색 배경 (Black)</option>
-                    <option value="gray-seamless">그레이 단색 배경 (Gray)</option>
-                    <option value="beige-seamless">베이지 단색 배경 (Beige)</option>
-                    <option value="sky-blue-seamless">하늘색 단색 배경 (Sky Blue)</option>
-                    <option value="color-block">컬러 블록 배경 (Color Block)</option>
-                    <option value="paper-texture">종이 질감 배경 (Paper)</option>
-                    <option value="concrete-wall">노출 콘크리트 벽 (Concrete)</option>
-                    <option value="brick-wall">붉은 벽돌 벽 (Brick)</option>
-                    <option value="bokeh-lights">보케 조명 배경 (Bokeh)</option>
-                    <option value="dog-park">애견 운동장 (Dog Park)</option>
-                    <option value="vet-clinic">동물병원 (Vet Clinic)</option>
-                    <option value="grooming-salon">애견 미용실 (Grooming)</option>
-                    <option value="cat-tower">캣타워 (Cat Tower)</option>
-                    <option value="windowsill-sun">햇살 창턱 (Windowsill)</option>
-                    <option value="bed-duvet">침대 이불 위 (Bed)</option>
-                    <option value="kitchen-floor">주방 바닥 (Kitchen Floor)</option>
-                    <option value="car-seat-pet">차 뒷좌석 (Car Seat)</option>
-                    <option value="camping-pet">캠핑장 (Camping)</option>
-                    <option value="river-side">강가 산책로 (Riverside)</option>
-                    <option value="city-sidewalk">도심 산책 (City Walk)</option>
-                    <option value="pet-cafe-play">놀이터 매트 (Play Mat)</option>
-                    <option value="pumpkin-patch">호박밭 (Pumpkin Patch)</option>
-                    <option value="christmas-tree">크리스마스 트리 옆 (Christmas)</option>
-                    <option value="birthday-party">생일 파티 (Birthday)</option>
-                    <option value="aquarium-wall">아쿠아리움 (Aquarium)</option>
-                    <option value="farm-barn">농장 헛간 (Farm)</option>
-                    <option value="lake-dock">호숫가 선착장 (Lake Dock)</option>
-                    <option value="desert-dune">사막 모래언덕 (Dunes)</option>
-                    <option value="mountain-trail">산 등산로 (Mountain Trail)</option>
-                </select>
+                <select id="param-bg-animal" class="lab-select"></select>
               </div>
 
               <div class="param-group" id="bg-scene-container" style="display: none;">
                 <label>장소/사물 배경 (Background)</label>
-                <select id="param-bg-scene" class="lab-select">
-                  <option value="none">기본 (None)</option>
-                  <option value="living-room">모던한 거실/방 안 (Living Room)</option>
-                  <option value="mountain-stars">별이 빛나는 밤 산맥 (Starry Mountains)</option>
-                  <option value="empty-beach">사람이 없는 고요한 해변 (Empty Beach)</option>
-                  <option value="vast-nature">광활한 대자연 (Vast Nature)</option>
-                  <option value="cyber-city">초고층 미래 도시 (Cyber City)</option>
-                  <option value="deep-space">광활한 심우주 (Deep Space)</option>
-                  <option value="surreal-desert">초현실적 사막 (Desert)</option>
-                  <option value="floating-island">구름 위 부유섬 (Island)</option>
-                  <option value="white-desk-sun">햇살 드는 흰 책상 (White Desk)</option>
-                  <option value="marble-vanity">대리석 화장대 (Marble)</option>
-                  <option value="kitchen-counter">주방 조리대 (Kitchen)</option>
-                  <option value="bathroom-shelf">욕실 선반 (Bathroom)</option>
-                  <option value="cafe-wood-table">카페 원목 테이블 (Cafe Table)</option>
-                  <option value="picnic">피크닉 매트 (Picnic)</option>
-                  <option value="water-surface">잔잔한 물 위 (Water)</option>
-                  <option value="stone-podium">돌 받침대 (Stone Podium)</option>
-                  <option value="gradient-studio">그라데이션 스튜디오 (Gradient)</option>
-                  <option value="hanok-interior">한옥 실내 (Hanok)</option>
-                  <option value="night-city-window">야경 창가 (Night Window)</option>
-                    <option value="green-chroma">🟩 그린 크로마키 (Green Screen)</option>
-                    <option value="blue-chroma">🟦 블루 크로마키 (Blue Screen)</option>
-                    <option value="black-seamless">블랙 단색 배경 (Black)</option>
-                    <option value="gray-seamless">그레이 단색 배경 (Gray)</option>
-                    <option value="beige-seamless">베이지 단색 배경 (Beige)</option>
-                    <option value="sky-blue-seamless">하늘색 단색 배경 (Sky Blue)</option>
-                    <option value="color-block">컬러 블록 배경 (Color Block)</option>
-                    <option value="paper-texture">종이 질감 배경 (Paper)</option>
-                    <option value="concrete-wall">노출 콘크리트 벽 (Concrete)</option>
-                    <option value="brick-wall">붉은 벽돌 벽 (Brick)</option>
-                    <option value="bokeh-lights">보케 조명 배경 (Bokeh)</option>
-                    <option value="bathroom-tile">욕실 타일 (Bathroom Tile)</option>
-                    <option value="vanity-mirror">화장대 거울 앞 (Vanity)</option>
-                    <option value="bed-linen">침구 위 (Bed Linen)</option>
-                    <option value="terrazzo">테라조 상판 (Terrazzo)</option>
-                    <option value="wood-shelf">원목 선반 (Wood Shelf)</option>
-                    <option value="glass-shelf">유리 선반 (Glass Shelf)</option>
-                    <option value="acrylic-blocks">아크릴 블록 (Acrylic)</option>
-                    <option value="silk-fabric">실크 천 (Silk)</option>
-                    <option value="sand-beach-product">모래 위 (Sand)</option>
-                    <option value="pebbles">자갈 위 (Pebbles)</option>
-                    <option value="moss-forest">이끼 숲 바닥 (Moss)</option>
-                    <option value="flowers-around">꽃에 둘러싸인 (Flowers)</option>
-                    <option value="fruit-splash">과일 스플래시 (Fruit Splash)</option>
-                    <option value="ice-cubes">얼음 위 (Ice)</option>
-                    <option value="snow-surface">눈 위 (Snow)</option>
-                    <option value="smoke-dark">어두운 연기 배경 (Smoke)</option>
-                    <option value="neon-sign-wall">네온 사인 벽 (Neon Wall)</option>
-                    <option value="mirror-reflection">거울 반사 바닥 (Mirror Floor)</option>
-                    <option value="cylinder-podium">원통 받침대 (Cylinder Podium)</option>
-                    <option value="arch-podium">아치 배경 + 받침대 (Arch)</option>
-                    <option value="tech-desk">테크 데스크 (Desk Setup)</option>
-                    <option value="gaming-rgb">게이밍 RGB (Gaming)</option>
-                    <option value="cafe-counter">카페 카운터 (Cafe Counter)</option>
-                    <option value="dining-table">식탁 위 (Dining Table)</option>
-                    <option value="bbq-table">바비큐 테이블 (BBQ)</option>
-                    <option value="picnic-blanket">피크닉 담요 (Picnic)</option>
-                    <option value="gym-floor">헬스장 바닥 (Gym)</option>
-                    <option value="car-dashboard">자동차 대시보드 (Dashboard)</option>
-                    <option value="office-desk">사무실 책상 (Office Desk)</option>
-                    <option value="kids-room">아이 방 (Kids Room)</option>
-                    <option value="christmas-scene">크리스마스 (Christmas)</option>
-                    <option value="autumn-leaves-table">가을 낙엽 테이블 (Autumn)</option>
-                    <option value="spring-blossom">벚꽃 가지 (Spring)</option>
-                    <option value="summer-pool">수영장 물 위 (Pool)</option>
-                    <option value="rooftop-city">옥상 도시뷰 (Rooftop)</option>
-                    <option value="street-night">밤거리 (Night Street)</option>
-                    <option value="forest-mist">안개 숲 (Misty Forest)</option>
-                    <option value="waterfall">폭포 (Waterfall)</option>
-                    <option value="aurora">오로라 (Aurora)</option>
-                    <option value="underwater">수중 (Underwater)</option>
-                    <option value="cloud-sky">구름 하늘 (Sky)</option>
-                    <option value="abstract-gradient">추상 그라데이션 (Abstract)</option>
-                </select>
+                <select id="param-bg-scene" class="lab-select"></select>
+              </div>
+
+              <div class="param-group">
+                <label for="param-mood">무드 (Mood)</label>
+                <select id="param-mood" class="lab-select"></select>
+              </div>
+
+              <div class="param-group">
+                <label for="param-palette">색상 팔레트</label>
+                <select id="param-palette" class="lab-select"></select>
+                <div id="param-palette-preview" class="lab-palette-preview" aria-hidden="true" hidden></div>
               </div>
 
               <div class="param-group">
@@ -723,173 +506,35 @@
               <div class="params-grid" style="margin-top: 12px;">
                 <div class="param-group">
                   <label>피사체 포즈</label>
-                  <select id="param-pose" class="lab-select">
-                    <option value="relaxed" selected>자연스러운 일상 (Candid)</option>
-                    <option value="dynamic">역동적인 액션</option>
-                    <option value="portrait">정면 포트레이트</option>
-                    <option value="heroic">웅장한 히어로 포즈</option>
-                    <option value="meditation">명상 / 정적인 자세</option>
-                    <option value="flying">공중 부양 / 도약</option>
-                    <option value="combat-stance">컴뱃 스탠스 (전투)</option>
-                    <option value="profile-view">측면 응시 (프로필)</option>
-                    <option value="low-angle-power">위엄있는 로우 앵글</option>
-                    <option value="stealth">웅크린 잠입 포즈</option>
-                    <option value="t-pose">T-포즈 (Character Sheet)</option>
-                    <option value="a-pose">A-포즈 (Character Sheet)</option>
-                    <option value="walking">걷는 중 (Walking)</option>
-                    <option value="looking-back">뒤돌아보기 (Look Back)</option>
-                    <option value="hair-touch">머리 넘기기 (Hair Touch)</option>
-                    <option value="chin-rest">턱 괴기 (Chin Rest)</option>
-                    <option value="laughing">웃는 순간 (Laughing)</option>
-                    <option value="holding-cup">컵 들고 (Holding Cup)</option>
-                    <option value="using-phone">폰 보는 중 (Phone)</option>
-                    <option value="leaning-wall">벽에 기대기 (Leaning)</option>
-                    <option value="sitting-chair">의자에 앉기 (Seated)</option>
-                    <option value="v-sign">브이 포즈 (V-sign)</option>
-                    <option value="jumping">점프 (Jump)</option>
-                  </select>
+                  <select id="param-pose" class="lab-select"></select>
                 </div>
                 <div class="param-group">
                   <label>촬영 관점 (POV)</label>
-                  <select id="param-pov" class="lab-select">
-                    <option value="standard">기본 촬영 (Standard)</option>
-                    <option value="selfie">셀카 느낌 (거울 셀카)</option>
-                    <option value="arm-extended">셀카 (한쪽 팔 뻗음)</option>
-                    <option value="candid">타인이 찍어준 느낌 (Candid)</option>
-                    <option value="pov">1인칭 시점 (First Person POV)</option>
-                    <option value="paparazzi">파파라치 뷰 (Long Lens)</option>
-                    <option value="security-cam">보안 카메라 (CCTV Style)</option>
-                    <option value="vlog-cam">브이로그 셀프캠 (Vlog)</option>
-                    <option value="through-window">창문 너머 (Through Glass)</option>
-                  </select>
+                  <select id="param-pov" class="lab-select"></select>
                 </div>
                 <div class="param-group">
                   <label>일관성 유지 (Reference)</label>
-                  <select id="param-human-ref" class="lab-select">
-                    <option value="creative" selected>완전히 새로운 인물 (Creative)</option>
-                    <option value="selective">주요 특징 유지 (참고 이미지 필요)</option>
-                    <option value="strict">레퍼런스 엄격 유지 (참고 이미지 필요)</option>
-                  </select>
+                  <select id="param-human-ref" class="lab-select"></select>
                 </div>
                 <div class="param-group">
                   <label>얼굴 디테일 (Aesthetic)</label>
-                  <select id="param-face" class="lab-select">
-                    <option value="natural">자연스러운 미인 (Natural)</option>
-                    <option value="ulzzang">얼짱 마스터 (Ulzzang Master)</option>
-                    <option value="puppy">강아지상 귀요미 (Puppy-eye)</option>
-                    <option value="cat">고양이상 세련미 (Cat-eye)</option>
-                    <option value="dreamy">신비로운 분위기 (Dreamy)</option>
-                    <option value="high-fashion">하이패션 샤프 (Sharp)</option>
-                    <option value="idol">아이돌 비주얼 (Idol)</option>
-                    <option value="fresh">청순 내추럴 (Fresh)</option>
-                    <option value="chic">시크 도도 (Chic)</option>
-                    <option value="mature">성숙한 분위기 (Mature)</option>
-                    <option value="no-makeup">꾸안꾸 (Effortless)</option>
-                  </select>
+                  <select id="param-face" class="lab-select"></select>
                 </div>
                 <div class="param-group">
                   <label>의상 스타일 (Outfit)</label>
-                  <select id="param-outfit" class="lab-select">
-                    <option value="none" selected>장면에 맞는 의상 (Auto)</option>
-                    <option value="reference">레퍼런스 의상 유지 (참고 이미지 필요)</option>
-                    <option value="streetwear">트렌디 스트릿웨어 (Streetwear)</option>
-                    <option value="techwear">고전적/현대적 테크웨어 (Techwear)</option>
-                    <option value="luxury">럭셔리 디자이너 룩 (Luxury)</option>
-                    <option value="academic">단정한 프레피 룩 (Academic)</option>
-                    <option value="cyberpunk">네온 사이버펑크 (Cyberpunk)</option>
-                    <option value="vintage">레트로 빈티지 (Vintage)</option>
-                    <option value="casual-chic">편안한 캐주얼 시크 (Casual)</option>
-                    <option value="office-look">오피스룩 (Office)</option>
-                    <option value="athleisure">애슬레저 (Athleisure)</option>
-                    <option value="knit-daily">니트 데일리 (Knit)</option>
-                    <option value="dress">원피스 (Dress)</option>
-                    <option value="denim">데님 (Denim)</option>
-                    <option value="suit">수트 (Suit)</option>
-                    <option value="summer-linen">여름 린넨 (Linen)</option>
-                    <option value="winter-coat">겨울 코트 (Winter Coat)</option>
-                    <option value="modern-hanbok">모던 한복 (Hanbok)</option>
-                    <option value="minimal-basic">미니멀 베이직 (Minimal)</option>
-                    <option value="old-money">올드머니 룩 (Old Money)</option>
-                    <option value="gorpcore">고프코어 아웃도어 (Gorpcore)</option>
-                    <option value="y2k">Y2K 레트로 (Y2K)</option>
-                    <option value="preppy-uniform">교복 스타일 (School Uniform)</option>
-                    <option value="trench-coat">트렌치코트 (Trench)</option>
-                    <option value="leather-jacket">가죽 재킷 (Leather)</option>
-                    <option value="blazer-casual">블레이저 캐주얼 (Smart Casual)</option>
-                    <option value="cardigan-soft">카디건 소프트룩 (Cardigan)</option>
-                    <option value="hoodie-comfy">후드티 편안룩 (Hoodie)</option>
-                    <option value="sporty-tennis">테니스 룩 (Tennis)</option>
-                    <option value="golf-wear">골프웨어 (Golf)</option>
-                    <option value="yoga-wear">요가복 (Yoga)</option>
-                    <option value="swimwear-resort">리조트 수영복 (Resort)</option>
-                    <option value="party-dress">파티 드레스 (Party)</option>
-                    <option value="wedding-guest">하객룩 (Wedding Guest)</option>
-                    <option value="pajama-home">홈웨어 파자마 (Loungewear)</option>
-                    <option value="chef-uniform">셰프 유니폼 (Chef)</option>
-                    <option value="doctor-gown">의료 가운 (Medical)</option>
-                    <option value="barista-apron">바리스타 앞치마 (Barista)</option>
-                    <option value="military-cargo">밀리터리 카고 (Military)</option>
-                    <option value="boho">보헤미안 (Boho)</option>
-                    <option value="grunge">그런지 (Grunge)</option>
-                    <option value="punk-rock">펑크 록 (Punk)</option>
-                    <option value="k-idol-stage">아이돌 무대의상 (Stage)</option>
-                    <option value="traditional-hanbok">전통 한복 (Traditional Hanbok)</option>
-                    <option value="kimono">기모노 (Kimono)</option>
-                    <option value="ski-wear">스키복 (Ski)</option>
-                    <option value="rain-gear">레인코트 (Rain)</option>
-                    <option value="tuxedo">턱시도 (Tuxedo)</option>
-                  </select>
+                  <select id="param-outfit" class="lab-select"></select>
                 </div>
                 <div class="param-group">
                   <label>촬영 샷 (Shot)</label>
-                  <select id="param-human-shot" class="lab-select">
-                    <option value="none">기본 (None)</option>
-                    <option value="close-up">클로즈업 (Close-up)</option>
-                    <option value="bust-shot">바스트 샷 (Bust Shot)</option>
-                    <option value="waist-shot">웨이스트 샷 (Waist Shot)</option>
-                    <option value="knee-shot">니 샷 (Knee Shot)</option>
-                    <option value="full-shot">전신 샷 (Full Shot)</option>
-                    <option value="long-shot">멀리서 찍은 샷 (Long Shot)</option>
-                    <option value="extreme-close-up">익스트림 클로즈업 (Extreme Close-up)</option>
-                    <option value="medium-close-up">미디엄 클로즈업 (Medium Close-up)</option>
-                  </select>
+                  <select id="param-human-shot" class="lab-select"></select>
                 </div>
                 <div class="param-group">
                   <label>화면 구도 (Composition)</label>
-                  <select id="param-human-comp" class="lab-select">
-                    <option value="none">기본 (None)</option>
-                    <option value="center">중앙 구도 (Center)</option>
-                    <option value="rule-of-thirds">3분할 구도 (Rule of Thirds)</option>
-                    <option value="symmetry">대칭 구도 (Symmetry)</option>
-                    <option value="diagonal">대각선 구도 (Diagonal)</option>
-                    <option value="golden-ratio">황금비 구도 (Golden Ratio)</option>
-                    <option value="negative-space">여백 구도 (Negative Space)</option>
-                    <option value="frame-in-frame">프레임 속 프레임 (Frame in Frame)</option>
-                    <option value="leading-lines">리딩 라인 (Leading Lines)</option>
-                  </select>
+                  <select id="param-human-comp" class="lab-select"></select>
                 </div>
                 <div class="param-group">
                   <label>종합 카메라 앵글 (Camera Angles)</label>
-                  <select id="param-human-cam-angle" class="lab-select">
-                    <option value="none">기본 (None)</option>
-                    <optgroup label="1. 수직 각도 (Vertical)">
-                      <option value="birds-eye">버즈 아이 뷰 (Bird's Eye View)</option>
-                      <option value="high-angle">하이 앵글 (High Angle)</option>
-                      <option value="eye-level">아이 레벨 (Eye Level)</option>
-                      <option value="low-angle">로우 앵글 (Low Angle)</option>
-                      <option value="worms-eye">웜즈 아이 뷰 (Worm's Eye View)</option>
-                    </optgroup>
-                    <optgroup label="2. 수평 위치 및 관계 (Horizontal)">
-                      <option value="shoulder-level">숄더 레벨 (Shoulder Level)</option>
-                      <option value="over-the-shoulder">오버 더 숄더 (OTS)</option>
-                      <option value="hip-angle">힙 앵글 (Hip Angle)</option>
-                      <option value="knee-angle">니 앵글 (Knee Angle)</option>
-                    </optgroup>
-                    <optgroup label="3. 특수 앵글 (Special)">
-                      <option value="dutch-angle">더치 앵글 (Dutch Angle)</option>
-                      <option value="pov">POV (1인칭 시점)</option>
-                    </optgroup>
-                  </select>
+                  <select id="param-human-cam-angle" class="lab-select"></select>
                 </div>
               </div>
             </div>
@@ -899,119 +544,31 @@
               <div class="params-grid" style="margin-top: 12px;">
                 <div class="param-group">
                   <label>강아지 종류</label>
-                  <select id="param-dog-breed" class="lab-select">
-                    <option value="none">기본 (None)</option>
-                    <option value="golden-retriever">골든 리트리버</option>
-                    <option value="shiba-inu">시바견 (Shiba Inu)</option>
-                    <option value="samoyed">사모예드</option>
-                    <option value="poodle">푸들 (Poodle)</option>
-                    <option value="corgi">웰시 코기 (Corgi)</option>
-                    <option value="maltese">말티즈 (Maltese)</option>
-                    <option value="pomeranian">포메라니안</option>
-                    <option value="bichon-frise">비숑 프리제</option>
-                    <option value="husky">시베리안 허스키</option>
-                    <option value="border-collie">보더 콜리</option>
-                    <option value="french-bulldog">프렌치 불독</option>
-                    <option value="german-shepherd">저먼 셰퍼드</option>
-                    <option value="beagle">비글</option>
-                    <option value="chihuahua">치와와</option>
-                    <option value="dachshund">닥스훈트</option>
-                    <option value="dalmatian">달마시안</option>
-                  </select>
+                  <select id="param-dog-breed" class="lab-select"></select>
                 </div>
                 <div class="param-group">
                   <label>고양이 종류</label>
-                  <select id="param-cat-breed" class="lab-select">
-                    <option value="none">기본 (None)</option>
-                    <option value="ragdoll">렉돌 (Ragdoll)</option>
-                    <option value="british-shorthair">브리티쉬 쇼트헤어</option>
-                    <option value="persian">페르시안</option>
-                    <option value="maine-coon">메인쿤</option>
-                    <option value="siamese">샴 (Siamese)</option>
-                    <option value="munchkin">먼치킨</option>
-                    <option value="russian-blue">러시안 블루</option>
-                    <option value="scottish-fold">스코티쉬 폴드</option>
-                    <option value="bengal">뱅갈 (Bengal)</option>
-                    <option value="abyssinian">아비시니안</option>
-                    <option value="sphynx">스핑크스</option>
-                    <option value="american-shorthair">아메리칸 쇼트헤어</option>
-                    <option value="norwegian-forest">노르웨이 숲 고양이</option>
-                    <option value="turkish-angora">터키시 앙고라</option>
-                  </select>
+                  <select id="param-cat-breed" class="lab-select"></select>
                 </div>
                 <div class="param-group">
                   <label>동물 포즈</label>
-                  <select id="param-animal-pose" class="lab-select">
-                    <option value="sitting">얌전히 앉아있는</option>
-                    <option value="running">신나게 달리는</option>
-                    <option value="sleeping">잠자는 중</option>
-                    <option value="pouncing">달려드는 (Pouncing)</option>
-                    <option value="playing">공놀이 중</option>
-                    <option value="alert">경계/서있는 자세</option>
-                    <option value="yawning">하품하는</option>
-                    <option value="stretching">기지개 켜는</option>
-                    <option value="head-tilt">고개 갸웃 (Head Tilt)</option>
-                    <option value="belly-up">배 보이고 눕기 (Belly Up)</option>
-                    <option value="jumping">점프 (Jump)</option>
-                    <option value="eating">간식 먹는 중 (Eating)</option>
-                    <option value="looking-up">올려다보기 (Looking Up)</option>
-                  </select>
+                  <select id="param-animal-pose" class="lab-select"></select>
                 </div>
                 <div class="param-group">
                   <label>촬영 시점</label>
-                  <select id="param-animal-pov" class="lab-select">
-                    <option value="eye-level">정면 응시 (Eye-level)</option>
-                    <option value="macro">초근접 매크로 (Macro)</option>
-                    <option value="wide">광각 전체샷 (Wide)</option>
-                    <option value="top-down">위에서 아래로 (Bird's eye)</option>
-                    <option value="low-angle">아래에서 위로 (Worm's eye)</option>
-                    <option value="closeup">클로즈업 (Close-up)</option>
-                  </select>
+                  <select id="param-animal-pov" class="lab-select"></select>
                 </div>
                 <div class="param-group">
                   <label>동물 촬영 샷 (Shot)</label>
-                  <select id="param-animal-shot" class="lab-select">
-                    <option value="none">기본 (None)</option>
-                    <option value="macro">초근접 샷 (Macro)</option>
-                    <option value="face-shot">얼굴 중심 (Face Shot)</option>
-                    <option value="upper-body">상반신 (Upper Body)</option>
-                    <option value="full-body">전신 (Full Body)</option>
-                    <option value="wide-view">풍경 포함 (Wide View)</option>
-                  </select>
+                  <select id="param-animal-shot" class="lab-select"></select>
                 </div>
                 <div class="param-group">
                   <label>동물 구도 (Composition)</label>
-                  <select id="param-animal-comp" class="lab-select">
-                    <option value="none">기본 (None)</option>
-                    <option value="eye-level">아이 레벨 (Eye Level)</option>
-                    <option value="top-down">위에서 아래로 (Top-down)</option>
-                    <option value="low-angle">아래에서 위로 (Low-angle)</option>
-                    <option value="side-view">측면 구도 (Side View)</option>
-                    <option value="dynamic">역동적 구도 (Dynamic)</option>
-                  </select>
+                  <select id="param-animal-comp" class="lab-select"></select>
                 </div>
                 <div class="param-group">
                   <label>종합 카메라 앵글 (Camera Angles)</label>
-                  <select id="param-animal-cam-angle" class="lab-select">
-                    <option value="none">기본 (None)</option>
-                    <optgroup label="1. 수직 각도 (Vertical)">
-                      <option value="birds-eye">버즈 아이 뷰 (Bird's Eye View)</option>
-                      <option value="high-angle">하이 앵글 (High Angle)</option>
-                      <option value="eye-level">아이 레벨 (Eye Level)</option>
-                      <option value="low-angle">로우 앵글 (Low Angle)</option>
-                      <option value="worms-eye">웜즈 아이 뷰 (Worm's Eye View)</option>
-                    </optgroup>
-                    <optgroup label="2. 수평 위치 및 관계 (Horizontal)">
-                      <option value="shoulder-level">숄더 레벨 (Shoulder Level)</option>
-                      <option value="over-the-shoulder">오버 더 숄더 (OTS)</option>
-                      <option value="hip-angle">힙 앵글 (Hip Angle)</option>
-                      <option value="knee-angle">니 앵글 (Knee Angle)</option>
-                    </optgroup>
-                    <optgroup label="3. 특수 앵글 (Special)">
-                      <option value="dutch-angle">더치 앵글 (Dutch Angle)</option>
-                      <option value="pov">POV (1인칭 시점)</option>
-                    </optgroup>
-                  </select>
+                  <select id="param-animal-cam-angle" class="lab-select"></select>
                 </div>
               </div>
             </div>
@@ -1021,89 +578,27 @@
               <div class="params-grid" style="margin-top: 12px;">
                 <div class="param-group">
                   <label>사물/광고 효과 (Effect)</label>
-                  <select id="param-scene-effect" class="lab-select">
-                    <option value="none">효과 없음 (None)</option>
-                    <option value="cinematic-smoke">시네마틱 연기 (Smoke)</option>
-                    <option value="water-splashes">청량한 물방울 튀김 (Splash)</option>
-                    <option value="electric-sparks">강렬한 스파크 (Sparks)</option>
-                    <option value="soft-mist">부드러운 안개 (Mist)</option>
-                    <option value="floating-particles">떠다니는 입자 (Particles)</option>
-                    <option value="product-glow">제품 아우라 광채 (Glow)</option>
-                    <option value="luxury-silk">고급스러운 테두리 실크 (Silk)</option>
-                    <option value="petals">꽃잎 흩날림 (Petals)</option>
-                    <option value="bokeh">보케 빛망울 (Bokeh)</option>
-                    <option value="light-rays">빛줄기 (Light Rays)</option>
-                    <option value="leaf-shadow">나뭇잎 그림자 (Leaf Shadow)</option>
-                    <option value="ice-frost">얼음·서리 (Frost)</option>
-                    <option value="ripples">물결 파동 (Ripples)</option>
-                  </select>
+                  <select id="param-scene-effect" class="lab-select"></select>
                 </div>
                 <div class="param-group">
                   <label>조명 컨셉 (Lighting)</label>
-                  <select id="param-scene-light" class="lab-select">
-                    <option value="commercial">상업용 스튜디오 조명</option>
-                    <option value="dramatic-shadow">강렬한 대비/그림자</option>
-                    <option value="soft-luxury">은은한 럭셔리 무드</option>
-                    <option value="neon-accent">네온 포인트 라이팅</option>
-                    <option value="natural-sunlight">자연 채광 (창가)</option>
-                    <option value="golden-hour">골든아워 (Golden Hour)</option>
-                    <option value="rim-backlight">역광 림라이트 (Rim Light)</option>
-                    <option value="moody-dark">어두운 무드 (Moody)</option>
-                    <option value="pastel-soft">파스텔 소프트 (Pastel)</option>
-                    <option value="hard-flash">하드 플래시 (Flash)</option>
-                  </select>
+                  <select id="param-scene-light" class="lab-select"></select>
                 </div>
                 <div class="param-group">
                   <label>사물 형태 유지 (Integrity)</label>
-                  <select id="param-scene-ref" class="lab-select">
-                    <option value="creative" selected>창의적 변형 허용 (Creative)</option>
-                    <option value="strict">레퍼런스 형태 유지 (참고 이미지 필요)</option>
-                  </select>
+                  <select id="param-scene-ref" class="lab-select"></select>
                 </div>
                 <div class="param-group">
                   <label>배경/사물 샷 (Shot)</label>
-                  <select id="param-scene-shot" class="lab-select">
-                    <option value="none">기본 (None)</option>
-                    <option value="macro">접사 (Macro)</option>
-                    <option value="standard">표준 (Standard)</option>
-                    <option value="wide">광각 (Wide)</option>
-                    <option value="ultra-wide">초광각 (Ultra Wide)</option>
-                    <option value="panoramic">파노라마 (Panoramic)</option>
-                  </select>
+                  <select id="param-scene-shot" class="lab-select"></select>
                 </div>
                 <div class="param-group">
                   <label>배경/사물 구도 (Composition)</label>
-                  <select id="param-scene-comp" class="lab-select">
-                    <option value="none">기본 (None)</option>
-                    <option value="rule-of-thirds">3분할 구도 (Rule of Thirds)</option>
-                    <option value="symmetrical">정대칭 구도 (Symmetrical)</option>
-                    <option value="vanishing-point">소실점 구도 (Vanishing Point)</option>
-                    <option value="flat-lay">수직 부감 (Flat Lay)</option>
-                    <option value="golden-spiral">황금 나선 구도 (Golden Spiral)</option>
-                  </select>
+                  <select id="param-scene-comp" class="lab-select"></select>
                 </div>
                 <div class="param-group">
                   <label>종합 카메라 앵글 (Camera Angles)</label>
-                  <select id="param-scene-cam-angle" class="lab-select">
-                    <option value="none">기본 (None)</option>
-                    <optgroup label="1. 수직 각도 (Vertical)">
-                      <option value="birds-eye">버즈 아이 뷰 (Bird's Eye View)</option>
-                      <option value="high-angle">하이 앵글 (High Angle)</option>
-                      <option value="eye-level">아이 레벨 (Eye Level)</option>
-                      <option value="low-angle">로우 앵글 (Low Angle)</option>
-                      <option value="worms-eye">웜즈 아이 뷰 (Worm's Eye View)</option>
-                    </optgroup>
-                    <optgroup label="2. 수평 위치 및 관계 (Horizontal)">
-                      <option value="shoulder-level">숄더 레벨 (Shoulder Level)</option>
-                      <option value="over-the-shoulder">오버 더 숄더 (OTS)</option>
-                      <option value="hip-angle">힙 앵글 (Hip Angle)</option>
-                      <option value="knee-angle">니 앵글 (Knee Angle)</option>
-                    </optgroup>
-                    <optgroup label="3. 특수 앵글 (Special)">
-                      <option value="dutch-angle">더치 앵글 (Dutch Angle)</option>
-                      <option value="pov">POV (1인칭 시점)</option>
-                    </optgroup>
-                  </select>
+                  <select id="param-scene-cam-angle" class="lab-select"></select>
                 </div>
               </div>
             </div>
@@ -1123,23 +618,7 @@
             <div class="lab-panel-body" id="lt-body" hidden>
               <div class="param-group">
                 <label for="lt-preset">조명 프리셋 <span id="lt-origin" class="lo-origin"></span></label>
-                <select id="lt-preset" class="lab-select">
-                  <option value="auto">Auto (장면에 맞게)</option>
-                  <option value="natural">Natural Light · 자연광</option>
-                  <option value="soft">Soft Light · 부드러운 빛</option>
-                  <option value="hard">Hard Light · 강한 빛</option>
-                  <option value="direct-flash">Direct Flash · 정면 플래시</option>
-                  <option value="rim">Rim Lighting · 림 라이트</option>
-                  <option value="rembrandt">Rembrandt · 렘브란트</option>
-                  <option value="butterfly">Butterfly · 버터플라이</option>
-                  <option value="split">Split · 스플릿</option>
-                  <option value="loop">Loop · 루프</option>
-                  <option value="neon">Neon · 네온</option>
-                  <option value="golden-hour">Golden Hour · 골든아워</option>
-                  <option value="ambient">Ambient · 주변광</option>
-                  <option value="studio">Studio · 스튜디오</option>
-                  <option value="custom">Custom · 직접 설정</option>
-                </select>
+                <select id="lt-preset" class="lab-select"></select>
               </div>
 
               <div class="lt-visual-row">
@@ -1186,12 +665,8 @@
               <div class="lt-volumetric">
                 <label class="lo-switch"><input type="checkbox" id="lt-vol-enabled"> <span>볼류메트릭 (빛줄기·대기 효과)</span></label>
                 <div class="lt-grid-3">
-                  <select id="lt-vol-type" class="lab-select" aria-label="볼류메트릭 종류">
-                    <option value="haze">Haze · 연무</option><option value="fog">Fog · 안개</option><option value="dust">Dust · 먼지</option><option value="smoke">Smoke · 연기</option>
-                  </select>
-                  <select id="lt-vol-visibility" class="lab-select" aria-label="볼류메트릭 가시성">
-                    <option value="subtle">Subtle · 은은</option><option value="moderate">Moderate · 보통</option><option value="strong">Strong · 강함</option>
-                  </select>
+                  <select id="lt-vol-type" class="lab-select" aria-label="볼류메트릭 종류"></select>
+                  <select id="lt-vol-visibility" class="lab-select" aria-label="볼류메트릭 가시성"></select>
                   <div class="lt-slider lt-slider-compact"><input type="range" id="lt-vol-density" min="0" max="100" step="1" aria-label="밀도"><input type="number" id="lt-vol-density-num" min="0" max="100" step="1" aria-label="밀도 (0–100)"></div>
                 </div>
               </div>
@@ -1200,13 +675,13 @@
                 <summary>고급 설정 (광원 · 질감 · 톤 · 보조광 · 색온도)</summary>
                 <div class="lt-grid-2">
                   <div class="param-group"><label for="lt-source">광원 종류</label>
-                    <select id="lt-source" class="lab-select"><option value="auto">Auto</option><option value="sunlight">Sunlight · 태양광</option><option value="led">LED</option><option value="fluorescent">Fluorescent · 형광등</option><option value="tungsten">Tungsten · 텅스텐</option><option value="strobe">Strobe · 스트로보</option></select></div>
+                    <select id="lt-source" class="lab-select"></select></div>
                   <div class="param-group"><label for="lt-quality">빛의 질감</label>
-                    <select id="lt-quality" class="lab-select"><option value="auto">Auto</option><option value="soft">Soft · 부드럽게</option><option value="hard">Hard · 선명하게</option><option value="custom">Custom · 그림자 경도</option></select></div>
+                    <select id="lt-quality" class="lab-select"></select></div>
                   <div class="param-group"><label for="lt-tonal">톤 스타일</label>
-                    <select id="lt-tonal" class="lab-select"><option value="auto">Auto</option><option value="balanced">Balanced</option><option value="high-key">High Key</option><option value="low-key">Low Key</option><option value="high-contrast">High Contrast</option><option value="low-contrast">Low Contrast</option></select></div>
+                    <select id="lt-tonal" class="lab-select"></select></div>
                   <div class="param-group"><label for="lt-fill">보조광 (Fill)</label>
-                    <select id="lt-fill" class="lab-select"><option value="auto">Auto</option><option value="off">Off</option><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select></div>
+                    <select id="lt-fill" class="lab-select"></select></div>
                 </div>
                 <div class="lt-slider"><label for="lt-hardness">그림자 경도</label><input type="range" id="lt-hardness" min="0" max="100" step="1"><input type="number" id="lt-hardness-num" min="0" max="100" step="1" aria-label="그림자 경도 (0 부드러움 – 100 선명)"><span class="unit"></span></div>
                 <div class="lt-slider"><label for="lt-kelvin">색온도</label><input type="range" id="lt-kelvin" min="2000" max="10000" step="100"><input type="number" id="lt-kelvin-num" min="2000" max="10000" step="100" aria-label="색온도 (K)"><span class="unit">K</span></div>
@@ -1224,22 +699,14 @@
             </div>
             <div class="lab-panel-body" id="op-body" hidden>
               <div class="param-group"><label for="op-lens">카메라 + 렌즈 프리셋 <span id="op-origin" class="lo-origin"></span></label>
-                <select id="op-lens" class="lab-select">
-                  <option value="auto">Auto</option>
-                  <option value="canon-r5ii-rf50">Canon EOS R5 Mark II + RF 50mm F1.8 STM</option>
-                  <option value="sony-a7iv-fe85">Sony A7 IV + FE 85mm F1.8</option>
-                  <option value="fuji-x100vi">Fujifilm X100VI (23mm ≈ 35mm 환산)</option>
-                  <option value="smartphone-main">Smartphone Main Camera</option>
-                  <option value="vintage-ccd">Vintage CCD Compact</option>
-                  <option value="custom">Custom · 직접 설정</option>
-                </select></div>
+                <select id="op-lens" class="lab-select"></select></div>
               <div class="lt-grid-3">
                 <div class="param-group"><label for="op-camera">카메라</label>
-                  <select id="op-camera" class="lab-select"><option value="auto">Auto</option><option value="smartphone">Smartphone</option><option value="ccd-compact">CCD Compact</option><option value="dslr">DSLR</option><option value="mirrorless">Mirrorless</option><option value="cinema">Cinema</option><option value="film-35mm">35mm Film</option><option value="medium-format">Medium Format</option></select></div>
+                  <select id="op-camera" class="lab-select"></select></div>
                 <div class="param-group"><label for="op-focal">초점거리 (환산)</label>
-                  <select id="op-focal" class="lab-select"><option value="auto">Auto</option><option value="14">14mm</option><option value="24">24mm</option><option value="28">28mm</option><option value="35">35mm</option><option value="50">50mm</option><option value="85">85mm</option><option value="105">105mm</option><option value="135">135mm</option><option value="200">200mm</option></select></div>
+                  <select id="op-focal" class="lab-select"></select></div>
                 <div class="param-group"><label for="op-aperture">조리개</label>
-                  <select id="op-aperture" class="lab-select"><option value="auto">Auto</option><option value="1.2">f/1.2</option><option value="1.4">f/1.4</option><option value="1.8">f/1.8</option><option value="2">f/2</option><option value="2.8">f/2.8</option><option value="4">f/4</option><option value="5.6">f/5.6</option><option value="8">f/8</option><option value="11">f/11</option><option value="16">f/16</option></select></div>
+                  <select id="op-aperture" class="lab-select"></select></div>
               </div>
               <details class="lt-advanced">
                 <summary>고급 설정 (화이트밸런스)</summary>
@@ -1313,10 +780,7 @@
             <div class="output-toolbar"
               style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin: 10px 0 4px;">
               <select id="param-output-mode" class="lab-select" title="출력 형식"
-                style="width: auto; max-width: 100%; height: 30px; padding: 0 8px; font-size: 0.72rem;">
-                <option value="zimage" selected>이미지 생성용 (단일 문단)</option>
-                <option value="spec">상세 설계서 (4문단)</option>
-              </select>
+                style="width: auto; max-width: 100%; height: 30px; padding: 0 8px; font-size: 0.72rem;"></select>
               <button class="btn-copy" id="send-to-studio-btn"
                 style="border-color: var(--skills-cyan); color: var(--skills-cyan);">이 프롬프트로 이미지 생성 →</button>
             </div>
@@ -1345,35 +809,30 @@
         style="display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: start; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 40px;">
 
         <div class="studio-controls">
-          <div class="label-mono">IMAGE GENERATION PROMPT</div>
-
-          <div class="studio-prompt-container"
-            style="margin-top: 16px; display: flex; flex-direction: column; gap: 12px;">
-            <div class="studio-input-header"
-              style="display: flex; justify-content: space-between; align-items: center;">
-              <!-- <label style="font-size: 0.85rem; color: var(--fg-dim); font-weight: 500;">그릴 내용을 상세하게 묘사해주세요</label> -->
-            </div>
-
-            <textarea id="imagePromptInput" class="lab-textarea" placeholder="예: 네온 사인이 빛나는 사이버펑크 도시, 비 오는 밤, 8k 해상도"
-              style="height: 180px; font-size: 0.95rem; line-height: 1.6; background: var(--input-bg); border: 1px solid var(--border-strong);"></textarea>
-            <div id="image-ref-chips" class="reference-chips" aria-label="Seedream 참고 이미지" hidden></div>
-
-            <div id="spicy-image-controls" hidden>
-              <label for="image-provider" class="label-mono">이미지 모델</label>
+          <div id="spicy-image-controls" class="image-model-toolbar" hidden>
+            <div class="image-model-field">
+              <label for="image-provider" class="image-field-label">이미지 모델</label>
               <select id="image-provider" class="lab-select">
-                <option value="default">기본 (Kie.ai / Pollinations)</option>
-                <option value="spicy">SpicyAPI · Seedream 5.5 Edit</option>
+                <option value="spicy">Seedream 5.5 Edit · SpicyAPI</option>
+                <option value="default" selected>기본 · Kie.ai / Pollinations</option>
               </select>
-              <div id="spicy-image-balance" class="capacity-hint" role="status"></div>
-              <div id="spicy-output-settings" class="capacity-hint" hidden>1K · PNG · 배경 자동</div>
             </div>
+            <div id="spicy-image-wallet" class="image-wallet" role="status" aria-live="polite" hidden>
+              <span class="image-field-label">사용 가능 잔액</span>
+              <strong id="spicy-image-balance">—</strong>
+              <small id="spicy-prepaid-balance" hidden></small>
+            </div>
+          </div>
 
-            <div class="studio-action-bar"
-              style="display: flex; gap: 12px; align-items: center; justify-content: flex-end; padding-top: 8px;">
-              <div class="control-item" style="display: flex; align-items: center; gap: 8px;">
-                <span style="font-size: 0.75rem; color: var(--fg-muted); white-space: nowrap;">화면 비율</span>
-                <select id="imageRatioInput" class="lab-select"
-                  style="min-width: 150px; height: 36px; padding: 0 12px;">
+          <div class="studio-prompt-container image-prompt-fields">
+            <label id="image-prompt-label" for="imagePromptInput" class="image-field-label">프롬프트</label>
+            <textarea id="imagePromptInput" class="lab-textarea" placeholder="예: 네온 사인이 빛나는 사이버펑크 도시, 비 오는 밤"
+              style="height: 180px; font-size: 0.95rem; line-height: 1.6; background: var(--input-bg); border: 1px solid var(--border-strong);"></textarea>
+
+            <div class="image-output-toolbar">
+              <div class="image-ratio-field">
+                <label for="imageRatioInput" class="image-field-label">화면 비율</label>
+                <select id="imageRatioInput" class="lab-select">
                   <option value="auto" selected>Auto (자동 맞춤)</option>
                   <option value="1:1">1:1 (Square)</option>
                   <option value="3:4">3:4 (Portrait)</option>
@@ -1383,20 +842,27 @@
                   <option value="21:9">21:9 (Wide)</option>
                 </select>
               </div>
-
-              <div class="vertical-divider" style="width: 1px; height: 16px; background: var(--border-strong);"></div>
-
-              <button id="image-upload-btn" class="btn-skills secondary"
-                style="height: 36px; padding: 0 14px; font-size: 0.8rem; display: flex; align-items: center; gap: 8px; border-radius: 8px; border: 1px solid rgba(147, 112, 219, 0.3);">
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+              <div id="spicy-output-settings" class="image-output-specs" aria-label="고정 출력 설정" hidden>
+                <span>1K</span><span>PNG</span><span>배경 자동</span>
+              </div>
+            </div>
+            <div id="image-reference-panel" class="image-reference-panel">
+              <div class="image-reference-toolbar">
+                <div>
+                  <div class="image-field-label">참고 이미지 <span id="spicy-reference-count" hidden>0/10</span></div>
+                  <div id="image-reference-hint">기본 모델은 텍스트 프롬프트로 생성합니다.</div>
+                </div>
+                <button id="image-upload-btn" type="button" class="btn-skills secondary image-upload-control">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                   <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
                   <circle cx="8.5" cy="8.5" r="1.5"></circle>
                   <polyline points="21 15 16 10 5 21"></polyline>
-                </svg>
-                <span>이미지 첨부</span>
-              </button>
-              <div id="image-reference-hint" class="capacity-hint" style="font-size: 0.65rem; color: var(--fg-muted); opacity: 0.6;">(참고 이미지는 현재 미반영 · 텍스트 프롬프트로 생성)</div>
-              <input type="file" id="image-file-input" accept="image/*" style="display: none;">
+                  </svg>
+                  <span>이미지 추가</span>
+                </button>
+                <input type="file" id="image-file-input" accept="image/*" hidden>
+              </div>
+              <div id="image-ref-chips" class="reference-chips" aria-label="Seedream 참고 이미지" hidden></div>
             </div>
 
             <!-- Preview Container -->
@@ -1409,13 +875,10 @@
             </div>
           </div>
 
-          <button id="image-generate-btn" class="btn-skills secondary"
-            style="width: 100%; font-size: 1.05rem; padding: 16px; height: auto; margin-top: 16px;">
-            ✨ 이미지 생성하기
-          </button>
+          <button id="image-generate-btn" type="button" class="btn-skills secondary image-studio-submit">이미지 생성</button>
         </div>
         <div class="studio-output" style="height: 100%; display: flex; flex-direction: column;">
-          <div class="label-mono">GENERATED RESULT</div>
+          <div class="image-field-label">결과 이미지</div>
           <div class="visualizer-output" id="image-result-box"
             style="flex: 1; min-height: 320px; margin-top: 16px; display: flex; align-items: center; justify-content: center; background: var(--input-bg); border-radius: 8px; border: 1px solid var(--border); overflow: hidden; position: relative;">
             <div id="image-placeholder"
@@ -1532,6 +995,21 @@
           </div>
         </div>
 
+      </div>
+    </section>
+
+    <section class="section" id="media-library" style="margin-top: 60px;" hidden>
+      <div class="section-header"><h2>미디어 보관함</h2></div>
+      <div class="lab-card media-library-body">
+        <div class="media-library-toolbar">
+          <div class="media-library-tabs" role="group" aria-label="미디어 목록">
+            <button type="button" id="media-recent-tab" aria-pressed="true">이번 세션</button>
+            <button type="button" id="media-saved-tab" aria-pressed="false">보관한 파일</button>
+          </div>
+          <span id="media-library-quota" class="media-library-status"></span>
+        </div>
+        <p id="media-library-status" class="media-library-status" role="status"></p>
+        <div id="media-library-grid" class="media-library-grid"></div>
       </div>
     </section>
 
@@ -2133,6 +1611,8 @@
   <!-- 🎙 Supertonic 3 브라우저 TTS (onnxruntime-web) -->
   <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/ort.webgpu.min.js"></script>
   <script type="module" src="supertonic/tts.js"></script>
+  <script src="prompt-rules.js"></script>
+  <script src="prompt-catalog.js"></script>
   <script src="script.js"></script>
   <script src="lighting-lab.js"></script>
 </body>

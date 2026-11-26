@@ -118,11 +118,13 @@ test('owner-only upload, live schema, balance, quote, idempotent creation and po
     assert.equal((await (await call('task/job_mock')).json()).code, 'content_rejected');
 });
 
-test('editor requires price confirmation and does not auto-resubmit rejected content', async () => {
+test('editor submits once after pricing and stops safely before or after submission', async () => {
     const source = readFileSync(require.resolve('../script.js'), 'utf8');
     const snippet = source.slice(source.indexOf('async function runSpicyEdit('), source.indexOf('async function generateImage()'));
     const values = new Map();
-    let confirmed = false;
+    const status = {};
+    let existingTask;
+    let abortQuote;
     const calls = [];
     const context = vm.createContext({
         spicyImageStorageKey: 'owner-pending',
@@ -132,20 +134,42 @@ test('editor requires price confirmation and does not auto-resubmit rejected con
             removeItem: key => values.delete(key)
         },
         setTimeout: callback => callback(),
-        showSystemConfirm: async () => confirmed,
-        spicyImageRequest: async (path) => {
+        showSystemConfirm: async () => assert.fail('Normal generation should skip the confirmation dialog'),
+        spicyImageRequest: async (path, body, signal) => {
             calls.push(path);
-            if (path === 'pending') return null;
-            if (path === 'quote') return { token: 'token', cost: '0.035', expiresAt: new Date().toISOString() };
-            if (path === 'create') return { taskId: 'job_mock' };
+            if (path === 'pending') return existingTask || null;
+            if (path === 'quote') {
+                abortQuote?.();
+                signal?.throwIfAborted();
+                return { token: 'token', cost: '0.035', expiresAt: new Date().toISOString() };
+            }
+            if (path === 'create') {
+                assert.match(status.textContent, /예상 비용 USD 0\.035/);
+                assert.equal(body.token, 'token');
+                return { taskId: 'job_mock' };
+            }
             return { state: 'failed', code: 'content_rejected', settled: true, cost: '0' };
         }
     });
     vm.runInContext(snippet, context);
-    assert.equal(await context.runSpicyEdit('Edit', ['image'], '1:1'), null);
-    assert.deepEqual(calls.splice(0), ['pending', 'quote']);
-    confirmed = true;
-    await assert.rejects(context.runSpicyEdit('Edit', ['image'], '1:1'), /콘텐츠가 거절/);
+    await assert.rejects(context.runSpicyEdit('Edit', ['image'], '1:1', status), /콘텐츠가 거절/);
     assert.deepEqual(calls, ['pending', 'quote', 'create', 'task/job_mock']);
     assert.equal(values.size, 0);
+    calls.length = 0;
+    const quoteController = new AbortController();
+    abortQuote = () => quoteController.abort();
+    await assert.rejects(context.runSpicyEdit('Edit', ['image'], '1:1', null, { signal: quoteController.signal }),
+        { name: 'AbortError' });
+    assert.deepEqual(calls, ['pending', 'quote']);
+    assert.equal(values.size, 0);
+
+    calls.length = 0;
+    const pollingController = new AbortController();
+    existingTask = { taskId: 'job_mock' };
+    values.set('owner-pending', JSON.stringify(existingTask));
+    await assert.rejects(context.runSpicyEdit('', [], 'auto', null, {
+        signal: pollingController.signal, onSubmitted: () => pollingController.abort()
+    }), { name: 'AbortError' });
+    assert.deepEqual(calls, ['pending']);
+    assert.equal(values.get('owner-pending'), JSON.stringify(existingTask));
 });

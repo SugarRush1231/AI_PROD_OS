@@ -409,6 +409,9 @@ function artDirection(mood, palette) {
 }
 
 function paletteInstruction(colors) {
+  if (colors.length === 1) {
+    return `Background palette: use a flat, solid ${colors[0]} backdrop, without gradients or additional background colors. Preserve explicitly specified subject colors and reference details.`;
+  }
   return `Background palette: use only ${colors.join(', ')} for the backdrop and environmental accents. Preserve explicitly specified subject colors and reference details.`;
 }
 

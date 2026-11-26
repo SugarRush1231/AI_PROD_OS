@@ -326,46 +326,75 @@ function showSystemConfirm(title, message, type = 'info', showInput = false) {
     const onCancel = () => { cleanup(); resolve(false); };
 
     const onEnter = (e) => { if (e.key === 'Enter') onConfirm(); };
+    const onEscape = (event) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onCancel();
+      }
+    };
 
     const cleanup = () => {
       UI.modal.classList.remove('active');
       UI.modalConfirmBtn.removeEventListener('click', onConfirm);
       UI.modalCancelBtn.removeEventListener('click', onCancel);
       UI.modalInput.removeEventListener('keydown', onEnter);
+      document.removeEventListener('keydown', onEscape);
     };
 
     UI.modalConfirmBtn.addEventListener('click', onConfirm);
     UI.modalCancelBtn.addEventListener('click', onCancel);
     UI.modalInput.addEventListener('keydown', onEnter);
+    document.addEventListener('keydown', onEscape);
   });
 }
 
 const paletteWheel = document.getElementById('param-palette-wheel');
 const paletteHex = document.getElementById('param-palette-hex');
 const paletteAuto = document.getElementById('param-palette-auto');
+const paletteMode = document.getElementById('param-palette-mode');
+const paletteAdd = document.getElementById('param-palette-add');
 const paletteStatus = document.getElementById('param-palette-status');
+let paletteDraft = '';
 
 function renderPalettePreview() {
   const preview = document.getElementById('param-palette-preview');
   const colors = promptCatalog.paletteColors(UI.paramPalette.value);
   const marker = document.getElementById('param-palette-marker');
-  const base = promptCatalog.palettePosition(colors[0] || '');
+  const custom = paletteMode.value === 'custom';
+  const selected = (custom && paletteDraft) || colors[0] || '';
+  const base = promptCatalog.palettePosition(selected);
   marker.hidden = !base;
   if (base) {
     const angle = base.hue * Math.PI / 180;
     marker.style.left = `${50 + Math.cos(angle) * base.saturation * 50}%`;
     marker.style.top = `${50 + Math.sin(angle) * base.saturation * 50}%`;
   }
-  paletteHex.value = colors[0] || '';
+  paletteHex.value = selected;
   paletteHex.removeAttribute('aria-invalid');
-  paletteAuto.setAttribute('aria-pressed', String(!base));
-  paletteStatus.textContent = base ? '배경에 적용할 배색' : '기준색을 고르면 배경에 사용할 색이 표시됩니다.';
+  paletteAuto.setAttribute('aria-pressed', String(UI.paramPalette.value === 'none'));
+  paletteAdd.hidden = !custom;
+  paletteAdd.disabled = !paletteDraft || colors.includes(paletteDraft) || colors.length >= 4;
+  paletteStatus.textContent = custom
+    ? '색을 고른 뒤 색 추가를 눌러 최대 4개를 지정하세요.'
+    : colors.length ? '배경에 적용할 배색' : '색상 휠에서 고르거나 HEX 코드를 입력하세요.';
   const swatches = colors.map(color => {
     const swatch = document.createElement('span');
     const sample = document.createElement('i');
     sample.style.backgroundColor = color;
     sample.setAttribute('aria-hidden', 'true');
     swatch.append(sample, color);
+    if (custom) {
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.textContent = '×';
+      remove.setAttribute('aria-label', `${color} 제거`);
+      remove.onclick = () => {
+        UI.paramPalette.value = `custom:${colors.filter(item => item !== color).join(',')}`;
+        renderPalettePreview();
+        (preview.querySelector('button') || paletteHex).focus();
+      };
+      swatch.append(remove);
+    }
     return swatch;
   });
   preview.replaceChildren(...swatches);
@@ -373,7 +402,15 @@ function renderPalettePreview() {
 }
 
 function choosePaletteColor(value) {
-  UI.paramPalette.value = value;
+  if (paletteMode.value === 'custom') paletteDraft = value;
+  else UI.paramPalette.value = value && paletteMode.value === 'single' ? `single:${value}` : value || 'none';
+  renderPalettePreview();
+}
+
+function restorePalette() {
+  const value = UI.paramPalette.value;
+  paletteMode.value = value.startsWith('single:') ? 'single' : value.startsWith('custom:') ? 'custom' : 'harmony';
+  paletteDraft = '';
   renderPalettePreview();
 }
 
@@ -398,12 +435,38 @@ paletteHex.addEventListener('input', () => {
   if (/^[0-9a-f]{6}$/i.test(code)) choosePaletteColor(`#${code.toUpperCase()}`);
 });
 paletteHex.addEventListener('blur', () => {
-  if (paletteHex.value === (promptCatalog.paletteColors(UI.paramPalette.value)[0] || '')) return;
-  if (!paletteHex.value.trim()) return choosePaletteColor('none');
+  const selected = (paletteMode.value === 'custom' && paletteDraft) || promptCatalog.paletteColors(UI.paramPalette.value)[0] || '';
+  if (paletteHex.value === selected) return;
+  if (!paletteHex.value.trim()) {
+    if (paletteMode.value === 'custom') renderPalettePreview();
+    else choosePaletteColor('');
+    return;
+  }
   paletteHex.setAttribute('aria-invalid', 'true');
   paletteStatus.textContent = 'HEX 코드 6자리를 입력해 주세요. 기존 배색이 적용됩니다.';
 });
-paletteAuto.addEventListener('click', () => choosePaletteColor('none'));
+paletteMode.addEventListener('change', () => {
+  const color = promptCatalog.paletteColors(UI.paramPalette.value)[0];
+  if (paletteMode.value === 'custom') {
+    UI.paramPalette.value = `custom:${color || ''}`;
+    paletteDraft = color || '';
+    renderPalettePreview();
+  } else {
+    choosePaletteColor(color);
+  }
+});
+paletteAdd.addEventListener('click', () => {
+  const colors = promptCatalog.paletteColors(UI.paramPalette.value);
+  if (!paletteAdd.disabled) {
+    UI.paramPalette.value = `custom:${[...colors, paletteDraft].join(',')}`;
+    renderPalettePreview();
+    paletteHex.focus();
+  }
+});
+paletteAuto.addEventListener('click', () => {
+  UI.paramPalette.value = 'none';
+  restorePalette();
+});
 
 // --- CUSTOM PRESET SYSTEM (SERVER SYNC) ---
 const MyPresets = {
@@ -471,7 +534,7 @@ const MyPresets = {
         if (key === 'paramType') el.dispatchEvent(new Event('change'));
       }
     });
-    renderPalettePreview();
+    restorePalette();
 
     // 2. 인풋 및 칩 초기화
     if (UI.paramCustom) UI.paramCustom.value = '';
@@ -605,7 +668,7 @@ const MyPresets = {
         }
       }
     });
-    renderPalettePreview();
+    restorePalette();
 
     // 1-b. 조명/광학 복구 (없는 구버전 프리셋은 기본값으로 마이그레이션)
     if (window.LightingLab) window.LightingLab.load(p.params.lighting, p.params.optics, p.params.lightingPanels);
@@ -1725,8 +1788,8 @@ ${PromptContext.visual.camera.composition !== 'none' ? `- Composition: ${PromptC
       `;
     }
 
-    const palette = config.type === 'none' ? [] : promptCatalog.paletteColors(UI.paramPalette.value);
-    if (config.type !== 'none') {
+    const palette = config.type === 'scene' ? promptCatalog.paletteColors(UI.paramPalette.value) : [];
+    if (config.type === 'scene') {
       const mood = promptCatalog.describe('param-mood', UI.paramMood.value);
       enrichedIntent += promptRules.artDirection(mood, palette);
     }
@@ -2332,19 +2395,18 @@ async function checkAuthStatus() {
     }
     if (imageBtn) {
       imageBtn.disabled = !isLoggedIn;
-      imageBtn.innerText = isLoggedIn
-        ? (document.getElementById('image-provider').value === 'spicy' ? '편집 견적 확인' : '이미지 생성')
-        : '로그인 필요';
+      imageBtn.innerText = isLoggedIn ? '이미지 생성' : '로그인 필요';
     }
     if (ratioInput) ratioInput.disabled = !isLoggedIn;
 
     // 🎬 영상 생성·원클릭: 로그인 + 승인 계정만
-    const paidOk = isLoggedIn && window.CAN_USE_PAID !== false;
+    const paidOk = isLoggedIn && window.CAN_USE_PAID === true;
     const videoBtn = document.getElementById('generate-video-btn');
     if (videoBtn) {
       videoBtn.disabled = !paidOk;
-      videoBtn.innerText = !isLoggedIn ? '🔒 로그인 필요' : (paidOk ? '🎬 AI 비디오 생성하기' : '🔒 승인된 계정 전용');
+      videoBtn.innerText = !isLoggedIn ? '🔒 로그인 필요' : (paidOk ? '🎬 AI 비디오 생성하기' : '🔒 영상 권한 필요');
     }
+    document.getElementById('video-permission-hint').hidden = !isLoggedIn || paidOk;
     const videoPrompt = document.getElementById('videoPromptInput');
     if (videoPrompt) videoPrompt.disabled = !paidOk;
     videoReferenceEditor.element.contentEditable = String(paidOk && videoRefImages.length > 0);
@@ -2358,6 +2420,7 @@ async function checkAuthStatus() {
       apVideo.disabled = !paidOk;
       if (!paidOk) apVideo.checked = false;
       if (apVideo.parentElement) apVideo.parentElement.title = paidOk ? '' : '영상 생성은 승인된 계정만 사용할 수 있습니다.';
+      document.getElementById('ap-video-permission-hint').hidden = !isLoggedIn || paidOk;
     }
     if (imageUploadBtn) {
       imageUploadBtn.disabled = !isLoggedIn;
@@ -2386,7 +2449,7 @@ async function checkAuthStatus() {
     if (!res.ok) throw new Error('Auth fetch failed');
     const data = await res.json();
 
-    window.CAN_USE_PAID = data.canUsePaid !== false;
+    window.CAN_USE_PAID = data.canUsePaid === true;
     csrfHeaderToken = data.csrfToken;
     currentAccountId = data.user?.id;
     mediaStorageEnabled = data.mediaLibraryEnabled === true;
@@ -3073,7 +3136,6 @@ function initSpicyImageControls(ownerId) {
     document.getElementById('spicy-image-wallet').hidden = !isSpicy;
     document.getElementById('spicy-reference-count').hidden = !isSpicy;
     document.getElementById('image-reference-panel').classList.toggle('is-seedream', isSpicy);
-    document.getElementById('image-generate-btn').textContent = isSpicy ? '편집 견적 확인' : '이미지 생성';
     document.getElementById('image-engine-status').textContent = isSpicy ? 'Seedream 5.5 Edit' : 'API Active';
     seedreamEditor.element.dataset.placeholder = '바꿀 내용을 입력하세요. @를 입력하면 첨부 이미지를 선택할 수 있어요.';
     seedreamEditor.element.setAttribute('aria-labelledby', 'image-prompt-label');
@@ -3089,12 +3151,13 @@ function initSpicyImageControls(ownerId) {
   provider.dispatchEvent(new Event('change'));
 }
 
-async function spicyImageRequest(path, body) {
+async function spicyImageRequest(path, body, signal) {
   const options = body === undefined ? {} : {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
   };
+  const timeout = AbortSignal.timeout(path === 'quote' ? 120000 : 25000);
   const response = await apiFetch(`/api/spicy-image/${path}`, {
-    ...options, signal: AbortSignal.timeout(path === 'quote' ? 120000 : 25000)
+    ...options, signal: signal ? AbortSignal.any([timeout, signal]) : timeout
   });
   const data = await response.json();
   if (!response.ok) throw Object.assign(new Error(data.error || 'SpicyAPI 요청에 실패했습니다.'), {
@@ -3117,29 +3180,29 @@ async function refreshSpicyBalance() {
   }
 }
 
-async function runSpicyEdit(prompt, images, ratio, status) {
-  let pending = await spicyImageRequest('pending');
+async function runSpicyEdit(prompt, images, ratio, status, { signal, onSubmitted } = {}) {
+  signal?.throwIfAborted();
+  let pending = await spicyImageRequest('pending', undefined, signal);
   pending ||= JSON.parse(localStorage.getItem(spicyImageStorageKey) || 'null');
+  let estimate = '';
+  let ratioNote = '';
+  if (pending) onSubmitted?.();
   if (!pending) {
     if (!prompt) throw new Error('편집 프롬프트와 참고 이미지를 입력해 주세요.');
-    if (status) status.textContent = '참고 이미지 업로드 및 견적 조회 중...';
-    const quote = await spicyImageRequest('quote', { prompt, images, ratio });
-    const expires = new Date(quote.expiresAt).toLocaleTimeString();
-    const ratioNote = ratio !== 'auto' && quote.ratio !== ratio ? ' 모델의 기본 화면 비율을 적용합니다.' : '';
-    const confirmed = await showSystemConfirm('Seedream 5.5 Edit',
-      `예상 비용 USD ${quote.cost} · 견적 만료 ${expires}.${ratioNote} 이 이미지 편집을 제출할까요?`, 'info');
-    if (!confirmed) return null;
+    if (status) status.textContent = '참고 이미지 업로드 및 예상 비용 확인 중…';
+    const quote = await spicyImageRequest('quote', { prompt, images, ratio }, signal);
+    estimate = ` · 예상 비용 USD ${quote.cost}`;
+    ratioNote = ratio !== 'auto' && quote.ratio !== ratio ? ' · 모델 기본 비율' : '';
     pending = { token: quote.token };
-    localStorage.setItem(spicyImageStorageKey, JSON.stringify(pending));
-  } else if (!pending.taskId) {
-    const confirmed = await showSystemConfirm('기존 Seedream 요청 확인',
-      '이전에 확인한 견적의 접수 상태를 같은 요청으로 확인할까요?', 'info');
-    if (!confirmed) return null;
   }
 
   try {
+    signal?.throwIfAborted();
     if (!pending.taskId) {
-      pending = await spicyImageRequest('create', pending);
+      if (status) status.textContent = `편집 요청 중…${estimate}${ratioNote}`;
+      localStorage.setItem(spicyImageStorageKey, JSON.stringify(pending));
+      onSubmitted?.();
+      pending = await spicyImageRequest('create', pending, signal);
       localStorage.setItem(spicyImageStorageKey, JSON.stringify(pending));
     }
   } catch (error) {
@@ -3158,11 +3221,19 @@ async function runSpicyEdit(prompt, images, ratio, status) {
     throw error;
   }
 
-  if (status) status.textContent = 'Seedream 이미지 편집 중...';
+  if (status) status.textContent = `Seedream 이미지 편집 중…${estimate}${ratioNote}`;
   const until = Date.now() + 120000;
   for (let delay = 2000; Date.now() < until; delay = Math.min(delay * 1.5, 10000)) {
-    await new Promise(resolve => setTimeout(resolve, delay));
-    const task = await spicyImageRequest(`task/${encodeURIComponent(pending.taskId)}`);
+    signal?.throwIfAborted();
+    await new Promise((resolve, reject) => {
+      const abort = () => { clearTimeout(timer); reject(signal.reason); };
+      const timer = setTimeout(() => {
+        signal?.removeEventListener('abort', abort);
+        resolve();
+      }, delay);
+      signal?.addEventListener('abort', abort, { once: true });
+    });
+    const task = await spicyImageRequest(`task/${encodeURIComponent(pending.taskId)}`, undefined, signal);
     if (task.state === 'queued' || task.state === 'running' || task.pending) continue;
     localStorage.removeItem(spicyImageStorageKey);
     if (task.state === 'succeeded' && task.url) return { data: {
@@ -3263,7 +3334,7 @@ async function generateImage() {
   if (!progressContainer) {
     placeholder.innerHTML = `
       <div id="image-progress-container" style="width: 80%; margin: 0 auto; text-align: center;">
-        <div id="image-progress-text" style="font-size: 0.85rem; margin-bottom: 8px; color: var(--skills-cyan);">🚀 서버로 요청을 보내는 중...</div>
+        <div id="image-progress-text" role="status" style="font-size: 0.85rem; margin-bottom: 8px; color: var(--skills-cyan);">🚀 서버로 요청을 보내는 중...</div>
         <div style="height: 6px; background: rgba(255,255,255,0.1); border-radius: 10px; overflow: hidden; position: relative;">
           <div id="image-progress-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #0cebeb, #20e3b2, #29ffc6); transition: width 0.3s ease; box-shadow: 0 0 10px var(--skills-cyan);"></div>
         </div>
@@ -3308,11 +3379,28 @@ async function generateImage() {
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 180000); // 180초 타임아웃
+  const stop = document.getElementById('image-stop-btn');
+  let submitted = false;
+  let manuallyStopped = false;
+  if (useSpicy) {
+    stop.hidden = false;
+    stop.textContent = '비용 확인 중단';
+    stop.onclick = () => {
+      manuallyStopped = true;
+      controller.abort();
+    };
+  }
 
   try {
     const editWithReferences = async () => {
       await spicyFileBatch;
-      return runSpicyEdit(cleanPrompt, spicyReferenceImages.map(ref => ref.src), ratioValue, statusTxt);
+      return runSpicyEdit(cleanPrompt, spicyReferenceImages.map(ref => ref.src), ratioValue, statusTxt, {
+        signal: controller.signal,
+        onSubmitted() {
+          submitted = true;
+          stop.textContent = '결과 조회 중단';
+        }
+      });
     };
     const response = useSpicy ? null : await apiFetch('/api/generate-image', {
       method: 'POST',
@@ -3331,7 +3419,10 @@ async function generateImage() {
         })
         : editWithReferences())
       : await response.json();
-    if (!responseData) { if (statusTxt) statusTxt.textContent = '편집 제출을 취소했습니다.'; return; }
+    if (!responseData) {
+      if (statusTxt) statusTxt.textContent = submitted ? '기존 작업의 조회를 중단했습니다.' : '편집을 제출하지 않았습니다.';
+      return;
+    }
 
     if (response && !response.ok) {
       console.error("이미지 생성 에러:", responseData);
@@ -3422,13 +3513,18 @@ async function generateImage() {
 
   } catch (error) {
     clearInterval(progressInterval);
-    console.error("이미지 생성 통신 에러:", error);
+    if (!manuallyStopped) console.error("이미지 생성 통신 에러:", error);
     const message = document.createElement('div');
     message.style.cssText = 'color: var(--status-error); padding: 20px;';
-    message.textContent = `❌ 생성 중 오류가 발생했습니다. ${error.message}`;
+    message.textContent = manuallyStopped
+      ? (submitted ? '결과 조회를 중단했습니다. 공급자 작업과 과금은 진행될 수 있습니다. 버튼을 다시 누르면 기존 작업을 조회합니다.'
+        : '비용 확인을 중단했습니다. 유료 편집은 제출되지 않았습니다.')
+      : `❌ 생성 중 오류가 발생했습니다. ${error.message}`;
     placeholder.replaceChildren(message);
   } finally {
     clearTimeout(timeoutId);
+    stop.hidden = true;
+    stop.onclick = null;
     if (useSpicy) refreshSpicyBalance();
     providerSelect.disabled = false;
     btn.innerHTML = orgBtnText;
@@ -4168,7 +4264,7 @@ RULES:
     const platformSel = document.getElementById('ap-platform');
     const platform = platformSel.options[platformSel.selectedIndex].text;
     const count = parseInt(document.getElementById('ap-scenes').value, 10) || 1;
-    const makeVideo = document.getElementById('ap-make-video').checked;
+    const makeVideo = window.CAN_USE_PAID === true && document.getElementById('ap-make-video').checked;
     const voiceOpt = document.getElementById('ap-voice')?.value || 'F1';
     const linkMode = document.getElementById('ap-link')?.value || 'cut';
 

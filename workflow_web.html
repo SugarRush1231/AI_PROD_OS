@@ -464,30 +464,36 @@
               </div>
 
               <div class="param-group" id="bg-scene-container" style="display: none;">
-                <label>장소/사물 배경 (Background)</label>
+                <label for="param-bg-scene">장소/사물 배경 (Background)</label>
                 <select id="param-bg-scene" class="lab-select"></select>
-              </div>
 
-              <div class="param-group">
-                <label for="param-mood">무드 (Mood)</label>
-                <select id="param-mood" class="lab-select"></select>
-              </div>
-
-              <div class="param-group">
-                <label for="param-palette-hex">배경 색상 팔레트</label>
-                <input id="param-palette-value" type="hidden" value="none">
-                <div class="lab-palette-controls">
-                  <div id="param-palette-wheel" class="lab-palette-wheel" aria-hidden="true">
-                    <span id="param-palette-marker" hidden></span>
-                  </div>
-                  <div class="lab-palette-fields">
-                    <input id="param-palette-hex" class="lab-select" type="text" placeholder="#RRGGBB"
-                      autocomplete="off" spellcheck="false" maxlength="7" aria-label="기준색 HEX 코드" aria-describedby="param-palette-status">
-                    <button id="param-palette-auto" type="button" class="btn-copy" aria-pressed="true">자동</button>
-                  </div>
+                <div class="param-group scene-art-direction">
+                  <label for="param-mood">배경 무드 (Mood)</label>
+                  <select id="param-mood" class="lab-select"></select>
                 </div>
-                <small id="param-palette-status" class="lab-palette-status" role="status">기준색을 고르면 배경에 사용할 색이 표시됩니다.</small>
-                <div id="param-palette-preview" class="lab-palette-preview" aria-label="생성된 배색" hidden></div>
+
+                <div id="scene-palette-controls" class="param-group scene-art-direction">
+                  <label for="param-palette-mode">배경 색상 팔레트</label>
+                  <input id="param-palette-value" type="hidden" value="none">
+                  <select id="param-palette-mode" class="lab-select">
+                    <option value="harmony">추천 조합</option>
+                    <option value="single">단색</option>
+                    <option value="custom">직접 조합</option>
+                  </select>
+                  <div class="lab-palette-controls">
+                    <div id="param-palette-wheel" class="lab-palette-wheel" aria-hidden="true">
+                      <span id="param-palette-marker" hidden></span>
+                    </div>
+                    <div class="lab-palette-fields">
+                      <input id="param-palette-hex" class="lab-select" type="text" placeholder="#RRGGBB"
+                        autocomplete="off" spellcheck="false" maxlength="7" aria-label="기준색 HEX 코드" aria-describedby="param-palette-status">
+                      <button id="param-palette-auto" type="button" class="btn-copy" aria-pressed="true">자동</button>
+                      <button id="param-palette-add" type="button" class="btn-copy" hidden>색 추가</button>
+                    </div>
+                  </div>
+                  <small id="param-palette-status" class="lab-palette-status" role="status">기준색을 고르면 배경에 사용할 색이 표시됩니다.</small>
+                  <div id="param-palette-preview" class="lab-palette-preview" aria-label="생성된 배색" hidden></div>
+                </div>
               </div>
 
               <div class="param-group">
@@ -887,6 +893,7 @@
           </div>
 
           <button id="image-generate-btn" type="button" class="btn-skills secondary image-studio-submit">이미지 생성</button>
+          <button id="image-stop-btn" type="button" class="btn-copy image-stop-control" hidden>비용 확인 중단</button>
         </div>
         <div class="studio-output" style="height: 100%; display: flex; flex-direction: column;">
           <div class="image-field-label">결과 이미지</div>
@@ -984,6 +991,7 @@
             style="width: 100%; font-size: 1.05rem; padding: 16px; height: auto; margin-top: 12px;">
             🎬 AI 비디오 생성하기
           </button>
+          <p id="video-permission-hint" class="vref-hint" hidden>영상 생성은 관리자에게 승인받은 Google 계정으로 사용할 수 있습니다.</p>
         </div>
 
         <div class="studio-output" style="height: 100%; display: flex; flex-direction: column;">
@@ -1090,13 +1098,14 @@
             </select>
           </div>
           <label style="display:flex; align-items:center; gap:6px; font-size: 0.8rem; color: var(--fg-muted); padding-bottom: 8px;">
-            <input type="checkbox" id="ap-make-video" checked> 영상까지 생성
+            <input type="checkbox" id="ap-make-video" checked aria-describedby="ap-video-permission-hint"> 영상까지 생성
           </label>
           <label style="display:flex; align-items:center; gap:6px; font-size: 0.8rem; color: var(--fg-muted); padding-bottom: 8px;">
             <input type="checkbox" id="ap-typo" checked> 타이포·자막
           </label>
           <button id="ap-run-btn" class="btn-skills" style="flex: 1; min-width: 220px; height: 44px; font-size: 1rem;">▶ 전체 자동 제작</button>
         </div>
+        <p id="ap-video-permission-hint" class="vref-hint" hidden>현재 계정은 영상 없이 자동 제작할 수 있습니다. 영상 생성은 관리자 승인이 필요합니다.</p>
 
         <div id="ap-steps" style="display: none; margin-top: 20px; display: none; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px;">
           <div class="ap-step" data-step="concept">① 컨셉 기획</div>

@@ -55,4 +55,8 @@ test('selected mood and palette become prompt instructions while auto is neutral
     assert.notDeepEqual(palette, catalog.paletteColors('#0000FF'));
     assert.match(rules.keepPalette('A white mug.', palette), /^Background palette: use only #FF0000.*A white mug\.$/);
     assert.equal(rules.keepPalette('A white mug.', []), 'A white mug.');
+    assert.deepEqual(catalog.paletteColors('single:#ab1234,#ABCDEF'), ['#AB1234']);
+    assert.deepEqual(catalog.paletteColors('custom:#FF0000,#0000ff,#ff0000,invalid'), ['#FF0000', '#0000FF']);
+    assert.deepEqual(catalog.paletteColors('custom:'), []);
+    assert.match(rules.keepPalette('A white mug.', ['#AB1234']), /flat, solid #AB1234 backdrop/);
 });

@@ -623,6 +623,11 @@
   }
 
   function paletteColors(value) {
+    if (value.startsWith('single:') || value.startsWith('custom:')) {
+      const [mode, colors] = value.split(':');
+      return [...new Set(colors.split(',').filter(color => /^#[0-9a-f]{6}$/i.test(color))
+        .map(color => color.toUpperCase()))].slice(0, mode === 'single' ? 1 : 4);
+    }
     const base = palettePosition(value);
     if (!base) return fields['param-palette'].options.find(([id]) => id === value)?.[3] ?? [];
     const { hue, saturation } = base;

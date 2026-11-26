@@ -603,11 +603,35 @@
     return descriptions.get(field)?.get(value) ?? value;
   }
 
-  function paletteColors(value) {
-    return fields['param-palette'].options.find(([id]) => id === value)?.[3] ?? [];
+  function wheelColor(hue, saturation, brightness = 1) {
+    const h = ((hue % 360) + 360) % 360 / 60;
+    const channel = offset => {
+      const k = (offset + h) % 6;
+      return Math.round(brightness * (1 - saturation * Math.max(0, Math.min(k, 4 - k, 1))) * 255)
+        .toString(16).padStart(2, '0');
+    };
+    return `#${channel(5)}${channel(3)}${channel(1)}`.toUpperCase();
   }
 
-  const catalog = { mount, describe, paletteColors };
+  function palettePosition(hex) {
+    if (!/^#[0-9a-f]{6}$/i.test(hex)) return null;
+    const [r, g, b] = hex.slice(1).match(/../g).map(channel => parseInt(channel, 16) / 255);
+    const max = Math.max(r, g, b);
+    const delta = max - Math.min(r, g, b);
+    const sector = !delta ? 0 : max === r ? (g - b) / delta : max === g ? 2 + (b - r) / delta : 4 + (r - g) / delta;
+    return { hue: (sector * 60 + 360) % 360, saturation: max ? delta / max : 0 };
+  }
+
+  function paletteColors(value) {
+    const base = palettePosition(value);
+    if (!base) return fields['param-palette'].options.find(([id]) => id === value)?.[3] ?? [];
+    const { hue, saturation } = base;
+    const colors = [value.toUpperCase(), wheelColor(hue + 28, saturation * .6, .73),
+      wheelColor(hue + 165, saturation * .65, .55), wheelColor(hue, saturation * .15, .95)];
+    return [...new Set(colors)];
+  }
+
+  const catalog = { mount, describe, paletteColors, palettePosition, wheelColor };
   if (typeof module !== 'undefined' && module.exports) module.exports = catalog;
   else globalThis.PromptCatalog = catalog;
 })();

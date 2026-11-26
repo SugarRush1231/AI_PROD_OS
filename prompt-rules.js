@@ -404,14 +404,22 @@ function opticsInstruction(keys, mode) {
 function artDirection(mood, palette) {
   const lines = [];
   if (mood && mood !== 'none') lines.push(`- Mood: ${mood}.`);
-  if (palette && palette !== 'none') {
-    lines.push(`- Color palette: ${palette}. Use these colors for the environment and accents while preserving explicitly specified subject colors and reference details.`);
-  }
+  if (palette.length) lines.push(`- ${paletteInstruction(palette)}`);
   return lines.length ? `\n[ART DIRECTION]\n${lines.join('\n')}\n` : '';
 }
 
+function paletteInstruction(colors) {
+  return `Background palette: use only ${colors.join(', ')} for the backdrop and environmental accents. Preserve explicitly specified subject colors and reference details.`;
+}
+
+function keepPalette(result, colors) {
+  if (!colors.length) return result;
+  const instruction = paletteInstruction(colors);
+  return `${instruction} ${result.replace(instruction, '').trim()}`;
+}
+
 const rules = {
-  pose, outfit, humanIdentity, objectIntegrity, opticsInstruction, artDirection,
+  pose, outfit, humanIdentity, objectIntegrity, opticsInstruction, artDirection, keepPalette,
   systemPrompt, background, boothPoses, perspective, imageConstraints, negativePrompt, opticsFields,
   optics: {
     LIGHT_PRESETS, PRESET_FIELDS, SOURCE_TEXT, TONAL_TEXT, FILL_TEXT, VOL_TYPE_TEXT, CAMERA_TYPES, CAMERA_TEXT,

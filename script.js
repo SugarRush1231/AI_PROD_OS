@@ -173,7 +173,7 @@ const UI = {
   paramType: document.getElementById('param-type'),
   paramStyle: document.getElementById('param-style'),
   paramMood: document.getElementById('param-mood'),
-  paramPalette: document.getElementById('param-palette'),
+  paramPalette: document.getElementById('param-palette-value'),
   paramAngle: document.getElementById('param-angle'),
   paramHumanCamAngle: document.getElementById('param-human-cam-angle'),
   paramAnimalCamAngle: document.getElementById('param-animal-cam-angle'),
@@ -340,22 +340,72 @@ function showSystemConfirm(title, message, type = 'info', showInput = false) {
   });
 }
 
-// --- CUSTOM PRESET SYSTEM (SERVER SYNC) ---
+const paletteWheel = document.getElementById('param-palette-wheel');
+const paletteHex = document.getElementById('param-palette-hex');
+const paletteAuto = document.getElementById('param-palette-auto');
+const paletteStatus = document.getElementById('param-palette-status');
+
 function renderPalettePreview() {
   const preview = document.getElementById('param-palette-preview');
   const colors = promptCatalog.paletteColors(UI.paramPalette.value);
+  const marker = document.getElementById('param-palette-marker');
+  const base = promptCatalog.palettePosition(colors[0] || '');
+  marker.hidden = !base;
+  if (base) {
+    const angle = base.hue * Math.PI / 180;
+    marker.style.left = `${50 + Math.cos(angle) * base.saturation * 50}%`;
+    marker.style.top = `${50 + Math.sin(angle) * base.saturation * 50}%`;
+  }
+  paletteHex.value = colors[0] || '';
+  paletteHex.removeAttribute('aria-invalid');
+  paletteAuto.setAttribute('aria-pressed', String(!base));
+  paletteStatus.textContent = base ? '배경에 적용할 배색' : '기준색을 고르면 배경에 사용할 색이 표시됩니다.';
   const swatches = colors.map(color => {
     const swatch = document.createElement('span');
-    swatch.style.backgroundColor = color;
-    swatch.title = color;
+    const sample = document.createElement('i');
+    sample.style.backgroundColor = color;
+    sample.setAttribute('aria-hidden', 'true');
+    swatch.append(sample, color);
     return swatch;
   });
   preview.replaceChildren(...swatches);
   preview.hidden = swatches.length === 0;
 }
 
-UI.paramPalette.addEventListener('change', renderPalettePreview);
+function choosePaletteColor(value) {
+  UI.paramPalette.value = value;
+  renderPalettePreview();
+}
 
+function pickWheelColor(event) {
+  const rect = paletteWheel.getBoundingClientRect();
+  const x = (event.clientX - rect.left) / rect.width * 2 - 1;
+  const y = (event.clientY - rect.top) / rect.height * 2 - 1;
+  const hue = Math.atan2(y, x) * 180 / Math.PI;
+  choosePaletteColor(promptCatalog.wheelColor(hue, Math.min(1, Math.hypot(x, y))));
+}
+
+paletteWheel.addEventListener('pointerdown', event => {
+  if (event.button !== 0) return;
+  paletteWheel.setPointerCapture(event.pointerId);
+  pickWheelColor(event);
+});
+paletteWheel.addEventListener('pointermove', event => {
+  if (paletteWheel.hasPointerCapture(event.pointerId)) pickWheelColor(event);
+});
+paletteHex.addEventListener('input', () => {
+  const code = paletteHex.value.trim().replace(/^#/, '');
+  if (/^[0-9a-f]{6}$/i.test(code)) choosePaletteColor(`#${code.toUpperCase()}`);
+});
+paletteHex.addEventListener('blur', () => {
+  if (paletteHex.value === (promptCatalog.paletteColors(UI.paramPalette.value)[0] || '')) return;
+  if (!paletteHex.value.trim()) return choosePaletteColor('none');
+  paletteHex.setAttribute('aria-invalid', 'true');
+  paletteStatus.textContent = 'HEX 코드 6자리를 입력해 주세요. 기존 배색이 적용됩니다.';
+});
+paletteAuto.addEventListener('click', () => choosePaletteColor('none'));
+
+// --- CUSTOM PRESET SYSTEM (SERVER SYNC) ---
 const MyPresets = {
   data: [],
   activeId: null, // 현재 활성화된 프리셋 추적
@@ -1675,9 +1725,9 @@ ${PromptContext.visual.camera.composition !== 'none' ? `- Composition: ${PromptC
       `;
     }
 
+    const palette = config.type === 'none' ? [] : promptCatalog.paletteColors(UI.paramPalette.value);
     if (config.type !== 'none') {
       const mood = promptCatalog.describe('param-mood', UI.paramMood.value);
-      const palette = promptCatalog.describe('param-palette', UI.paramPalette.value);
       enrichedIntent += promptRules.artDirection(mood, palette);
     }
     const finalDirectives = [config.chips, config.custom].map(x => (x || '').trim()).filter(Boolean).join(', ');
@@ -1739,6 +1789,7 @@ ${PromptContext.visual.camera.composition !== 'none' ? `- Composition: ${PromptC
     } else {
       setLabLayer(2, 'done', '완료');
     }
+    data.result = promptRules.keepPalette(data.result, palette);
 
     stopLoadingAnimation(UI.optimizedOutput);
     if (UI.optimizedOutput) {
@@ -2607,8 +2658,92 @@ function createReferenceEditor(inputId, format, pattern) {
   editor.setAttribute('aria-label', input.placeholder);
   editor.dataset.placeholder = input.placeholder;
   input.after(editor);
+  const menu = document.createElement('div');
+  menu.id = `${inputId}-references`;
+  menu.className = 'reference-menu';
+  menu.setAttribute('role', 'listbox');
+  menu.setAttribute('aria-label', '삽입할 참고 이미지');
+  menu.hidden = true;
+  document.body.append(menu);
+  editor.setAttribute('aria-controls', menu.id);
+  editor.setAttribute('aria-autocomplete', 'list');
   let refs = [];
   let caret;
+  let mention;
+  let activeOption = 0;
+
+  function closeReferenceMenu() {
+    menu.hidden = true;
+    mention = null;
+    editor.removeAttribute('aria-activedescendant');
+  }
+
+  function chooseReference(index) {
+    if (!mention || !refs[index]) return;
+    caret = mention;
+    closeReferenceMenu();
+    insert(makeToken(refs[index], index), true);
+  }
+
+  function highlightReference(index) {
+    activeOption = index;
+    for (const [i, option] of Array.from(menu.children).entries()) {
+      option.setAttribute('aria-selected', String(i === activeOption));
+    }
+    const option = menu.children[activeOption];
+    editor.setAttribute('aria-activedescendant', option.id);
+    const top = option.offsetTop;
+    if (top < menu.scrollTop) menu.scrollTop = top;
+    const bottom = top + option.offsetHeight;
+    if (bottom > menu.scrollTop + menu.clientHeight) menu.scrollTop = bottom - menu.clientHeight;
+  }
+
+  function positionReferenceMenu() {
+    if (menu.hidden || !mention) return;
+    const anchor = mention.getBoundingClientRect();
+    const bounds = editor.getBoundingClientRect();
+    const viewport = window.visualViewport;
+    const right = viewport ? viewport.offsetLeft + viewport.width : document.documentElement.clientWidth;
+    const top = viewport?.offsetTop || 0;
+    const bottom = viewport ? top + viewport.height : window.innerHeight;
+    if (anchor.bottom < Math.max(top, bounds.top) || anchor.top > Math.min(bottom, bounds.bottom)) {
+      return closeReferenceMenu();
+    }
+    menu.style.left = `${Math.max((viewport?.offsetLeft || 0) + 8, Math.min(anchor.left, right - menu.offsetWidth - 8))}px`;
+    menu.style.top = `${Math.max(top + 8, anchor.bottom + menu.offsetHeight + 6 <= bottom
+      ? anchor.bottom + 6 : anchor.top - menu.offsetHeight - 6)}px`;
+  }
+
+  function showReferenceMenu() {
+    const selection = window.getSelection();
+    const node = selection?.anchorNode;
+    if (!refs.length || input.disabled || editor.hidden || !selection?.isCollapsed ||
+        node?.nodeType !== Node.TEXT_NODE || !editor.contains(node) || node.parentElement.closest('.inline-reference')) {
+      return closeReferenceMenu();
+    }
+    const end = selection.anchorOffset;
+    const match = /(?:^|[\s(])(@(?:[a-z]+(?: *\d*)?)?)$/i.exec(node.data.slice(0, end));
+    if (!match) return closeReferenceMenu();
+    const query = match[1].toLowerCase().replace(/\s/g, '');
+    const options = refs.flatMap((src, i) => format(i + 1).replace(/\s/g, '').startsWith(query) ? [{ src, i }] : []);
+    if (!options.length) return closeReferenceMenu();
+    const range = document.createRange();
+    range.setStart(node, end - match[1].length);
+    range.setEnd(node, end);
+    mention = range;
+    menu.replaceChildren(...options.map(({ src, i }) => {
+      const option = document.createElement('div');
+      option.id = `${menu.id}-${i}`;
+      option.setAttribute('role', 'option');
+      option.append(makeToken(src, i));
+      option.addEventListener('pointerdown', event => event.preventDefault());
+      option.addEventListener('click', () => chooseReference(i));
+      return option;
+    }));
+    menu.hidden = false;
+    positionReferenceMenu();
+    highlightReference(0);
+  }
 
   function makeToken(src, index) {
     const pill = document.createElement('span');
@@ -2622,6 +2757,7 @@ function createReferenceEditor(inputId, format, pattern) {
   }
 
   function render() {
+    closeReferenceMenu();
     editor.replaceChildren();
     let offset = 0;
     for (const match of input.value.matchAll(pattern)) {
@@ -2682,7 +2818,30 @@ function createReferenceEditor(inputId, format, pattern) {
   }
 
   document.addEventListener('selectionchange', rememberCaret);
-  editor.addEventListener('input', syncPrompt);
+  editor.addEventListener('input', event => {
+    syncPrompt();
+    if (!event.isComposing) showReferenceMenu();
+  });
+  editor.addEventListener('compositionend', showReferenceMenu);
+  editor.addEventListener('blur', closeReferenceMenu);
+  editor.addEventListener('click', closeReferenceMenu);
+  editor.addEventListener('keydown', event => {
+    if (menu.hidden || event.isComposing) return;
+    if (event.key === 'Escape' || event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+      closeReferenceMenu();
+      if (event.key === 'Escape') event.preventDefault();
+    } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      const step = event.key === 'ArrowDown' ? 1 : -1;
+      highlightReference((activeOption + step + menu.children.length) % menu.children.length);
+    } else if (event.key === 'Enter') {
+      event.preventDefault();
+      menu.children[activeOption].click();
+    }
+  });
+  window.addEventListener('scroll', event => { if (event.target !== menu) positionReferenceMenu(); }, true);
+  window.addEventListener('resize', positionReferenceMenu);
+  window.visualViewport?.addEventListener('resize', positionReferenceMenu);
   editor.addEventListener('paste', event => {
     event.preventDefault();
     if (!event.clipboardData) return;
@@ -2694,6 +2853,7 @@ function createReferenceEditor(inputId, format, pattern) {
   input.addEventListener('input', () => { if (!editor.hidden) render(); });
   return {
     update(nextRefs, active) {
+      closeReferenceMenu();
       refs = [...nextRefs];
       input.hidden = active;
       editor.hidden = !active;
@@ -2702,6 +2862,7 @@ function createReferenceEditor(inputId, format, pattern) {
     },
     insertReference(index) {
       if (!refs[index]) return;
+      if (mention) return chooseReference(index);
       insert(makeToken(refs[index], index), true);
     },
     remap(nextRefs) {
@@ -2914,7 +3075,7 @@ function initSpicyImageControls(ownerId) {
     document.getElementById('image-reference-panel').classList.toggle('is-seedream', isSpicy);
     document.getElementById('image-generate-btn').textContent = isSpicy ? '편집 견적 확인' : '이미지 생성';
     document.getElementById('image-engine-status').textContent = isSpicy ? 'Seedream 5.5 Edit' : 'API Active';
-    seedreamEditor.element.dataset.placeholder = '바꿀 내용을 입력하세요. 아래 참고 이미지 번호를 눌러 프롬프트에 넣을 수 있어요.';
+    seedreamEditor.element.dataset.placeholder = '바꿀 내용을 입력하세요. @를 입력하면 첨부 이미지를 선택할 수 있어요.';
     seedreamEditor.element.setAttribute('aria-labelledby', 'image-prompt-label');
     document.getElementById('image-file-input').multiple = isSpicy;
     document.getElementById('image-preview-container').style.display = !isSpicy && currentImageBase64 ? 'block' : 'none';
@@ -3504,7 +3665,7 @@ if (generatedImageResult) {
 function toImagePrompt(raw) {
   if (!raw) return '';
   let text = raw.split(/#+\s*Negative Prompts?/i)[0];     // 네거티브 섹션 제거 (Z-Image는 미지원)
-  text = text.replace(/\*\*(.*?)\*\*\.?/g, '').replace(/[#*_`>]/g, ''); // 마크다운/헤더 제거
+  text = text.replace(/\*\*(.*?)\*\*\.?/g, '').replace(/^#{1,6}[\t ]+/gm, '').replace(/[*_`>]/g, '');
   text = text.replace(/\s+/g, ' ').trim();
   return text.length > 1000 ? text.slice(0, 1000).replace(/[^.]*$/, '').trim() || text.slice(0, 1000) : text;
 }

@@ -42,10 +42,17 @@ test('Lab rules retain pose, reference, output and optics constraints', () => {
 
 test('selected mood and palette become prompt instructions while auto is neutral', () => {
     const mood = catalog.describe('param-mood', 'serene');
-    const palette = catalog.describe('param-palette', 'warm-earth');
-    assert.match(rules.artDirection(mood, palette), /Mood: a calm[\s\S]*Color palette: peach, terracotta/);
-    assert.match(rules.artDirection('none', palette), /preserving explicitly specified subject colors/);
-    assert.equal(rules.artDirection('none', 'none'), '');
+    const palette = catalog.paletteColors('#FF0000');
+    assert.match(rules.artDirection(mood, palette), /Mood: a calm[\s\S]*Background palette: use only #FF0000/);
+    assert.match(rules.artDirection('none', palette), /preserve explicitly specified subject colors/i);
+    assert.equal(rules.artDirection('none', []), '');
     assert.deepEqual(catalog.paletteColors('none'), []);
     assert.equal(catalog.paletteColors('warm-earth').length, 4);
+    assert.equal(catalog.wheelColor(120, 1), '#00FF00');
+    assert.equal(catalog.wheelColor(-120, 1), '#0000FF');
+    assert.deepEqual(catalog.palettePosition('#0000FF'), { hue: 240, saturation: 1 });
+    assert.equal(palette.length, 4);
+    assert.notDeepEqual(palette, catalog.paletteColors('#0000FF'));
+    assert.match(rules.keepPalette('A white mug.', palette), /^Background palette: use only #FF0000.*A white mug\.$/);
+    assert.equal(rules.keepPalette('A white mug.', []), 'A white mug.');
 });

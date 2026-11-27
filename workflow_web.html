@@ -43,7 +43,6 @@
         <a href="#prompt-lab" class="nav-link">프롬프트 랩</a>
         <a href="#image-studio" class="nav-link">이미지</a>
         <a href="#video-studio" class="nav-link">영상</a>
-        <a href="#media-library" id="media-library-link" class="nav-link" hidden>보관함</a>
         <a href="#autopilot-card" class="nav-link">Autopilot</a>
         <a href="#video-production-suite" class="nav-link">기획 도구</a>
       </div>
@@ -927,6 +926,15 @@
           </div>
         </div>
       </div>
+      <section class="media-library" data-media-library="image" aria-labelledby="image-media-heading" hidden>
+        <div class="media-library-toolbar">
+          <h3 id="image-media-heading">이미지 보관함</h3>
+          <span class="media-library-quota" data-media-quota hidden></span>
+        </div>
+        <p class="media-library-status" data-media-status role="status"></p>
+        <button type="button" class="btn-copy media-library-retry" data-media-retry hidden>다시 불러오기</button>
+        <div class="media-library-grid" data-media-grid></div>
+      </section>
     </section>
 
     <!-- ===== AI VIDEO STUDIO (Kie Grok Imagine) ===== -->
@@ -1015,21 +1023,15 @@
         </div>
 
       </div>
-    </section>
-
-    <section class="section" id="media-library" style="margin-top: 60px;" hidden>
-      <div class="section-header"><h2>미디어 보관함</h2></div>
-      <div class="lab-card media-library-body">
+      <section class="media-library" data-media-library="video" aria-labelledby="video-media-heading" hidden>
         <div class="media-library-toolbar">
-          <div class="media-library-tabs" role="group" aria-label="미디어 목록">
-            <button type="button" id="media-recent-tab" aria-pressed="true">이번 세션</button>
-            <button type="button" id="media-saved-tab" aria-pressed="false">보관한 파일</button>
-          </div>
-          <span id="media-library-quota" class="media-library-status"></span>
+          <h3 id="video-media-heading">영상 보관함</h3>
+          <span class="media-library-quota" data-media-quota hidden></span>
         </div>
-        <p id="media-library-status" class="media-library-status" role="status"></p>
-        <div id="media-library-grid" class="media-library-grid"></div>
-      </div>
+        <p class="media-library-status" data-media-status role="status"></p>
+        <button type="button" class="btn-copy media-library-retry" data-media-retry hidden>다시 불러오기</button>
+        <div class="media-library-grid" data-media-grid></div>
+      </section>
     </section>
 
     <section class="section" id="video-production-suite" style="margin-top: 60px;">

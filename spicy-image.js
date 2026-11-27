@@ -1,6 +1,7 @@
 const express = require('express');
 const fetch = require('node-fetch');
 const { archiveSource } = require('./media-library');
+const { isGoogleOwner } = require('./access-control');
 const { createHash, createHmac, createCipheriv, createDecipheriv, randomBytes } = require('node:crypto');
 
 const MODEL = 'bytedance/seedream-5.5/edit';
@@ -9,9 +10,7 @@ const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const REPLAY_WINDOW = 20 * 60 * 60 * 1000;
 
 function canUseSpicy(req) {
-    const owner = process.env.SPICY_OWNER_GOOGLE_ID?.trim();
-    return Boolean(owner && process.env.SPICY_API_KEY && process.env.SESSION_SECRET?.length >= 32 &&
-        req.isAuthenticated() && req.user.provider === 'google' && req.user.id === owner);
+    return Boolean(process.env.SPICY_API_KEY && process.env.SESSION_SECRET?.length >= 32 && isGoogleOwner(req));
 }
 
 function fail(status, message, code) {

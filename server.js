@@ -13,7 +13,7 @@ const { Pool } = require('pg');
 const { pipeline } = require('node:stream/promises');
 const { Transform } = require('node:stream');
 const { SESSION_MS, SESSION_COOKIE, PostgresSessionStore, minimalGoogleProfile, publicProfile,
-    csrfToken, requireCsrf, quota } = require('./access-control');
+    isGoogleOwner, csrfToken, requireCsrf, quota } = require('./access-control');
 const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const { canUseSpicy, spicyImageRouter } = require('./spicy-image');
@@ -193,6 +193,7 @@ const dbApiLimiter = rateLimit({
 app.get('/api/me', generalApiLimiter, (req, res) => {
     res.set('Cache-Control', 'no-store');
     res.json({ user: publicProfile(req.user), canUsePaid: canUsePaid(req), canUseSpicy: canUseSpicy(req),
+        canSaveMedia: isGoogleOwner(req),
         csrfToken: req.user ? csrfToken(req) : null, mediaLibraryEnabled: Boolean(req.user && archive.enabled) });
 });
 
@@ -606,7 +607,7 @@ app.post('/api/engineer', ensureAuthenticated, textAiLimiter, generationQuota, a
  * (영상은 /api/video/create · /api/video/status 로 분리)
  */
 // --- Kie.ai Market API: 작업 생성 → 상태 폴링 → 결과 URL 반환 ---
-async function generateWithKie(apiKey, prompt, aspectRatio) {
+async function generateWithKie(apiKey, prompt, aspectRatio, onStatus) {
     const headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` };
     const createRes = await fetch('https://api.kie.ai/api/v1/jobs/createTask', {
         method: 'POST',
@@ -618,8 +619,10 @@ async function generateWithKie(apiKey, prompt, aspectRatio) {
         throw new Error(`createTask 실패 (code ${created.code}): ${created.msg}`);
     }
     const taskId = created.data.taskId;
+    onStatus?.('accepted');
 
     const deadline = Date.now() + 120000; // 최대 2분 대기
+    let lastState;
     while (Date.now() < deadline) {
         await new Promise(r => setTimeout(r, 3000));
         const infoRes = await fetch(`https://api.kie.ai/api/v1/jobs/recordInfo?taskId=${encodeURIComponent(taskId)}`, { headers });
@@ -632,11 +635,25 @@ async function generateWithKie(apiKey, prompt, aspectRatio) {
             return url;
         }
         if (state === 'fail') throw new Error(`생성 실패: ${info.data?.failMsg || 'unknown'}`);
+        if (state && state !== lastState) onStatus?.(state);
+        lastState = state;
     }
     throw new Error('Kie 생성 시간 초과');
 }
 
 app.post('/api/generate-image', ensureAuthenticated, strictAiLimiter, generationQuota, async (req, res, next) => {
+    // Existing clients receive JSON. The Studio opts into status events on the same request.
+    const stream = req.get('Accept') === 'application/x-ndjson';
+    const report = (provider, state) => {
+        if (!stream || res.destroyed) return;
+        if (!res.headersSent) res.set({ 'Content-Type': 'application/x-ndjson', 'Cache-Control': 'no-store, no-transform', 'X-Accel-Buffering': 'no' });
+        res.write(JSON.stringify({ type: 'status', provider, state }) + '\n');
+    };
+    const reply = (status, body) => {
+        if (res.destroyed) return;
+        if (stream && res.headersSent) return res.end(JSON.stringify({ type: 'result', status, ...body }) + '\n');
+        return res.status(status).json(body);
+    };
     try {
         const { prompt } = req.body;
         let { aspect_ratio } = req.body;
@@ -662,8 +679,9 @@ app.post('/api/generate-image', ensureAuthenticated, strictAiLimiter, generation
         let fallbackReason = !kieKey ? 'KIE_API_KEY 미설정' : (!canUsePaid(req) ? '승인되지 않은 계정 (무료 엔진 사용)' : null);
         if (kieKey && canUsePaid(req)) {
             try {
-                const kieUrl = await generateWithKie(kieKey, String(prompt).slice(0, 1000), kieRatioMap[aspect_ratio] || '1:1');
-                return res.status(200).json({ data: { url: kieUrl, provider: 'kie:z-image',
+                report('kie', 'submitting');
+                const kieUrl = await generateWithKie(kieKey, String(prompt).slice(0, 1000), kieRatioMap[aspect_ratio] || '1:1', state => report('kie', state));
+                return reply(200, { data: { url: kieUrl, provider: 'kie:z-image',
                     archiveToken: archiveSource(req.user, 'image', kieUrl) } });
             } catch (kieErr) {
                 console.warn('[KIE_FALLBACK] Kie 실패 → Pollinations로 전환:', kieErr.message);
@@ -680,11 +698,11 @@ app.post('/api/generate-image', ensureAuthenticated, strictAiLimiter, generation
         const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(String(prompt).slice(0, 1500))}`
             + `?width=${width}&height=${height}&seed=${seed}&model=flux&nologo=true`;
 
-        res.status(200).json({ data: { url, provider: 'pollinations', fallbackReason,
+        reply(200, { data: { url, provider: 'pollinations', fallbackReason,
             archiveToken: archiveSource(req.user, 'image', url) } });
     } catch (error) {
         console.error('[IMAGE_GEN_ERROR]', error.message);
-        res.status(500).json({ error: '이미지 생성 요청에 실패했습니다.' });
+        reply(500, { error: '이미지 생성 요청에 실패했습니다.' });
     }
 });
 

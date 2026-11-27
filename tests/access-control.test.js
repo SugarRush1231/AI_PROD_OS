@@ -109,6 +109,7 @@ test('PostgreSQL-backed HTTP access, OAuth state, video ownership and logout', {
         const me = await (await fetch(base + '/api/me', { headers: { Cookie: cookie } })).json();
         assert.equal(me.user.id, id);
         assert.equal(me.user.verifiedEmail, undefined);
+        assert.equal(me.canSaveMedia, id === 'owner');
         return { Cookie: cookie, 'X-CSRF-Token': me.csrfToken, 'Content-Type': 'application/json' };
     }
     const owner = await signedIn('owner', 'owner@example.org');

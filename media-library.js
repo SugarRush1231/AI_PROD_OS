@@ -7,6 +7,9 @@ const { BlockList, isIP } = require('node:net');
 const { createHash, createHmac, randomUUID, timingSafeEqual } = require('node:crypto');
 const fs = require('node:fs/promises');
 const os = require('node:os');
+const { Readable } = require('node:stream');
+const { pipeline } = require('node:stream/promises');
+const { isGoogleOwner } = require('./access-control');
 
 const MIB = 1024 * 1024;
 const MAX_FILE = { image: 10 * MIB, video: 50 * MIB };
@@ -14,6 +17,8 @@ const MAX_ITEMS = 200;
 const TOTAL_ITEMS = 20000;
 const ACCOUNT_BYTES = 250 * MIB;
 const TOTAL_BYTES = 5120 * MIB;
+const DATABASE_MEDIA_BYTES = 250 * MIB;
+const DATABASE_CHUNK_BYTES = 2 * MIB;
 const TOKEN_LIFETIME = 60 * 60 * 1000;
 const upload = multer({ dest: os.tmpdir(), limits: { files: 1, parts: 2, fileSize: MAX_FILE.video } });
 
@@ -142,15 +147,22 @@ async function initMediaDb(pool) {
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         UNIQUE(owner_id, source_hash)
     )`);
+    await pool.query("ALTER TABLE media_archive ADD COLUMN IF NOT EXISTS storage_backend TEXT NOT NULL DEFAULT 'bucket'");
+    await pool.query(`CREATE TABLE IF NOT EXISTS media_archive_files (
+        id UUID PRIMARY KEY REFERENCES media_archive(id) ON DELETE CASCADE,
+        body BYTEA NOT NULL
+    )`);
 }
 
 function mediaLibrary(pool, storage = storageFromEnv(), fetchMedia = downloadSource) {
     const router = express.Router();
+    const storageBackend = storage ? 'bucket' : 'postgres';
     let saving = 0;
     const key = id => 'media/' + id;
     const route = handle => async (req, res) => {
         try { await handle(req, res); }
         catch (error) {
+            if (res.destroyed || res.headersSent) return res.destroy();
             if (!error.status) console.error('[MEDIA_ARCHIVE]', error.name, error.code || '');
             res.status(error.status || 502).json({ error: error.status ? error.message : '보관함 요청에 실패했습니다.' });
         }
@@ -160,15 +172,17 @@ function mediaLibrary(pool, storage = storageFromEnv(), fetchMedia = downloadSou
         try {
             await db.query('BEGIN');
             await db.query('SELECT pg_advisory_xact_lock(41650779)');
-            const previous = (await db.query('SELECT id, state FROM media_archive WHERE owner_id = $1 AND source_hash = $2',
+            const previous = (await db.query('SELECT id, state, storage_backend FROM media_archive WHERE owner_id = $1 AND source_hash = $2',
                 [owner, sourceHash])).rows[0];
             if (previous && previous.state !== 'ready') fail(409, '같은 파일을 처리 중입니다.');
             if (previous) {
+                if (!storage && previous.storage_backend === 'bucket') fail(503, '기존 보관 파일의 버킷 연결을 확인해 주세요.');
                 await db.query('COMMIT');
                 return { id: previous.id, existing: true };
             }
             const { rows: [usage] } = await db.query(`SELECT
                 COALESCE(SUM(bytes), 0) AS total, COUNT(*) AS total_items,
+                COALESCE(SUM(bytes) FILTER (WHERE storage_backend = 'postgres'), 0) AS database_bytes,
                 COALESCE(SUM(bytes) FILTER (WHERE owner_id = $1), 0) AS own,
                 COUNT(*) FILTER (WHERE owner_id = $1) AS items FROM media_archive`, [owner]);
             if (Number(usage.own) + file.size > ACCOUNT_BYTES || Number(usage.items) >= MAX_ITEMS) {
@@ -177,9 +191,14 @@ function mediaLibrary(pool, storage = storageFromEnv(), fetchMedia = downloadSou
             if (Number(usage.total) + file.size > TOTAL_BYTES || Number(usage.total_items) >= TOTAL_ITEMS) {
                 fail(507, '서비스 보관 공간이 가득 찼습니다.');
             }
+            if (!storage && Number(usage.database_bytes) + file.size > DATABASE_MEDIA_BYTES) {
+                fail(507, '데이터베이스 보관 한도에 도달했습니다. 보관함에서 파일을 삭제해 주세요.');
+            }
             const id = randomUUID();
-            await db.query(`INSERT INTO media_archive (id, owner_id, source_hash, kind, mime, bytes, state)
-                VALUES ($1, $2, $3, $4, $5, $6, 'pending')`, [id, owner, sourceHash, kind, file.mime, file.size]);
+            await db.query(`INSERT INTO media_archive (id, owner_id, source_hash, kind, mime, bytes, state, storage_backend)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+            [id, owner, sourceHash, kind, file.mime, file.size, storage ? 'pending' : 'ready', storageBackend]);
+            if (!storage) await db.query('INSERT INTO media_archive_files (id, body) VALUES ($1, $2)', [id, file.body]);
             await db.query('COMMIT');
             return { id };
         } catch (error) {
@@ -190,7 +209,7 @@ function mediaLibrary(pool, storage = storageFromEnv(), fetchMedia = downloadSou
 
     async function save(owner, kind, file, sourceHash) {
         const { id, existing } = await reserve(owner, sourceHash, kind, file);
-        if (existing) return id;
+        if (!storage || existing) return id;
         try {
             await storage.put(key(id), file);
         } catch (error) {
@@ -202,16 +221,44 @@ function mediaLibrary(pool, storage = storageFromEnv(), fetchMedia = downloadSou
         return id;
     }
 
+    async function sendDatabaseFile(req, res, item) {
+        const size = Number(item.bytes);
+        const ranges = req.range(size);
+        if (ranges === -1) return res.status(416).set('Content-Range', `bytes */${size}`).end();
+        const range = ranges?.type === 'bytes' && ranges.length === 1 ? ranges[0] : null;
+        const { start, end } = range || { start: 0, end: size - 1 };
+        async function readChunk(offset) {
+            const length = Math.min(DATABASE_CHUNK_BYTES, end - offset + 1);
+            const { rows: [file] } = await pool.query('SELECT substring(body FROM $2::int FOR $3::int) AS part FROM media_archive_files WHERE id = $1',
+                [req.params.id, offset + 1, length]);
+            if (file?.part?.length !== length) fail(404, '보관 파일을 찾을 수 없습니다.');
+            return Buffer.from(file.part);
+        }
+        const first = req.method === 'HEAD' ? null : await readChunk(start);
+        res.status(range ? 206 : 200).set({ 'Content-Type': item.mime, 'Accept-Ranges': 'bytes', 'Content-Length': String(end - start + 1) });
+        if (range) res.set('Content-Range', `bytes ${start}-${end}/${size}`);
+        if (!first) return res.end();
+        async function* chunks() {
+            yield first;
+            for (let offset = start + first.length; offset <= end && !res.destroyed; offset += DATABASE_CHUNK_BYTES) {
+                yield await readChunk(offset);
+            }
+        }
+        await pipeline(Readable.from(chunks()), res);
+    }
+
     router.use((req, res, next) => {
         res.set('Cache-Control', 'no-store');
         if (!req.isAuthenticated()) return res.status(401).json({ error: '로그인 후 보관함을 사용할 수 있습니다.' });
-        if (!storage) return res.status(503).json({ error: '보관용 스토리지가 아직 연결되지 않았습니다.' });
+        if (req.method === 'POST' && !isGoogleOwner(req)) {
+            return res.status(403).json({ error: '관리자 계정에서만 파일을 보관할 수 있습니다.' });
+        }
         next();
     });
     router.get('/', route(async (req, res) => {
         const { rows } = await pool.query(`SELECT id, kind, bytes, created_at FROM media_archive
             WHERE owner_id = $1 AND state = 'ready' ORDER BY created_at DESC`, [req.user.id]);
-        res.json({ items: rows, limit: ACCOUNT_BYTES, maxItems: MAX_ITEMS });
+        res.json({ items: rows, limit: ACCOUNT_BYTES, maxItems: MAX_ITEMS, storage: storageBackend });
     }));
     router.post('/', route(async (req, res) => {
         if (saving >= 2) fail(429, '보관 중인 파일이 많습니다. 잠시 후 다시 시도해 주세요.');
@@ -245,12 +292,22 @@ function mediaLibrary(pool, storage = storageFromEnv(), fetchMedia = downloadSou
         next();
     });
     router.get('/:id/file', route(async (req, res) => {
-        const { rowCount } = await pool.query("SELECT 1 FROM media_archive WHERE id = $1 AND owner_id = $2 AND state = 'ready'",
+        const { rows: [item] } = await pool.query("SELECT storage_backend, mime, bytes FROM media_archive WHERE id = $1 AND owner_id = $2 AND state = 'ready'",
             [req.params.id, req.user.id]);
-        if (!rowCount) fail(404, '보관 파일을 찾을 수 없습니다.');
+        if (!item) fail(404, '보관 파일을 찾을 수 없습니다.');
+        if (item.storage_backend === 'postgres') return sendDatabaseFile(req, res, item);
+        if (!storage) fail(503, '기존 보관 파일의 버킷 연결을 확인해 주세요.');
         res.redirect(await storage.url(key(req.params.id)));
     }));
     router.delete('/:id', route(async (req, res) => {
+        const { rows: [item] } = await pool.query("SELECT storage_backend FROM media_archive WHERE id = $1 AND owner_id = $2 AND state IN ('ready', 'deleting')",
+            [req.params.id, req.user.id]);
+        if (!item) fail(404, '보관 파일을 찾을 수 없습니다.');
+        if (item.storage_backend === 'postgres') {
+            await pool.query('DELETE FROM media_archive WHERE id = $1 AND owner_id = $2', [req.params.id, req.user.id]);
+            return res.sendStatus(204);
+        }
+        if (!storage) fail(503, '기존 보관 파일의 버킷 연결을 확인해 주세요.');
         const { rowCount } = await pool.query(`UPDATE media_archive SET state = 'deleting', updated_at = NOW()
             WHERE id = $1 AND owner_id = $2 AND state IN ('ready', 'deleting')`, [req.params.id, req.user.id]);
         if (!rowCount) fail(404, '보관 파일을 찾을 수 없습니다.');
@@ -259,7 +316,7 @@ function mediaLibrary(pool, storage = storageFromEnv(), fetchMedia = downloadSou
         res.sendStatus(204);
     }));
     return {
-        router, enabled: Boolean(storage),
+        router, enabled: true,
         async prune() {
             if (!storage) return;
             const { rows } = await pool.query(`SELECT id FROM media_archive

@@ -42,7 +42,7 @@ Express API (server.js) ── Google OAuth · Rate limit · Helmet CSP
 | `GROQ_API_KEY` (… `_6`) | 텍스트 생성 · STT |
 | `KIE_API_KEY` | 이미지 · 영상 생성 |
 | `SPICY_API_KEY` | SpicyAPI 서버 전용 키 |
-| `SPICY_OWNER_GOOGLE_ID` | Seedream 5.5 Edit를 사용할 단일 Google 계정 ID |
+| `SPICY_OWNER_GOOGLE_ID` | Seedream 5.5 Edit와 미디어 영구 보관을 허용할 단일 Google 계정 ID |
 | `DATABASE_URL` | 필수. 프리셋, 세션, 호출량, 작업 소유권을 저장하는 PostgreSQL |
 | `PG_CA_CERT` | PostgreSQL이 사설 CA를 사용하는 경우 신뢰할 CA 인증서 PEM |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `CALLBACK_URL` | Google 로그인 |
@@ -50,7 +50,7 @@ Express API (server.js) ── Google OAuth · Rate limit · Helmet CSP
 | `SESSION_SECRET` | 필수. 무작위로 생성한 32자 이상의 세션 서명 키 |
 | `TRUST_PROXY_CIDRS` | HTTPS를 종료하는 배포 프록시의 신뢰 가능한 IP/CIDR 목록. 쉼표로 구분합니다. |
 | `ALLOWED_ORIGIN`, `PORT` | 서버 설정 |
-| `MEDIA_BUCKET` | 보관함용 비공개 S3 호환 버킷 이름 |
+| `MEDIA_BUCKET` | 선택. 보관 파일을 PostgreSQL 대신 저장할 비공개 S3 호환 버킷 이름 |
 | `MEDIA_S3_ACCESS_KEY_ID`, `MEDIA_S3_SECRET_ACCESS_KEY` | 해당 버킷의 읽기·쓰기·삭제 권한만 가진 서버 자격 증명 |
 | `MEDIA_S3_ENDPOINT`, `MEDIA_S3_REGION` | S3 호환 서비스의 HTTPS 엔드포인트와 리전. AWS S3는 엔드포인트 생략 가능 |
 
@@ -60,10 +60,21 @@ Express API (server.js) ── Google OAuth · Rate limit · Helmet CSP
 
 ### 미디어 보관함
 
+- 이미지 스튜디오 아래에는 이미지, 영상 스튜디오 아래에는 영상이 표시됩니다. 각 목록은 이번 세션 결과와 보관한 파일을 함께 보여줍니다.
 - 이번 세션 목록의 최근 30개 결과는 페이지 메모리에서만 표시됩니다. 새로고침, 페이지 종료, 로그아웃 시 이 목록은 초기화됩니다. 진행 중인 유료 요청의 복구 상태는 별도로 유지됩니다.
-- **보관**을 누르면 파일이 버킷에 복사되고 사용자 ID, 파일 종류, 용량, 저장 시각만 PostgreSQL 목록에 기록됩니다. 본인의 보관 목록에서만 5분짜리 재생 링크를 발급받을 수 있습니다.
-- 계정당 250 MiB 또는 200개, 서비스 전체 5 GiB로 제한합니다. 파일 한 개는 이미지 10 MiB, 영상 50 MiB까지 저장할 수 있습니다. 보관함에서 삭제하면 공간이 반환됩니다.
-- 버킷은 퍼블릭 접근을 차단한 상태로 연결합니다. 위 환경변수가 비어 있으면 이번 세션 목록만 사용할 수 있습니다. 생성 비용과 별도로 스토리지 사용량 및 다운로드 트래픽은 스토리지 서비스에서 청구할 수 있습니다.
+- 관리자 계정에서 **보관하기**를 누르면 기본적으로 기존 `DATABASE_URL`의 PostgreSQL에 원본과 보관 목록을 저장합니다. 파일을 열거나 재생할 때 앱이 로그인과 소유권을 확인합니다.
+- 계정당 250 MiB 또는 200개, PostgreSQL에 저장하는 보관 파일 전체는 250 MiB로 제한합니다. S3 호환 버킷을 연결한 경우 서비스 보관 한도는 5 GiB입니다. 파일당 한도는 이미지 10 MiB, 영상 50 MiB입니다. 보관함에서 삭제하면 앱의 보관 용량이 반환됩니다.
+- 비공개 버킷을 연결하면 새 파일은 버킷에 들어갑니다. 목록은 PostgreSQL에 기록되며 파일은 본인에게 발급한 5분짜리 링크로 재생합니다. 버킷과 PostgreSQL에 이미 저장된 파일은 각각의 저장 위치에서 계속 조회합니다.
+
+Cloudflare R2를 사용하려면 비공개 Standard 버킷과 해당 버킷 전용 S3 자격 증명을 만들고, Koyeb 서비스에 아래 환경변수를 설정합니다. 로컬에서 같은 PostgreSQL 보관 목록을 사용한다면 같은 버킷을 연결합니다.
+
+```dotenv
+MEDIA_BUCKET=ai-prod-media
+MEDIA_S3_ENDPOINT=https://<CLOUDFLARE_ACCOUNT_ID>.r2.cloudflarestorage.com
+MEDIA_S3_REGION=auto
+MEDIA_S3_ACCESS_KEY_ID=<R2_ACCESS_KEY_ID>
+MEDIA_S3_SECRET_ACCESS_KEY=<R2_SECRET_ACCESS_KEY>
+```
 
 ### Prompt Architecture Lab 설정
 
@@ -77,9 +88,9 @@ Express API (server.js) ── Google OAuth · Rate limit · Helmet CSP
 2. 서버에 그 값을 `SPICY_OWNER_GOOGLE_ID`로 설정합니다. `SPICY_API_KEY`와 무작위로 생성한 32자 이상의 `SESSION_SECRET`도 필요합니다.
 3. 서버 재시작 후 본인 계정으로 다시 로그인합니다. Image Studio에서 Seedream 5.5 Edit를 선택하고 참고 이미지를 첨부합니다. 첨부 번호를 누르면 프롬프트에 `@image 1`처럼 삽입됩니다. 영상은 `@image1`을 사용합니다.
 
-편집에는 JPEG, PNG, WebP, GIF를 최대 10장, 전체 10 MiB까지 첨부할 수 있습니다. 모델 스키마에 더 낮은 제한이 있으면 그 제한이 우선합니다. 화면 비율은 기존 선택을 사용하며 Seedream 결과는 1K, PNG, 배경 자동으로 고정됩니다. **이미지 생성**을 누르면 서버가 모델 스키마를 조회해 최대 5분간 캐시하고, 참고 이미지를 SpicyAPI에 업로드합니다. 예상 비용이 진행 화면에 표시되고 유료 작업이 바로 제출됩니다.
+편집에는 JPEG, PNG, WebP, GIF를 최대 10장, 전체 10 MiB까지 첨부할 수 있습니다. 모델 스키마에 더 낮은 제한이 있으면 그 제한이 우선합니다. Seedream의 기본 화면 비율은 9:16이며, 직접 다른 비율을 선택할 수 있습니다. 결과는 1K, PNG, 배경 자동으로 고정됩니다. **이미지 생성**을 누르면 서버가 모델 스키마를 조회해 최대 5분간 캐시하고, 참고 이미지를 SpicyAPI에 업로드합니다. 예상 비용이 진행 화면에 표시되고 유료 작업이 바로 제출됩니다.
 
-요청 접수나 상태 조회가 끊기면 생성 버튼으로 기존 요청을 확인할 수 있습니다. Seedream은 진행 중 요청을 PostgreSQL에 저장합니다. 접수 여부가 불명확한 상태로 20시간이 지나면 SpicyAPI 콘솔에서 확인해야 합니다.
+Seedream은 진행 중 요청을 PostgreSQL에 저장합니다. 접수된 작업은 화면으로 돌아오면 기존 작업 ID로 결과 조회를 이어갑니다. 접수 여부가 불명확하거나 직접 조회를 중단한 요청은 생성 버튼으로 확인할 수 있습니다. 접수 여부가 불명확한 상태로 20시간이 지나면 SpicyAPI 콘솔에서 확인해야 합니다.
 
 ## 로컬 실행
 

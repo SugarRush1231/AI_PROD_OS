@@ -50,6 +50,11 @@ function publicProfile(user) {
     return { id, displayName, photos };
 }
 
+function isGoogleOwner(req) {
+    const owner = process.env.SPICY_OWNER_GOOGLE_ID?.trim();
+    return Boolean(owner && req.isAuthenticated() && req.user?.provider === 'google' && req.user.id === owner);
+}
+
 function csrfToken(req) {
     return createHmac('sha256', process.env.SESSION_SECRET).update('csrf:').update(req.sessionID).digest('hex');
 }
@@ -83,5 +88,5 @@ function quota(pool, bucket, minutes, max) {
 }
 
 module.exports = {
-    SESSION_MS, SESSION_COOKIE, PostgresSessionStore, minimalGoogleProfile, publicProfile, csrfToken, requireCsrf, quota
+    SESSION_MS, SESSION_COOKIE, PostgresSessionStore, minimalGoogleProfile, publicProfile, isGoogleOwner, csrfToken, requireCsrf, quota
 };

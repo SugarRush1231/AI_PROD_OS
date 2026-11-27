@@ -5,9 +5,15 @@ promptCatalog.mount(document, promptRules.opticsFields);
 let csrfHeaderToken;
 let currentAccountId;
 let mediaStorageEnabled = false;
-let mediaTab = 'recent';
+let canSaveMedia = false;
 let savedMedia = [];
 let mediaQuota;
+let mediaLoadRevision = 0;
+let mediaArchiveLoading = false;
+let mediaArchiveError = '';
+const mediaLibraries = Object.fromEntries([...document.querySelectorAll('[data-media-library]')]
+  .map(panel => [panel.dataset.mediaLibrary, panel]));
+const mediaGalleryViews = new WeakMap();
 const recentMedia = [];
 const CURRENT_MEDIA_LIMIT = 30;
 
@@ -19,24 +25,32 @@ function apiFetch(url, options = {}) {
 }
 
 function initMediaLibrary() {
-  document.getElementById('media-library').hidden = false;
-  document.getElementById('media-library-link').hidden = false;
-  renderMediaLibrary();
+  for (const panel of Object.values(mediaLibraries)) panel.hidden = false;
+  if (mediaStorageEnabled) loadSavedMedia();
+  else for (const kind of Object.keys(mediaLibraries)) renderMediaLibrary(kind);
 }
 
 function recordGeneratedMedia(kind, url, token, blob) {
-  if (!currentAccountId || !url || recentMedia.some(entry => entry.url === url)) return;
+  if (!currentAccountId || mediaLibraries[kind]?.hidden !== false || !url || recentMedia.some(entry => entry.url === url)) return;
   recentMedia.unshift({ kind, url, token, blob, created_at: new Date().toISOString() });
-  if (recentMedia.length > CURRENT_MEDIA_LIMIT) recentMedia.pop();
-  if (mediaTab === 'recent') renderMediaLibrary();
+  const oldest = recentMedia.length > CURRENT_MEDIA_LIMIT ? recentMedia.pop() : null;
+  renderMediaLibrary(kind);
+  if (oldest && oldest.kind !== kind) renderMediaLibrary(oldest.kind);
 }
 
 function clearMediaView() {
-  document.getElementById('media-library-grid').replaceChildren();
+  for (const panel of Object.values(mediaLibraries)) {
+    panel.hidden = true;
+    const grid = panel.querySelector('[data-media-grid]');
+    grid.replaceChildren();
+    mediaGalleryViews.delete(grid);
+  }
+  mediaLoadRevision++;
   recentMedia.length = 0;
   savedMedia = [];
   mediaQuota = undefined;
-  mediaTab = 'recent';
+  mediaArchiveLoading = false;
+  mediaArchiveError = '';
 }
 
 function mediaSize(bytes) {
@@ -60,59 +74,87 @@ function mediaAction(label, handler) {
   return button;
 }
 
-function renderMediaLibrary(message) {
-  const list = mediaTab === 'recent' ? recentMedia : savedMedia;
-  const grid = document.getElementById('media-library-grid');
-  const status = document.getElementById('media-library-status');
-  document.getElementById('media-recent-tab').setAttribute('aria-pressed', String(mediaTab === 'recent'));
-  document.getElementById('media-saved-tab').setAttribute('aria-pressed', String(mediaTab === 'saved'));
-  document.getElementById('media-library-quota').textContent = mediaTab === 'saved' && mediaQuota
-    ? `${mediaSize(savedMedia.reduce((total, item) => total + Number(item.bytes), 0))} / ${mediaSize(mediaQuota.limit)} · ${savedMedia.length}/${mediaQuota.maxItems}개` : '';
-  status.textContent = message || (mediaTab === 'recent'
-    ? list.length ? '페이지를 닫거나 로그아웃하면 이 기록이 사라집니다.' : '이번 세션에 생성한 이미지와 영상이 여기에 표시됩니다.'
-    : !mediaStorageEnabled ? '보관용 스토리지가 아직 연결되지 않았습니다.' : list.length ? '' : '아직 보관한 파일이 없습니다.');
-  grid.replaceChildren();
+function renderMediaLibrary(kind, message) {
+  const panel = mediaLibraries[kind];
+  if (panel.hidden) return;
+  const isVideo = kind === 'video';
+  const saved = savedMedia.filter(entry => entry.kind === kind);
+  const savedIds = new Set(saved.map(entry => entry.id));
+  const list = saved.concat(recentMedia.filter(entry => entry.kind === kind && !savedIds.has(entry.savedId)))
+    .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
+  const grid = panel.querySelector('[data-media-grid]');
+  const status = panel.querySelector('[data-media-status]');
+  const quota = panel.querySelector('[data-media-quota]');
+  quota.hidden = !mediaQuota;
+  const storageLabel = canSaveMedia && mediaQuota?.storage === 'postgres' ? 'PostgreSQL 보관 · ' : '';
+  quota.textContent = mediaQuota
+    ? `${storageLabel}내 보관 용량 ${mediaSize(savedMedia.reduce((total, item) => total + Number(item.bytes), 0))} / ${mediaSize(mediaQuota.limit)} · ${savedMedia.length}/${mediaQuota.maxItems}개` : '';
+  status.textContent = message || mediaArchiveError || (mediaArchiveLoading ? '보관한 파일을 불러오는 중…'
+    : canSaveMedia && !mediaStorageEnabled ? '보관용 저장소를 연결하면 파일을 저장할 수 있습니다.'
+      : !list.length ? (isVideo ? '아직 영상이 없습니다.' : '아직 이미지가 없습니다.')
+        : list.some(entry => !entry.id && !entry.savedId) ? '이번 세션 항목은 페이지를 닫거나 로그아웃하면 사라집니다.' : '');
+  status.hidden = !status.textContent;
+  panel.querySelector('[data-media-retry]').hidden = !mediaArchiveError;
+  grid.hidden = !list.length;
+  // An archive refresh can change the shared quota without interrupting a player in this gallery.
+  const view = JSON.stringify([canSaveMedia, mediaStorageEnabled, list.map(entry => [entry.id || entry.savedId,
+    entry.url, entry.created_at, entry.bytes, entry.saving, Boolean(entry.token || entry.blob)])]);
+  if (mediaGalleryViews.get(grid) === view) return;
+  mediaGalleryViews.set(grid, view);
+  const scrollLeft = grid.scrollLeft;
+  const cards = document.createDocumentFragment();
   for (const entry of list) {
+    const archiveId = entry.id || entry.savedId;
     const card = document.createElement('article');
     card.className = 'media-library-card';
-    const isVideo = entry.kind === 'video';
-    const title = isVideo ? '생성 영상' : '생성 이미지';
     const media = document.createElement(isVideo ? 'video' : 'img');
-    media.src = entry.id ? `/api/media-archive/${entry.id}/file` : entry.url;
+    const preview = isVideo ? media : mediaAction('이미지 크게 보기', () => openImageViewer(media.src));
     if (isVideo) {
       media.controls = true;
       media.playsInline = true;
       media.preload = 'none';
+      media.setAttribute('aria-label', archiveId ? '보관한 영상' : '이번 세션 생성 영상');
     } else {
       media.loading = 'lazy';
-      media.alt = title;
-      media.tabIndex = 0;
-      const open = () => openImageViewer(media.src);
-      media.addEventListener('click', open);
-      media.addEventListener('keydown', event => { if (event.key === 'Enter') open(); });
+      media.alt = '';
+      preview.className = 'media-library-preview';
+      preview.setAttribute('aria-label', archiveId ? '보관한 이미지 크게 보기' : '이번 세션 생성 이미지 크게 보기');
+      preview.replaceChildren(media);
     }
+    media.src = archiveId ? `/api/media-archive/${archiveId}/file` : entry.url;
     const content = document.createElement('div');
     content.className = 'media-library-entry';
     const heading = document.createElement('strong');
-    heading.textContent = title;
+    heading.textContent = archiveId ? '보관됨' : '이번 세션';
     const time = document.createElement('time');
     time.dateTime = entry.created_at;
-    time.textContent = new Date(entry.created_at).toLocaleString() + (entry.id ? ` · ${mediaSize(entry.bytes)}` : '');
-    const actions = document.createElement('div');
-    actions.className = 'media-library-actions';
-    if (entry.id) {
-      actions.append(mediaAction('삭제', async button => {
-        if (!await showSystemConfirm('파일 삭제', '보관함에서 이 파일을 삭제할까요?', 'danger')) return;
+    time.textContent = new Date(entry.created_at).toLocaleString() + (entry.bytes != null ? ` · ${mediaSize(entry.bytes)}` : '');
+    content.append(heading, time);
+    if (archiveId) {
+      content.append(mediaAction('삭제', async button => {
         button.disabled = true;
+        if (!await showSystemConfirm('파일 삭제', '보관함에서 이 파일을 삭제할까요?', 'danger')) {
+          button.disabled = false;
+          return;
+        }
         try {
-          await archiveRequest(`/${entry.id}`, { method: 'DELETE' });
-          savedMedia = savedMedia.filter(item => item.id !== entry.id);
-          for (const recent of recentMedia) if (recent.savedId === entry.id) recent.savedId = undefined;
-          renderMediaLibrary('보관 파일을 삭제했습니다.');
-        } catch (error) { status.textContent = error.message; button.disabled = false; }
+          await archiveRequest(`/${archiveId}`, { method: 'DELETE' });
+          if (panel.hidden) return;
+          savedMedia = savedMedia.filter(item => item.id !== archiveId);
+          for (const recent of recentMedia) if (recent.savedId === archiveId) recent.savedId = undefined;
+          const message = '보관 파일을 삭제했습니다.';
+          renderMediaLibrary(kind, message);
+          loadSavedMedia(kind, message);
+        } catch (error) {
+          status.hidden = false;
+          status.textContent = error.message;
+          button.disabled = false;
+        }
       }));
-    } else if (mediaStorageEnabled && (entry.token || entry.blob)) {
-      const save = mediaAction(entry.savedId ? '보관됨' : '보관', async button => {
+    } else if (canSaveMedia && (entry.token || entry.blob)) {
+      const save = mediaAction(entry.saving ? '보관 중…' : '보관하기', async button => {
+        if (entry.saving) return;
+        entry.saving = true;
         button.disabled = true;
         button.textContent = '보관 중…';
         try {
@@ -122,40 +164,53 @@ function renderMediaLibrary(message) {
           const item = await archiveRequest(entry.blob ? '/upload-video' : '', {
             method: 'POST', body: data, headers: entry.blob ? undefined : { 'Content-Type': 'application/json' }
           });
+          if (panel.hidden) return;
           entry.savedId = item.id;
-          if (mediaTab === 'saved') await showSavedMedia();
-          else renderMediaLibrary('보관한 파일에 저장했습니다.');
+          const message = '파일을 보관했습니다.';
+          renderMediaLibrary(kind, message);
+          loadSavedMedia(kind, message);
         } catch (error) {
-          status.textContent = error.message;
+          entry.saving = false;
           button.disabled = false;
-          button.textContent = '보관';
+          button.textContent = '보관하기';
+          renderMediaLibrary(kind, error.message);
+        } finally {
+          entry.saving = false;
         }
       });
-      save.disabled = Boolean(entry.savedId);
-      actions.append(save);
+      save.disabled = !mediaStorageEnabled || Boolean(entry.saving);
+      content.append(save);
     }
-    content.append(heading, time, actions);
-    card.append(media, content);
-    grid.append(card);
+    card.append(preview, content);
+    cards.append(card);
+  }
+  grid.replaceChildren(cards);
+  grid.scrollLeft = scrollLeft;
+}
+
+async function loadSavedMedia(changedKind, message) {
+  const revision = ++mediaLoadRevision;
+  mediaArchiveLoading = true;
+  mediaArchiveError = '';
+  if (!changedKind) for (const kind of Object.keys(mediaLibraries)) renderMediaLibrary(kind);
+  try {
+    const { items, limit, maxItems, storage } = await archiveRequest('');
+    if (revision !== mediaLoadRevision) return;
+    savedMedia = items;
+    mediaQuota = { limit, maxItems, storage };
+  } catch (error) {
+    if (revision !== mediaLoadRevision) return;
+    mediaArchiveError = `보관한 파일을 불러오지 못했습니다. ${error.message}`;
+  }
+  mediaArchiveLoading = false;
+  for (const kind of Object.keys(mediaLibraries)) {
+    renderMediaLibrary(kind, kind === changedKind && !mediaArchiveError ? message : undefined);
   }
 }
 
-async function showSavedMedia() {
-  mediaTab = 'saved';
-  renderMediaLibrary(mediaStorageEnabled ? '보관 파일을 불러오는 중…' : undefined);
-  if (!mediaStorageEnabled) return;
-  try {
-    mediaQuota = await archiveRequest('');
-    savedMedia = mediaQuota.items;
-    if (mediaTab === 'saved') renderMediaLibrary();
-  } catch (error) { if (mediaTab === 'saved') renderMediaLibrary(error.message); }
+for (const panel of Object.values(mediaLibraries)) {
+  panel.querySelector('[data-media-retry]').addEventListener('click', () => loadSavedMedia());
 }
-
-document.getElementById('media-recent-tab').addEventListener('click', () => {
-  mediaTab = 'recent';
-  renderMediaLibrary();
-});
-document.getElementById('media-saved-tab').addEventListener('click', showSavedMedia);
 window.addEventListener('pagehide', clearMediaView);
 window.addEventListener('pageshow', event => { if (event.persisted) location.reload(); });
 
@@ -1889,7 +1944,7 @@ ${PromptContext.visual.camera.composition !== 'none' ? `- Composition: ${PromptC
 
     // 🚨 에러 시 스피너가 무한정 도는 현상 방지: 실패 상태 시각화
     UI.layers.forEach(layer => {
-      if (layer && layer.dataset.st !== 'done') {
+      if (layer && layer.dataset.st === 'run') {
         layer.dataset.st = 'fail';
         const status = layer.querySelector('.layer-status');
         if (status) {
@@ -2453,7 +2508,7 @@ async function checkAuthStatus() {
     csrfHeaderToken = data.csrfToken;
     currentAccountId = data.user?.id;
     mediaStorageEnabled = data.mediaLibraryEnabled === true;
-    if (data.canUseSpicy) initSpicyImageControls(data.user.id);
+    canSaveMedia = data.canSaveMedia === true;
     if (data.user) {
       USER_LOGGED_IN = true;
       if (loginBtn) loginBtn.style.display = 'none';
@@ -2470,6 +2525,7 @@ async function checkAuthStatus() {
       MyPresets.fetchFromServer();
       updateAuthUIInputs(true);
       initMediaLibrary();
+      if (data.canUseSpicy) initSpicyImageControls(data.user.id);
       if (typeof syncVpsSettingsFromServer === 'function') {
         syncVpsSettingsFromServer();
       }
@@ -3123,14 +3179,23 @@ function calculateAspectRatio(base64Str) {
 
 // 이미지 생성 통신 함수 (서버 /api/generate-image → Kie z-image, 실패 시 Pollinations)
 let spicyImageStorageKey;
+let checkingSpicyRecovery = false;
 
 function initSpicyImageControls(ownerId) {
   const controls = document.getElementById('spicy-image-controls');
   const provider = document.getElementById('image-provider');
-  if (!controls || !provider) return;
+  const ratio = document.getElementById('imageRatioInput');
+  if (!controls || !provider || !ratio) return;
+  const ratioByProvider = { default: ratio.value, spicy: '9:16' };
+  let activeProvider = 'default';
   spicyImageStorageKey = `spicy-image-pending:${ownerId}`;
   controls.hidden = false;
   provider.addEventListener('change', () => {
+    if (provider.value !== activeProvider) {
+      ratioByProvider[activeProvider] = ratio.value;
+      activeProvider = provider.value;
+      ratio.value = ratioByProvider[activeProvider];
+    }
     const isSpicy = provider.value === 'spicy';
     document.getElementById('spicy-output-settings').hidden = !isSpicy;
     document.getElementById('spicy-image-wallet').hidden = !isSpicy;
@@ -3145,10 +3210,44 @@ function initSpicyImageControls(ownerId) {
     document.getElementById('image-reference-hint').textContent = isSpicy
       ? '최대 10장 · 전체 10 MiB'
       : '기본 모델은 텍스트 프롬프트로 생성합니다.';
-    if (isSpicy) refreshSpicyBalance();
+    if (isSpicy) {
+      refreshSpicyBalance();
+      resumeSpicyImage();
+    }
   });
+  document.addEventListener('visibilitychange', resumeSpicyImage);
+  window.addEventListener('online', resumeSpicyImage);
   provider.value = 'spicy';
   provider.dispatchEvent(new Event('change'));
+}
+
+async function resumeSpicyImage() {
+  const isPaused = () => sessionStorage.getItem(`${spicyImageStorageKey}:paused`);
+  if (checkingSpicyRecovery || document.hidden || isPaused() ||
+      document.getElementById('image-provider').value !== 'spicy' ||
+      document.getElementById('image-generate-btn').disabled) return;
+  checkingSpicyRecovery = true;
+  try {
+    const saved = readSpicyPending();
+    const { taskId } = saved?.taskId ? saved : (await spicyImageRequest('pending')) || {};
+    if (!taskId) return;
+    const resume = () => {
+      if (!document.hidden && !isPaused()) return generateImage(taskId);
+    };
+    if (navigator.locks) {
+      await navigator.locks.request(spicyImageStorageKey, { ifAvailable: true }, lock => lock && resume());
+    } else {
+      await resume();
+    }
+  } catch (error) {
+    console.warn('Seedream 작업을 확인하지 못했습니다.', error);
+  } finally {
+    checkingSpicyRecovery = false;
+  }
+}
+
+function readSpicyPending() {
+  return JSON.parse(localStorage.getItem(spicyImageStorageKey) || 'null');
 }
 
 async function spicyImageRequest(path, body, signal) {
@@ -3159,7 +3258,10 @@ async function spicyImageRequest(path, body, signal) {
   const response = await apiFetch(`/api/spicy-image/${path}`, {
     ...options, signal: signal ? AbortSignal.any([timeout, signal]) : timeout
   });
-  const data = await response.json();
+  const data = await response.json().catch(error => {
+    if (response.ok) throw error;
+    return {};
+  });
   if (!response.ok) throw Object.assign(new Error(data.error || 'SpicyAPI 요청에 실패했습니다.'), {
     status: response.status, code: data.code
   });
@@ -3180,10 +3282,56 @@ async function refreshSpicyBalance() {
   }
 }
 
-async function runSpicyEdit(prompt, images, ratio, status, { signal, onSubmitted } = {}) {
+function waitForTaskLookup(delay, signal) {
   signal?.throwIfAborted();
-  let pending = await spicyImageRequest('pending', undefined, signal);
-  pending ||= JSON.parse(localStorage.getItem(spicyImageStorageKey) || 'null');
+  return new Promise((resolve, reject) => {
+    let timer;
+    const cleanup = () => {
+      clearTimeout(timer);
+      document.removeEventListener('visibilitychange', ready);
+      window.removeEventListener('online', ready);
+      signal?.removeEventListener('abort', abort);
+    };
+    const ready = () => {
+      if (document.hidden) return;
+      cleanup();
+      resolve();
+    };
+    const abort = () => { cleanup(); reject(signal.reason); };
+    document.addEventListener('visibilitychange', ready);
+    window.addEventListener('online', ready);
+    signal?.addEventListener('abort', abort, { once: true });
+    if (!document.hidden) timer = setTimeout(ready, delay);
+  });
+}
+
+function loadSpicyResult(image, url, signal) {
+  const timeout = AbortSignal.any([signal, AbortSignal.timeout(25000)]);
+  timeout.throwIfAborted();
+  return new Promise((resolve, reject) => {
+    const finish = error => {
+      image.removeEventListener('load', loaded);
+      image.removeEventListener('error', failed);
+      timeout.removeEventListener('abort', aborted);
+      if (error) {
+        image.removeAttribute('src');
+        reject(error);
+      } else resolve();
+    };
+    const loaded = () => finish();
+    const failed = () => finish(new Error('생성된 이미지 파일을 불러오지 못했습니다. 다시 누르면 기존 결과를 조회합니다.'));
+    const aborted = () => failed();
+    image.addEventListener('load', loaded);
+    image.addEventListener('error', failed);
+    timeout.addEventListener('abort', aborted, { once: true });
+    image.src = url;
+  });
+}
+
+async function runSpicyEdit(prompt, images, ratio, status, { signal, onSubmitted, recoveryTaskId, loadResult } = {}) {
+  signal?.throwIfAborted();
+  let pending = recoveryTaskId ? { taskId: recoveryTaskId } : await spicyImageRequest('pending', undefined, signal);
+  pending ||= readSpicyPending();
   let estimate = '';
   let ratioNote = '';
   if (pending) onSubmitted?.();
@@ -3203,7 +3351,6 @@ async function runSpicyEdit(prompt, images, ratio, status, { signal, onSubmitted
       localStorage.setItem(spicyImageStorageKey, JSON.stringify(pending));
       onSubmitted?.();
       pending = await spicyImageRequest('create', pending, signal);
-      localStorage.setItem(spicyImageStorageKey, JSON.stringify(pending));
     }
   } catch (error) {
     if ([400, 402, 422].includes(error.status) || error.code === '40901') {
@@ -3218,35 +3365,127 @@ async function runSpicyEdit(prompt, images, ratio, status, { signal, onSubmitted
         return null;
       }
     }
-    throw error;
+    signal?.throwIfAborted();
+    if (!canRetryTaskLookup(error) && error.code !== 'duplicate_pending') throw error;
+    if (status) status.textContent = '접수 응답이 끊겼습니다. 기존 작업 ID를 확인 중…';
+    // The create request may already have reached SpicyAPI. Only read back its stored job ID.
+    for (let attempt = 0; attempt < 5; attempt++) {
+      await waitForTaskLookup(4000, signal);
+      try {
+        const existing = await spicyImageRequest('pending', undefined, signal);
+        if (existing?.taskId) {
+          pending = existing;
+          break;
+        }
+      } catch (lookupError) {
+        signal?.throwIfAborted();
+        if (!canRetryTaskLookup(lookupError)) throw lookupError;
+      }
+    }
+    if (!pending.taskId) throw error;
   }
 
-  if (status) status.textContent = `Seedream 이미지 편집 중…${estimate}${ratioNote}`;
-  const until = Date.now() + 120000;
-  for (let delay = 2000; Date.now() < until; delay = Math.min(delay * 1.5, 10000)) {
+  localStorage.setItem(spicyImageStorageKey, JSON.stringify(pending));
+  const showStatus = text => { if (status) status.textContent = `${text}${estimate}${ratioNote}`; };
+  showStatus(recoveryTaskId ? '기존 Seedream 작업의 결과 확인 중…' : 'Seedream 작업이 접수됐습니다. 상태 확인 중…');
+  const path = `task/${encodeURIComponent(pending.taskId)}`;
+  let fileAttempts = 0;
+  for (let delay = recoveryTaskId ? 0 : 2000; ; delay = Math.min(Math.max(2000, delay * 1.5), 15000)) {
+    await waitForTaskLookup(delay, signal);
     signal?.throwIfAborted();
-    await new Promise((resolve, reject) => {
-      const abort = () => { clearTimeout(timer); reject(signal.reason); };
-      const timer = setTimeout(() => {
-        signal?.removeEventListener('abort', abort);
-        resolve();
-      }, delay);
-      signal?.addEventListener('abort', abort, { once: true });
-    });
-    const task = await spicyImageRequest(`task/${encodeURIComponent(pending.taskId)}`, undefined, signal);
-    if (task.state === 'queued' || task.state === 'running' || task.pending) continue;
+    let task;
+    try {
+      task = await spicyImageRequest(path, undefined, signal);
+    } catch (error) {
+      signal?.throwIfAborted();
+      if (!canRetryTaskLookup(error)) throw error;
+      showStatus('연결이 끊겼거나 응답이 늦습니다. 기존 작업을 다시 확인합니다…');
+      continue;
+    }
+    if (task.state === 'queued' || task.state === 'running' || task.pending) {
+      showStatus(task.state === 'queued' ? 'Seedream 작업 대기열에 있습니다…'
+        : task.state === 'running' ? 'Seedream 이미지 편집 중…' : '편집 완료 · 결과 파일 준비 중…');
+      continue;
+    }
+    if (task.state === 'succeeded' && task.url) {
+      showStatus('편집 완료 · 이미지 불러오는 중…');
+      try {
+        await loadResult?.(task.url);
+      } catch (error) {
+        signal?.throwIfAborted();
+        if (++fileAttempts >= 3) throw error;
+        showStatus('이미지 링크를 다시 확인하는 중…');
+        continue;
+      }
+      localStorage.removeItem(spicyImageStorageKey);
+      return { data: { url: task.url, provider: 'spicy:seedream-5.5-edit', archiveToken: task.archiveToken } };
+    }
     localStorage.removeItem(spicyImageStorageKey);
-    if (task.state === 'succeeded' && task.url) return { data: {
-      url: task.url, provider: 'spicy:seedream-5.5-edit', archiveToken: task.archiveToken
-    } };
-    const reason = task.code === 'content_rejected' ? '콘텐츠가 거절되었습니다.' : '이미지 편집에 실패했습니다.';
+    const reason = task.code === 'content_rejected' ? '콘텐츠가 거절되었습니다.'
+      : task.state === 'succeeded' ? '편집은 완료됐지만 결과 파일을 받을 수 없습니다.' : '이미지 편집에 실패했습니다.';
     const cost = task.settled && task.cost != null ? ` · 최종 비용 USD ${task.cost}` : '';
     throw new Error(`${reason}${task.error ? ' ' + task.error : ''}${cost}`);
   }
-  throw new Error('편집이 진행 중입니다. 생성 버튼을 다시 누르면 기존 작업의 결과를 조회합니다.');
 }
 
-async function generateImage() {
+function canRetryTaskLookup(error) {
+  return [408, 429].includes(error.status) || error.status >= 500 ||
+    ['TypeError', 'TimeoutError', 'AbortError', 'SyntaxError'].includes(error.name);
+}
+
+function showGenerationStatus(placeholder, text) {
+  const status = document.createElement('div');
+  status.setAttribute('role', 'status');
+  status.style.cssText = 'padding: 12px; font-size: .85rem; color: var(--fg-muted);';
+  status.textContent = text;
+  placeholder.replaceChildren(status);
+  return status;
+}
+
+function kieGenerationStatus(state, item) {
+  switch (state) {
+    case 'submitting': return `${item} 생성 요청 · 접수 응답 대기 중…`;
+    case 'accepted': return `${item} 작업 접수 · 상태 확인 중…`;
+    case 'waiting': return `${item} 작업 대기 중…`;
+    case 'queuing': return `${item} 작업 대기열에 있습니다…`;
+    case 'generating': return `${item} 생성 중…`;
+    case 'success': return `${item} 생성 완료 · 결과 파일 확인 중…`;
+    default: return `${item} 작업 상태 확인 중…`;
+  }
+}
+
+async function requestStudioImage(body, onStatus, signal) {
+  const response = await apiFetch('/api/generate-image', {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/x-ndjson' },
+    signal, body: JSON.stringify(body)
+  });
+  if (!response.ok || !response.headers.get('Content-Type')?.startsWith('application/x-ndjson')) {
+    return { ok: response.ok, status: response.status, data: await response.json() };
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) throw new Error('이미지 생성 응답이 완료되기 전에 연결이 끊겼습니다.');
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+      for (const line of lines) {
+        if (!line) continue;
+        const { type, provider, state, status, ...data } = JSON.parse(line);
+        if (type === 'status' && provider === 'kie') onStatus?.(kieGenerationStatus(state, 'Kie 이미지'));
+        if (type === 'result') return { ok: status >= 200 && status < 300, status, data };
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+async function generateImage(recoveryTaskId) {
   if (!USER_LOGGED_IN) {
     const confirmLogin = await showSystemConfirm('🔒 권한 확인', '이미지 생성 서비스는 로그인이 필요합니다. 로그인 페이지로 이동할까요?', 'info');
     if (confirmLogin) window.location.href = '/auth/google';
@@ -3260,18 +3499,21 @@ async function generateImage() {
   const btn = document.getElementById('image-generate-btn');
   if (btn.disabled) return;
   const useSpicy = Boolean(spicyImageStorageKey && document.getElementById('image-provider')?.value === 'spicy');
-  const resumeSpicy = useSpicy && localStorage.getItem(spicyImageStorageKey);
+  if (recoveryTaskId && !useSpicy) return;
+  if (useSpicy && !recoveryTaskId) sessionStorage.removeItem(`${spicyImageStorageKey}:paused`);
   const choicePanel = document.getElementById('post-gen-choices');
 
   // UI 초기화: 이전 결과물(이미지 및 선택지)을 모두 숨기고 로딩상태 준비
   if (resultImage) {
+    resultImage.onload = null;
+    resultImage.onerror = null;
     resultImage.style.display = "none";
-    resultImage.src = ""; 
+    resultImage.removeAttribute('src');
   }
   if (choicePanel) choicePanel.style.display = "none";
   if (placeholder) placeholder.style.display = "block";
 
-  if (!promptValue && !resumeSpicy && !useSpicy) { alert("그릴 내용을 입력해주세요!"); return; }
+  if (!promptValue && !useSpicy) { alert("그릴 내용을 입력해주세요!"); return; }
 
   // 자동 비율 계산
   if (!useSpicy && ratioValue === 'auto' && currentImageBase64) {
@@ -3329,37 +3571,7 @@ async function generateImage() {
   btn.innerHTML = '<span class="spinner"></span> AI 이미지 생성 중...';
   btn.disabled = true;
 
-  // 프로그레스 바 영역 생성/업데이트
-  let progressContainer = document.getElementById('image-progress-container');
-  if (!progressContainer) {
-    placeholder.innerHTML = `
-      <div id="image-progress-container" style="width: 80%; margin: 0 auto; text-align: center;">
-        <div id="image-progress-text" role="status" style="font-size: 0.85rem; margin-bottom: 8px; color: var(--skills-cyan);">🚀 서버로 요청을 보내는 중...</div>
-        <div style="height: 6px; background: rgba(255,255,255,0.1); border-radius: 10px; overflow: hidden; position: relative;">
-          <div id="image-progress-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #0cebeb, #20e3b2, #29ffc6); transition: width 0.3s ease; box-shadow: 0 0 10px var(--skills-cyan);"></div>
-        </div>
-        <div id="image-progress-tip" style="font-size: 0.7rem; margin-top: 10px; color: var(--fg-dim); opacity: 0.6;">예상 소요 시간: 약 45초~60초 (중간에 멈춘 것처럼 보여도 서버는 작동 중입니다)</div>
-      </div>
-    `;
-    progressContainer = document.getElementById('image-progress-container');
-  }
-
-  const bar = document.getElementById('image-progress-bar');
-  const statusTxt = document.getElementById('image-progress-text');
-
-  // 가짜 프로그레스 애니메이션 (실제 응답 올 때까지 서서히 상승)
-  let progress = 0;
-  const progressInterval = setInterval(() => {
-    if (progress < 90) {
-      progress += (90 - progress) * 0.05; // 로그 곡선으로 부드럽게 상승
-      if (bar) bar.style.width = `${progress}%`;
-      if (!useSpicy && statusTxt) {
-        if (progress > 30) statusTxt.innerText = "🤖 AI 이미지 모델 호출 중...";
-        if (progress > 60) statusTxt.innerText = "🎨 AI 모델 연산 중... 거의 다 되었습니다!";
-        if (progress > 85) statusTxt.innerText = "📦 결과 이미지 수신 대기 중...";
-      }
-    }
-  }, 1500);
+  const statusTxt = showGenerationStatus(placeholder, useSpicy ? '기존 Seedream 작업 확인 중…' : '이미지 생성 요청 · 서버 응답 대기 중…');
 
   // 📏 비율 정제 로직 (서버에서 모델별 지원 비율로 다시 매핑)
   const getCleanAspectRatio = (raw) => {
@@ -3378,7 +3590,7 @@ async function generateImage() {
   };
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 180000); // 180초 타임아웃
+  const timeoutId = useSpicy ? undefined : setTimeout(() => controller.abort(), 180000);
   const stop = document.getElementById('image-stop-btn');
   let submitted = false;
   let manuallyStopped = false;
@@ -3387,38 +3599,35 @@ async function generateImage() {
     stop.textContent = '비용 확인 중단';
     stop.onclick = () => {
       manuallyStopped = true;
+      if (submitted) sessionStorage.setItem(`${spicyImageStorageKey}:paused`, '1');
       controller.abort();
     };
   }
 
   try {
     const editWithReferences = async () => {
-      await spicyFileBatch;
+      if (!recoveryTaskId) await spicyFileBatch;
       return runSpicyEdit(cleanPrompt, spicyReferenceImages.map(ref => ref.src), ratioValue, statusTxt, {
         signal: controller.signal,
+        recoveryTaskId,
+        loadResult: url => loadSpicyResult(resultImage, url, controller.signal),
         onSubmitted() {
           submitted = true;
           stop.textContent = '결과 조회 중단';
         }
       });
     };
-    const response = useSpicy ? null : await apiFetch('/api/generate-image', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      signal: controller.signal,
-      body: JSON.stringify(requestBody)
-    });
-    clearTimeout(timeoutId);
+    const response = useSpicy ? null : await requestStudioImage(requestBody,
+      text => { statusTxt.textContent = text; }, controller.signal);
 
-    clearInterval(progressInterval);
     const responseData = useSpicy
-      ? await (navigator.locks
+      ? await (!recoveryTaskId && navigator.locks
         ? navigator.locks.request(spicyImageStorageKey, { ifAvailable: true }, lock => {
           if (!lock) throw new Error('다른 탭에서 Seedream 요청을 처리 중입니다.');
           return editWithReferences();
         })
         : editWithReferences())
-      : await response.json();
+      : response.data;
     if (!responseData) {
       if (statusTxt) statusTxt.textContent = submitted ? '기존 작업의 조회를 중단했습니다.' : '편집을 제출하지 않았습니다.';
       return;
@@ -3429,9 +3638,6 @@ async function generateImage() {
       alert(`[생성 실패] ${responseData.error || '통신 오류'}`);
       throw new Error(responseData.error);
     }
-
-    if (bar) bar.style.width = '100%';
-    if (statusTxt) statusTxt.innerText = "✨ 생성 완료! 이미지를 표시합니다.";
 
     const findImageInObject = (obj) => {
       if (!obj) return null;
@@ -3472,8 +3678,6 @@ async function generateImage() {
       console.error("최종 이미지 추출 실패. 응답 원본:", responseData);
       throw new Error("서버 응답에서 이미지 URL을 찾지 못했습니다.");
     }
-    recordGeneratedMedia('image', finalImageUrl, responseData.data?.archiveToken);
-
     // 실제 사용된 엔진 표시 (Kie 실패 시 폴백 사유도 노출)
     const engineEl = document.getElementById('image-engine-status');
     const provider = responseData.data && responseData.data.provider;
@@ -3483,8 +3687,8 @@ async function generateImage() {
       if (typeof addLog === 'function') addLog(`!! 이미지 폴백: ${responseData.data.fallbackReason}`, 'error');
     }
 
-    resultImage.src = finalImageUrl;
-    resultImage.onload = () => {
+    const showResult = () => {
+      recordGeneratedMedia('image', finalImageUrl, responseData.data?.archiveToken);
       resultImage.style.display = "block";
       const ph = document.getElementById('image-placeholder');
       if (ph) ph.style.display = "none";
@@ -3510,9 +3714,16 @@ async function generateImage() {
         };
       }
     };
+    if (useSpicy) showResult();
+    else {
+      statusTxt.textContent = provider === 'pollinations'
+        ? 'Pollinations 이미지 요청 · 파일 응답 대기 중…' : '이미지 불러오는 중…';
+      resultImage.onload = showResult;
+      resultImage.onerror = () => { statusTxt.textContent = '생성된 이미지 파일을 불러오지 못했습니다.'; };
+      resultImage.src = finalImageUrl;
+    }
 
   } catch (error) {
-    clearInterval(progressInterval);
     if (!manuallyStopped) console.error("이미지 생성 통신 에러:", error);
     const message = document.createElement('div');
     message.style.cssText = 'color: var(--status-error); padding: 20px;';
@@ -3535,7 +3746,7 @@ async function generateImage() {
 // 이미지 생성 버튼 이벤트 리스너 (CSP 준수: inline onclick 대신 JS에서 연결)
 const imageGenBtn = document.getElementById('image-generate-btn');
 if (imageGenBtn) {
-  imageGenBtn.addEventListener('click', generateImage);
+  imageGenBtn.addEventListener('click', () => generateImage());
 }
 
 /* ==========================================================================
@@ -3653,32 +3864,9 @@ async function generateVideo() {
   btn.innerHTML = '<span class="spinner"></span> AI 비디오 생성 중...';
   btn.disabled = true;
 
-  // 비디오 프로그레스 UI
-  placeholder.innerHTML = `
-    <div id="video-progress-container" style="width: 80%; text-align: center;">
-      <div id="video-progress-text" style="font-size: 0.85rem; margin-bottom: 12px; color: #818cf8;">🚀 비디오 생성 요청을 보냈습니다...</div>
-      <div style="height: 6px; background: rgba(255,255,255,0.1); border-radius: 10px; overflow: hidden;">
-        <div id="video-progress-bar" style="width: 5%; height: 100%; background: linear-gradient(90deg, #6366f1, #c084fc); transition: width 0.4s ease;"></div>
-      </div>
-      <div style="font-size: 0.7rem; margin-top: 12px; color: var(--fg-muted);">영상 렌더링을 시작했습니다 (보통 1~3분)</div>
-    </div>
-  `;
+  const statusTxt = showGenerationStatus(placeholder, taskId ? '기존 영상 작업 확인 중…' : '영상 생성 요청 · 접수 응답 대기 중…');
   videoElement.style.display = "none";
   placeholder.style.display = "block";
-
-  const bar = document.getElementById('video-progress-bar');
-  const statusTxt = document.getElementById('video-progress-text');
-  
-  let progress = 5;
-  const progressInterval = setInterval(() => {
-    if (progress < 95) {
-      progress += (95 - progress) * 0.03;
-      if (bar) bar.style.width = `${progress}%`;
-      if (progress > 30 && statusTxt) statusTxt.innerText = "🎬 비디오 프레임 렌더링 중...";
-      if (progress > 60 && statusTxt) statusTxt.innerText = "✨ 화질 개선 및 AI 업스케일링 중...";
-      if (progress > 85 && statusTxt) statusTxt.innerText = "📦 최종 영상 인코딩 중...";
-    }
-  }, 2000);
 
   try {
     if (!taskId) {
@@ -3692,20 +3880,16 @@ async function generateVideo() {
       if (!createRes.ok) throw new Error(created.error || '영상 작업 접수 여부를 확인할 수 없습니다.');
       taskId = created.taskId;
       localStorage.setItem(pendingKey, taskId);
+      statusTxt.textContent = '영상 작업 접수 · 상태 확인 중…';
     }
-    const videoUrl = await AP.pollTask(taskId, 10 * 60 * 1000);
+    const videoUrl = await AP.pollTask(taskId, 10 * 60 * 1000, text => { statusTxt.textContent = text; });
     localStorage.removeItem(pendingKey);
-    clearInterval(progressInterval);
-
-    if (bar) bar.style.width = '100%';
-    if (statusTxt) statusTxt.innerText = "✨ 생성 완료!";
 
     videoElement.src = videoUrl;
     videoElement.style.display = "block";
     placeholder.style.display = "none";
 
   } catch (error) {
-    clearInterval(progressInterval);
     console.error("Video Gen Error:", error);
     if (error.terminal) localStorage.removeItem(pendingKey);
     placeholder.textContent = `❌ ${error.message}${taskId && !error.terminal ? ' 생성 버튼을 다시 누르면 기존 작업을 조회합니다.' : ''}`;
@@ -3806,7 +3990,7 @@ const AP = {
   setStep(step, state) {
     const el = document.querySelector(`.ap-step[data-step="${step}"]`);
     if (!el) return;
-    el.classList.remove('running', 'done', 'failed', 'skipped');
+    el.classList.remove('running', 'done', 'failed', 'partial', 'skipped');
     if (state) el.classList.add(state);
     AP.updateProgress();
   },
@@ -3817,28 +4001,19 @@ const AP = {
     const bar = document.getElementById('ap-progress-bar');
     const txt = document.getElementById('ap-progress-text');
     if (!steps.length || !bar) return;
-    const finished = steps.filter(s => s.classList.contains('done') || s.classList.contains('skipped') || s.classList.contains('failed')).length;
+    const skipped = steps.filter(s => s.classList.contains('skipped')).length;
+    const failed = steps.filter(s => s.classList.contains('failed') || s.classList.contains('partial')).length;
+    const done = steps.filter(s => s.classList.contains('done')).length;
+    const total = steps.length - skipped;
     const running = steps.filter(s => s.classList.contains('running')).map(s => s.innerText.replace(/^[①-⑳]\s*/, '').replace(' ✓', ''));
-    const pct = Math.round((finished / steps.length) * 100);
+    const pct = total ? Math.round((done / total) * 100) : 0;
     bar.style.width = `${pct}%`;
     if (txt) {
       const sec = AP.startedAt ? Math.floor((Date.now() - AP.startedAt) / 1000) : 0;
       const t = `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
-      txt.innerText = `${pct}% · 경과 ${t}${running.length ? ` · 진행 중: ${running.join(', ')}` : ''}`;
+      const text = `${done}/${total}단계 완료${failed ? ` · 실패 또는 일부 완료 ${failed}단계` : ''} · 경과 ${t}${running.length ? ` · 진행 중 ${running.join(', ')}` : ''}`;
+      if (txt.innerText !== text) txt.innerText = text;
     }
-  },
-
-  // 장면 카드 상태에 경과 시간 표시
-  startSceneTimer(i, label) {
-    const t0 = Date.now();
-    const id = setInterval(() => {
-      const st = document.getElementById(`ap-state-${i}`);
-      if (!st || !st.dataset.timing) return clearInterval(id);
-      const s = Math.floor((Date.now() - t0) / 1000);
-      st.innerText = `${st.dataset.timing} ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
-    }, 1000);
-    const st = document.getElementById(`ap-state-${i}`);
-    if (st) { st.dataset.timing = label; st.innerText = label; }
   },
 
   async engineer(intent, systemPrompt) {
@@ -3936,10 +4111,7 @@ RULES:
     const media = document.getElementById(`ap-media-${i}`);
     const st = document.getElementById(`ap-state-${i}`);
     if (content !== null && media) media.replaceChildren(content);
-    if (state && st) {
-      if (/렌더링 중|재시도 중/.test(state)) { AP.startSceneTimer(i, state.replace(/\s*\(1~3분\)/, '')); }
-      else { delete st.dataset.timing; st.innerText = state; }
-    }
+    if (state && st && st.innerText !== state) st.innerText = state;
   },
 
   sceneMedia(tag, url) {
@@ -3950,37 +4122,46 @@ RULES:
     return element;
   },
 
-  async makeImage(prompt) {
+  async makeImage(prompt, onStatus) {
     for (let attempt = 0; attempt < 3; attempt++) {
-      const res = await apiFetch('/api/generate-image', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, aspect_ratio: '9:16' })
-      });
-      if (res.status === 429) { await AP.sleep(20000); continue; }
-      const data = await res.json();
+      const res = await requestStudioImage({ prompt, aspect_ratio: '9:16' }, onStatus);
+      if (res.status === 429) {
+        onStatus?.('이미지 호출 한도에 도달했습니다. 요청 대기 중…');
+        await AP.sleep(20000);
+        continue;
+      }
+      const data = res.data;
       if (!res.ok || !data.data?.url) throw new Error(data.error || '이미지 생성 실패');
-      recordGeneratedMedia('image', data.data.url, data.data.archiveToken);
       return data.data;
     }
     throw new Error('이미지 요청 한도 초과');
   },
 
-  async pollTask(taskId, timeoutMs) {
+  async pollTask(taskId, timeoutMs, onStatus) {
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
-      await AP.sleep(6000);
-      const stRes = await fetch(`/api/task/status?taskId=${encodeURIComponent(taskId)}`);
-      if (stRes.status === 429) continue;
-      const st = await stRes.json();
-      if (!stRes.ok) throw new Error(st.error || '영상 상태를 조회할 수 없습니다.');
+      await waitForTaskLookup(6000);
+      let st;
+      try {
+        const stRes = await fetch(`/api/task/status?taskId=${encodeURIComponent(taskId)}`, { signal: AbortSignal.timeout(15000) });
+        st = await stRes.json().catch(error => {
+          if (stRes.ok) throw error;
+          return {};
+        });
+        if (!stRes.ok) throw Object.assign(new Error(st.error || '영상 상태를 조회할 수 없습니다.'), { status: stRes.status });
+      } catch (error) {
+        if (!canRetryTaskLookup(error)) throw error;
+        onStatus?.('영상 상태를 다시 확인하는 중…');
+        continue;
+      }
       if (st.state === 'success' && st.url) {
         recordGeneratedMedia('video', st.url, st.archiveToken);
         return st.url;
       }
       if (st.state === 'fail') throw Object.assign(new Error(st.failMsg || '작업 실패'), { terminal: true });
+      onStatus?.(kieGenerationStatus(st.state, '영상'));
     }
-    throw new Error('시간 초과');
+    throw new Error('아직 영상 결과를 확인하지 못했습니다.');
   },
 
   showVideoResume(scene, taskId, message) {
@@ -3992,7 +4173,7 @@ RULES:
       button.disabled = true;
       AP.setScene(scene, null, '기존 영상 작업 조회 중');
       try {
-        const url = await AP.pollTask(taskId, 6 * 60 * 1000);
+        const url = await AP.pollTask(taskId, 6 * 60 * 1000, text => AP.setScene(scene, null, text));
         AP.setScene(scene, AP.sceneMedia('video', url), '영상 완료');
       } catch (error) {
         AP.setScene(scene, error.terminal ? '영상 생성 실패' : null, error.message);
@@ -4004,19 +4185,19 @@ RULES:
   },
 
   // 🎙 Supertonic 3 (브라우저 실행, 무료). 모델은 첫 사용 때 한 번 받고 캐시
-  async makeVoice(text, voice) {
+  async makeVoice(text, voice, onSynthesis) {
     if (!globalThis.SupertonicTTS) {
       await new Promise((res, rej) => {
         const t = setTimeout(() => rej(new Error('음성 엔진 스크립트를 불러오지 못했습니다.')), 15000);
         window.addEventListener('supertonic-ready', () => { clearTimeout(t); res(); }, { once: true });
       });
     }
-    const { url } = await globalThis.SupertonicTTS.speak(text, { voice, speed: 1.15 });
+    const { url } = await globalThis.SupertonicTTS.speak(text, { voice, speed: 1.15, onSynthesis });
     return url;
   },
 
   // 실패 시 자동 재시도: 이미지→영상 → 텍스트→영상 (시도당 최대 6분)
-  async makeVideo(motionPrompt, imageUrl, onRetry, fallbackPrompt) {
+  async makeVideo(motionPrompt, imageUrl, onStatus, fallbackPrompt) {
     // Grok Imagine 480p(최저가): 이미지→영상 실패 시 텍스트→영상
     const attempts = [
       { resolution: '480p', image: imageUrl, prompt: motionPrompt },
@@ -4025,7 +4206,7 @@ RULES:
     let lastErr = null;
     for (let a = 0; a < attempts.length; a++) {
       const at = attempts[a];
-      if (a > 0 && onRetry) onRetry(a, lastErr);
+      onStatus?.(a > 0 ? '텍스트로 영상 다시 요청 중…' : '영상 생성 요청 · 접수 응답 대기 중…');
       let taskId;
       try {
         const res = await apiFetch('/api/video/create', {
@@ -4036,7 +4217,8 @@ RULES:
         const created = await res.json();
         if (!res.ok) throw new Error(created.error || '영상 작업 생성 실패');
         taskId = created.taskId;
-        return await AP.pollTask(taskId, 6 * 60 * 1000);
+        onStatus?.('영상 작업 접수 · 상태 확인 중…');
+        return await AP.pollTask(taskId, 6 * 60 * 1000, onStatus);
       } catch (e) {
         lastErr = e;
         addLog(`!! 영상 시도 ${a + 1} 실패 (${at.image ? '이미지→영상' : '텍스트→영상'} ${at.resolution}): ${e.message}`, 'error');
@@ -4280,6 +4462,11 @@ RULES:
     const pw = document.getElementById('ap-progress'); if (pw) pw.style.display = 'block';
     clearInterval(AP._tick); AP._tick = setInterval(() => AP.updateProgress(), 1000);
     ['concept', 'storyboard', 'shotlist', 'scenes', 'images', 'voice', 'videos', 'merge', 'release'].forEach(k => AP.setStep(k, null));
+    if (voiceOpt === 'none') AP.setStep('voice', 'skipped');
+    if (!makeVideo) {
+      AP.setStep('videos', 'skipped');
+      AP.setStep('merge', 'skipped');
+    }
     const dl = document.getElementById('ap-download'); if (dl) dl.style.display = 'none';
     document.getElementById('ap-final').style.display = 'none';
     document.getElementById('ap-scene-grid').innerHTML = '';
@@ -4332,8 +4519,11 @@ RULES:
             try {
               if (!sc.narration) { rs.push({ status: 'fulfilled', value: null }); continue; }
               const slot = document.getElementById(`ap-voice-${i}`);
-              if (slot) slot.innerText = '🎙 음성 생성 중...';
-              const url = await AP.makeVoice(sc.narration, voiceOpt);
+              if (slot) slot.innerText = '🎙 음성 합성 대기 중…';
+              const url = await AP.makeVoice(sc.narration, voiceOpt, () => {
+                if (slot) slot.innerText = '🎙 음성 합성 중…';
+                if (vStatus) vStatus.innerText = '🎙 내레이션 합성 중…';
+              });
               if (slot) {
                 const audio = new Audio(url);
                 audio.controls = true;
@@ -4348,16 +4538,16 @@ RULES:
             }
           }
           if (unsub) unsub();
-          if (vStatus) vStatus.innerText = '🎙 내레이션 완료 · AI 음성';
           return rs;
         })().then(rs => {
           const urls = rs.map(r => (r.status === 'fulfilled' ? r.value : null));
+          const failed = rs.filter(r => r.status === 'rejected').length;
           rs.forEach((r, i) => { if (r.status === 'rejected') addLog(`!! 내레이션 ${i + 1} 실패: ${r.reason.message}`, 'error'); });
-          AP.setStep('voice', urls.some(Boolean) ? 'done' : 'failed');
+          AP.setStep('voice', urls.some(Boolean) ? (failed ? 'partial' : 'done') : (failed ? 'failed' : 'skipped'));
+          if (vStatus) vStatus.innerText = failed ? `🎙 내레이션 ${failed}개 실패` :
+            (urls.some(Boolean) ? '🎙 내레이션 완료 · AI 음성' : '🎙 내레이션 없음');
           return urls;
         });
-      } else {
-        AP.setStep('voice', 'skipped');
       }
 
       // ⑧ BGM·SEO는 텍스트라 이미지/영상과 병렬 진행
@@ -4378,10 +4568,20 @@ RULES:
         }
         const spinner = document.createElement('span');
         spinner.className = 'spinner';
-        AP.setScene(i, spinner, '이미지 생성 중');
-        const img = await AP.makeImage(`${scenes[i].image_prompt} Clean photographic frame with no text, letters, logos or graphic overlays.`);
+        AP.setScene(i, spinner, '이미지 생성 요청 · 서버 응답 대기 중…');
+        const img = await AP.makeImage(`${scenes[i].image_prompt} Clean photographic frame with no text, letters, logos or graphic overlays.`,
+          text => AP.setScene(i, null, text));
+        const sceneImage = AP.sceneMedia('img', img.url);
+        AP.setScene(i, null, img.provider === 'pollinations' ? 'Pollinations 이미지 요청 · 파일 응답 대기 중…' : '이미지 불러오는 중…');
+        try {
+          await sceneImage.decode();
+        } catch {
+          AP.setScene(i, '이미지 파일을 불러오지 못했습니다.', '이미지 불러오기 실패');
+          throw new Error(`장면 ${i + 1} 이미지 파일을 불러오지 못했습니다.`);
+        }
+        recordGeneratedMedia('image', img.url, img.archiveToken);
         images.push(img.url);
-        AP.setScene(i, AP.sceneMedia('img', img.url), '이미지 완료');
+        AP.setScene(i, sceneImage, '이미지 완료');
       }
       AP.setStep('images', 'done');
 
@@ -4402,12 +4602,10 @@ RULES:
                 if (!prevUrl) throw new Error('앞 장면 영상이 없어 이어 붙일 수 없습니다.');
                 AP.setScene(i, null, '앞 영상의 마지막 장면 캡처 중');
                 startImage = await AP.lastFrame(prevUrl);
-                AP.setScene(i, AP.sceneMedia('img', startImage), '영상 렌더링 중 (1~3분)');
-              } else {
-                AP.setScene(i, null, '영상 렌더링 중 (1~3분)');
+                AP.setScene(i, AP.sceneMedia('img', startImage), '시작 이미지 준비 완료');
               }
               const url = await AP.makeVideo(sc.motion_prompt || sc.image_prompt, startImage,
-                (n) => AP.setScene(i, null, `영상 재시도 중 (텍스트→영상)...`), sc.image_prompt);
+                text => AP.setScene(i, null, text), sc.image_prompt);
               AP.setScene(i, AP.sceneMedia('video', url), '영상 완료');
               prevUrl = url;
               results.push({ status: 'fulfilled', value: url });
@@ -4419,9 +4617,8 @@ RULES:
         } else {
           results = await Promise.allSettled(scenes.map(async (sc, i) => {
             await AP.sleep(i * 1500); // 동시 생성 요청 분산
-            AP.setScene(i, null, '영상 렌더링 중 (1~3분)');
             const url = await AP.makeVideo(sc.motion_prompt || sc.image_prompt, images[i],
-              (n) => AP.setScene(i, null, `영상 재시도 중 (텍스트→영상)...`), sc.image_prompt);
+              text => AP.setScene(i, null, text), sc.image_prompt);
             AP.setScene(i, AP.sceneMedia('video', url), '영상 완료');
             return url;
           }));
@@ -4432,7 +4629,7 @@ RULES:
           else AP.setScene(i, null, `영상 실패: ${r.reason.message}`);
         });
         clips = results.filter(r => r.status === 'fulfilled').map(r => r.value);
-        AP.setStep('videos', clips.length === scenes.length ? 'done' : (clips.length ? 'done' : 'failed'));
+        AP.setStep('videos', clips.length === scenes.length ? 'done' : (clips.length ? 'partial' : 'failed'));
         const voiceUrls = await voicePromise;
         const okIdx = results.map((r, i) => (r.status === 'fulfilled' ? i : -1)).filter(i => i >= 0);
         const clipVoices = okIdx.map(i => voiceUrls[i] || null);
@@ -4457,10 +4654,7 @@ RULES:
             AP.setStep('merge', 'failed');
             AP.playSequence(clips, clipVoices);
           }
-        }
-      } else {
-        AP.setStep('videos', 'skipped');
-        AP.setStep('merge', 'skipped');
+        } else AP.setStep('merge', 'skipped');
       }
 
       await voicePromise;
@@ -4473,8 +4667,10 @@ RULES:
           seoOut.innerText = seoOut.dataset.rawResult;
         }
       }
-      updateStatusUI('vps', 'idle', '원클릭 파이프라인 완료');
-      addLog(`✓ 원클릭 파이프라인 완료 — 장면 ${scenes.length}개, 영상 ${clips.length}개`, 'success');
+      const hasIssues = Boolean(document.querySelector('.ap-step.failed, .ap-step.partial'));
+      const outcome = hasIssues ? '원클릭 파이프라인 일부 완료' : '원클릭 파이프라인 완료';
+      updateStatusUI('vps', hasIssues ? 'error' : 'idle', outcome);
+      addLog(`${outcome} · 장면 ${scenes.length}개, 영상 ${clips.length}개`, hasIssues ? 'error' : 'success');
     } catch (err) {
       AP.setStep(current, 'failed');
       updateStatusUI('vps', 'error', `파이프라인 오류: ${err.message}`);
@@ -4561,22 +4757,31 @@ if (UI.engineerBtn) UI.engineerBtn.addEventListener('click', renderLabParamSumma
     if (!text) { setStatus('읽을 문장을 입력해 주세요.', '#f59e0b'); input.focus(); return; }
     const label = btn.textContent;
     btn.disabled = true; btn.textContent = '음성 생성 중…';
-    prog.style.display = 'block'; bar.style.width = '5%';
+    prog.style.display = 'none'; bar.style.width = '0%';
     setStatus('음성 엔진 준비 중…');
     let unsub = null;
     const t0 = performance.now();
     try {
       await ready();
-      unsub = globalThis.SupertonicTTS.onProgress((m, pct) => { setStatus(`🎙 ${m}`); if (typeof pct === 'number') bar.style.width = `${Math.max(5, Math.min(100, pct <= 1 ? pct * 100 : pct))}%`; });
+      unsub = globalThis.SupertonicTTS.onProgress((m, pct) => {
+        setStatus(`🎙 ${m}`);
+        if (typeof pct === 'number') {
+          prog.style.display = 'block';
+          bar.style.width = `${Math.max(0, Math.min(100, pct * 100))}%`;
+        }
+      });
       const { url, duration } = await globalThis.SupertonicTTS.speak(text, {
         voice: $('vps-tts-voice').value, lang: $('vps-tts-lang').value,
-        speed: Number(speed.value), steps: Number($('vps-tts-steps').value)
+        speed: Number(speed.value), steps: Number($('vps-tts-steps').value),
+        onSynthesis() {
+          prog.style.display = 'none';
+          setStatus('음성 합성 중…');
+        }
       });
       if (lastUrl) URL.revokeObjectURL(lastUrl);
       lastUrl = url;
       audio.src = url; audio.style.display = 'block';
       dl.href = url; dl.download = `ai-voice-${$('vps-tts-voice').value}-${Date.now()}.wav`; dl.style.display = 'inline-flex';
-      bar.style.width = '100%';
       const backend = globalThis.SupertonicTTS.backend && globalThis.SupertonicTTS.backend();
       meta.textContent = `길이 ${duration.toFixed(1)}초 · 생성 ${((performance.now() - t0) / 1000).toFixed(1)}초 · 실행 ${backend === 'webgpu' ? 'WebGPU' : 'WebAssembly(CPU)'} · 모델 ${(globalThis.SupertonicTTS.source && globalThis.SupertonicTTS.source()) || '브라우저 캐시'}`;
       setStatus('✓ 완료 — 재생하거나 WAV로 내려받으세요.', '#10b981');
@@ -4587,7 +4792,8 @@ if (UI.engineerBtn) UI.engineerBtn.addEventListener('click', renderLabParamSumma
     } finally {
       if (unsub) unsub();
       btn.disabled = false; btn.textContent = label;
-      setTimeout(() => { prog.style.display = 'none'; bar.style.width = '0%'; }, 800);
+      prog.style.display = 'none';
+      bar.style.width = '0%';
     }
   });
 })();

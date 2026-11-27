@@ -111,10 +111,11 @@ function trimSilence(wav, sr, threshold = 0.01, padSec = 0.05) {
 
 let queue = Promise.resolve(); // 같은 모델 세션을 동시에 돌리지 않도록 순차 처리
 
-async function speak(text, { voice = 'F1', speed = 1.15, steps = 8, lang = 'ko' } = {}) {
+async function speak(text, { voice = 'F1', speed = 1.15, steps = 8, lang = 'ko', onSynthesis } = {}) {
   const job = queue.then(async () => {
     const tts = await load();
     const style = await getStyle(voice);
+    onSynthesis?.();
     const { wav } = await tts.call(String(text).trim(), lang, style, steps, speed, 0.1);
     const trimmed = trimSilence(Float32Array.from(wav), tts.sampleRate);
     const blob = new Blob([writeWavFile(trimmed, tts.sampleRate)], { type: 'audio/wav' });

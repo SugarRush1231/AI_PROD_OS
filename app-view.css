@@ -1,0 +1,156 @@
+.app-view {
+  --app-nav-height: 64px;
+  --app-bottom: calc(var(--app-nav-height) + env(safe-area-inset-bottom, 0px));
+  min-height: 100dvh;
+}
+
+.app-view :where(.mesh-bg, .nav-center, footer) { display: none; }
+.app-view #server-status { display: none !important; }
+.app-view > nav:first-of-type {
+  height: auto;
+  min-height: calc(56px + env(safe-area-inset-top, 0px));
+  padding-top: env(safe-area-inset-top, 0px);
+}
+.app-view .nav-inner, .app-view main {
+  max-width: 640px;
+  padding-inline: max(14px, env(safe-area-inset-left, 0px)) max(14px, env(safe-area-inset-right, 0px));
+}
+.app-view .nav-right { gap: 8px !important; }
+.app-view .theme-control-box { border: 0 !important; padding: 0 !important; margin: 0 !important; }
+.app-view #user-name-display { max-width: 92px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.app-view #login-btn, .app-view #logout-btn { min-height: 44px; touch-action: manipulation; }
+.app-view main { padding-block: 16px calc(var(--app-bottom) + 24px); }
+.app-view:not(.app-ready) main > :not(#image-studio), .app-view.app-ready main > :not(.app-current) { display: none; }
+.app-view main > .app-current, .app-view #image-studio { margin-block: 0 !important; padding-block: 0; }
+.app-view .section-header { flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.app-view .section-header h2 { font-size: 1.26rem; }
+.app-view .section-header .status-indicator { font-size: .67rem; }
+
+.app-view #prompt-lab .lab-grid {
+  grid-template-columns: minmax(0, 1fr) !important;
+  gap: 16px;
+  padding: 14px;
+}
+.app-view #prompt-lab .lab-grid > * { grid-column: 1; min-width: 0; }
+.app-view #prompt-lab .lab-header-area { margin: 0; padding-bottom: 12px; }
+.app-view #prompt-lab .lab-header-top, .app-view #prompt-lab .preset-group { flex-wrap: wrap; }
+.app-view #prompt-lab .lab-right { display: flex; flex-direction: column; gap: 12px; }
+.app-view #prompt-lab .params-grid { grid-template-columns: minmax(0, 1fr) !important; gap: 12px; }
+.app-view .param-group > label { min-height: 0; }
+.app-view #prompt-lab #lab-actions { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+.app-view #prompt-lab #lab-actions > button { min-width: 0; min-height: 48px; padding: 8px 10px; white-space: normal; }
+.app-view #prompt-lab .lab-panel-toggle { min-height: 40px; flex-wrap: wrap; }
+.app-view #prompt-lab .layer { padding-inline: 10px; gap: 8px; }
+.app-view #prompt-lab .layer-name { min-width: 0; word-break: keep-all; }
+.app-view #prompt-lab .layer-status { flex-shrink: 0; }
+.app-view #prompt-lab .lab-output .visualizer-output { padding: 12px; margin: 0; }
+.app-view #prompt-lab .output-header .label-mono { white-space: normal; overflow-wrap: anywhere; }
+.app-view #prompt-lab .output-toolbar > * { width: 100% !important; min-width: 0; }
+.app-view #prompt-lab #send-to-studio-btn { min-height: 44px; white-space: normal; }
+.app-view #prompt-lab #optimized-output { padding: 12px !important; overflow-wrap: anywhere; }
+
+.app-view #image-studio > .lab-card, .app-view #video-studio > .lab-card {
+  grid-template-columns: minmax(0, 1fr) !important;
+  gap: 18px !important;
+  margin-top: 0 !important;
+  padding: 14px !important;
+  border-radius: 16px !important;
+}
+.app-view .studio-controls, .app-view .video-controls { min-width: 0; }
+.app-view #image-studio .image-model-toolbar { margin-bottom: 12px; }
+.app-view #image-studio .image-reference-panel { margin-bottom: 4px; }
+.app-view #image-studio .image-upload-control { min-height: 48px; }
+.app-view #image-studio .image-model-field { flex-basis: 150px; }
+.app-view #video-studio .video-frame-settings { margin-top: 0 !important; }
+.app-view #video-studio .studio-action-bar { gap: 8px !important; }
+.app-view #video-studio .studio-action-bar > * { min-width: 0; }
+.app-view :where(textarea, select, input:not([type]), input[type="text"], [contenteditable="true"]) { font-size: 16px !important; }
+.app-view select { min-height: 44px; }
+.app-view :where(#imagePromptInput, #videoPromptInput, .reference-editor) { min-height: 116px; }
+.app-view :where(#imagePromptInput, #videoPromptInput) { height: 136px !important; }
+.app-view :where(#image-result-box, #video-result-box) { min-height: clamp(224px, 36svh, 364px) !important; margin-top: 8px !important; }
+.app-view .app-production-actions {
+  position: sticky;
+  bottom: var(--app-bottom);
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 8px 0;
+  background: var(--panel);
+}
+.app-view .app-production-actions > button {
+  margin: 0 !important;
+  min-height: 48px;
+  touch-action: manipulation;
+}
+.app-view .app-production-actions > button:first-child { flex: 1; min-width: 0; }
+.app-view #image-stop-btn:not([hidden]) { width: auto; flex: 0 1 auto; }
+
+.app-view #video-production-suite .video-suite-grid {
+  grid-template-columns: minmax(0, 1fr) !important;
+  gap: 14px !important;
+  margin-top: 14px !important;
+}
+.app-view #video-production-suite .video-suite-grid > * { min-width: 0; }
+.app-view #video-production-suite .output-header { padding-inline: 12px !important; }
+.app-view #video-production-suite :where(.output-header .label-mono, .vps-export-bar .label-mono) { white-space: normal; overflow-wrap: anywhere; }
+.app-view .input-source-toggle, .app-view .vps-export-actions { flex-wrap: wrap; }
+.app-view .input-source-toggle .chip { flex: 1 1 115px; min-width: 0; min-height: 44px; white-space: normal; }
+.app-view .vps-export-actions { width: 100%; gap: 8px !important; }
+.app-view .vps-export-actions > button { flex: 1 1 120px; min-width: 0; padding-inline: 10px !important; }
+.app-view #autopilot-card { padding: 14px !important; margin-top: 0 !important; }
+.app-view .ap-settings { display: grid !important; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px !important; }
+.app-view .ap-settings > .param-group { min-width: 0 !important; }
+.app-view .ap-settings :where(.ap-wide-field, #ap-run-btn) { grid-column: 1 / -1; }
+.app-view #ap-run-btn { min-width: 0 !important; min-height: 48px; }
+.app-view #ap-voice { min-width: 0; flex: 1; }
+.app-view #ap-voice-preview { min-width: 44px !important; min-height: 44px; }
+.app-view #ap-scenes, .app-view #ap-platform { min-width: 0; }
+.app-view #ap-steps { grid-template-columns: repeat(auto-fit, minmax(min(100%, 138px), 1fr)) !important; }
+.app-view #ap-scene-grid { grid-template-columns: repeat(auto-fill, minmax(min(100%, 160px), 1fr)) !important; }
+.app-view #video-production-suite :where(audio, video) { max-width: 100%; }
+
+.app-view .app-navigation {
+  position: fixed;
+  inset: auto 0 0;
+  top: auto;
+  height: var(--app-bottom);
+  padding: 4px max(8px, env(safe-area-inset-right, 0px)) env(safe-area-inset-bottom, 0px) max(8px, env(safe-area-inset-left, 0px));
+  border: 0;
+  border-top: 1px solid var(--border);
+  justify-content: center;
+  opacity: 1;
+  background: var(--bg);
+}
+.app-view .app-navigation a {
+  width: min(25%, 156px);
+  min-height: 48px;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 5px;
+  border-radius: 12px;
+  color: var(--fg-muted);
+  text-decoration: none;
+  font-size: .74rem;
+  font-weight: 650;
+  touch-action: manipulation;
+}
+.app-view .app-navigation a[aria-current="page"] {
+  color: var(--skills-purple);
+  background: color-mix(in srgb, var(--skills-purple) 12%, transparent);
+  font-weight: 750;
+}
+.app-view .app-navigation a:focus-visible { outline: 2px solid var(--skills-purple); outline-offset: -2px; }
+.app-nav-symbol { position: relative; width: 20px; height: 16px; border: 1.6px solid currentColor; border-radius: 4px; }
+.app-nav-prompt::before, .app-nav-production::before { content: ''; position: absolute; inset: 4px 4px auto; height: 1.5px; background: currentColor; box-shadow: 0 4px currentColor; }
+.app-nav-production { width: 15px; height: 18px; }
+.app-nav-image::before { content: ''; position: absolute; width: 4px; height: 4px; top: 2px; right: 3px; border-radius: 50%; background: currentColor; }
+.app-nav-image::after { content: ''; position: absolute; width: 7px; height: 7px; border: solid currentColor; border-width: 1.6px 1.6px 0 0; transform: rotate(-45deg); bottom: 0; left: 4px; }
+.app-nav-video::before { content: ''; position: absolute; top: 3px; left: 6px; border-block: 4px solid transparent; border-left: 6px solid currentColor; }
+
+@media (max-height: 430px) {
+  .app-view .app-production-actions { position: static; }
+}

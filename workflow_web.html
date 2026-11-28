@@ -67,8 +67,7 @@
         <!-- Auth (Far-Right) -->
         <div id="user-auth-area">
           <button id="login-btn" class="btn-skills"
-            style="display: none; padding: 6px 14px; font-size: 0.75rem; font-weight: 700;"
-            onclick="location.href='/auth/google'">로그인</button>
+            style="display: none; padding: 6px 14px; font-size: 0.75rem; font-weight: 700;">로그인</button>
           <div id="user-profile" style="display: none; align-items: center; gap: 10px;">
             <div style="text-align: right; line-height: 1.1;">
               <div id="user-name-display" class="label-mono"
@@ -1050,7 +1049,7 @@
         <textarea id="ap-goal" class="lab-input-small" rows="3"
           style="width: 100%; margin-top: 12px; resize: vertical;"
           placeholder="예) 직장인 대상 '퇴근 후 10분 홈카페' 릴스. 따뜻하고 감성적인 톤, 마지막에 저장 유도"></textarea>
-        <div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin-top: 12px;">
+        <div class="ap-settings" style="display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin-top: 12px;">
           <div class="param-group" style="min-width: 140px;">
             <label style="display:block; font-size: 0.75rem; color: var(--fg-muted); margin-bottom: 6px;">플랫폼</label>
             <select id="ap-platform" class="lab-select">
@@ -1068,7 +1067,7 @@
               <option value="4">4</option>
             </select>
           </div>
-          <div class="param-group" style="min-width: 130px;">
+          <div class="param-group ap-wide-field" style="min-width: 130px;">
             <label style="display:block; font-size: 0.75rem; color: var(--fg-muted); margin-bottom: 6px;">내레이션</label>
             <div style="display: flex; gap: 6px; align-items: center;">
               <select id="ap-voice" class="lab-select">
@@ -1092,7 +1091,7 @@
                 style="height: 36px; min-width: 40px; padding: 0 10px;">▶</button>
             </div>
           </div>
-          <div class="param-group" style="min-width: 150px;">
+          <div class="param-group ap-wide-field" style="min-width: 150px;">
             <label style="display:block; font-size: 0.75rem; color: var(--fg-muted); margin-bottom: 6px;">영상 연결</label>
             <select id="ap-link" class="lab-select">
               <option value="cut" selected>컷 전환 (장면별)</option>
@@ -1531,7 +1530,7 @@
         <div class="label-mono" style="margin: 0;">EXPORT FULL MASTERPLAN (통합 기획서 내보내기)</div>
         <p style="font-size: 0.8rem; color: var(--fg-dim); margin: 0; text-align: center;">지금까지 생성된 6개의결과(컨셉, 스토리보드,
           숏리스트, BGM, 자막, SEO)를<br>하나의 문서로 합쳐서 다운로드합니다.</p>
-        <div style="display: flex; gap: 16px;">
+        <div class="vps-export-actions" style="display: flex; gap: 16px;">
           <button class="btn-skills secondary" id="btn-export-txt" style="padding: 12px 24px; font-weight: 700;">
             📝 텍스트(.txt) 저장
           </button>
@@ -1590,6 +1589,13 @@
       </div>
     </section>
   </main>
+
+  <nav class="app-navigation" aria-label="제작 메뉴" hidden>
+    <a href="#prompt-lab"><span class="app-nav-symbol app-nav-prompt" aria-hidden="true"></span>프롬프트</a>
+    <a href="#image-studio"><span class="app-nav-symbol app-nav-image" aria-hidden="true"></span>이미지</a>
+    <a href="#video-studio"><span class="app-nav-symbol app-nav-video" aria-hidden="true"></span>영상</a>
+    <a href="#video-production-suite"><span class="app-nav-symbol app-nav-production" aria-hidden="true"></span>기획</a>
+  </nav>
 
   <footer>
     <div class="container footer-inner">

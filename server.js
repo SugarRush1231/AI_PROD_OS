@@ -123,12 +123,16 @@ morgan.token('url', req => req.originalUrl.split('?')[0]);
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 
 // --- [AUTH ROUTES] ---
-app.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
+app.get('/auth/google', (req, res, next) => {
+    req.session.appLogin = req.query.view === 'app';
+    passport.authenticate('google', { scope: ['profile', 'email'] })(req, res, next);
+});
 
-app.get('/auth/google/callback',
-    passport.authenticate('google', { failureRedirect: '/' }),
-    (req, res) => res.redirect('/')
-);
+app.get('/auth/google/callback', (req, res, next) => {
+    const entry = req.session.appLogin ? '/app' : '/';
+    delete req.session.appLogin;
+    passport.authenticate('google', { successRedirect: entry, failureRedirect: entry })(req, res, next);
+});
 
 app.post('/logout', ensureAuthenticated, requireCsrf, (req, res, next) => {
     req.logout((err) => {
@@ -241,6 +245,23 @@ app.get(['/', '/index.html', '/workflow_web.html'], (req, res) => {
     res.set('Cache-Control', 'no-store, max-age=0');
     res.type('html').send(renderMainHtml());
 });
+app.get('/app', (req, res) => {
+    if (req.path !== '/app') return res.redirect(308, '/app');
+    const appHtml = renderMainHtml()
+        .replace('initial-scale=1.0', 'initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content')
+        .replace('<title>Skill Studio — AI Pipeline Orchestration</title>', '<title>AI_PROD_OS</title>')
+        .replace('</head>', `  <meta name="theme-color" content="#101528">\n  <link rel="manifest" href="/app.webmanifest">\n  <link rel="stylesheet" href="/app-view.css?v=${ASSET_VERSION}">\n</head>`)
+        .replace('<body class="dark">', '<body class="dark app-view">')
+        .replace('</body>', `  <script src="/app-view.js?v=${ASSET_VERSION}"></script>\n</body>`);
+    res.set('Cache-Control', 'no-store, max-age=0');
+    res.type('html').send(appHtml);
+});
+app.get('/app.webmanifest', (req, res) => {
+    res.type('application/manifest+json').sendFile(path.join(__dirname, 'app.webmanifest'));
+});
+app.get('/.well-known/assetlinks.json', (req, res) => {
+    res.type('application/json').sendFile(path.join(__dirname, 'android', 'assetlinks.json'), { maxAge: 300000 });
+});
 
 const staticOptions = {
     index: false,
@@ -254,7 +275,7 @@ const staticOptions = {
 for (const dir of ['assets', 'ico', 'img', 'supertonic']) {
     app.use(`/${dir}`, express.static(path.join(__dirname, dir), staticOptions));
 }
-app.get(['/script.js', '/prompt-rules.js', '/prompt-catalog.js', '/lighting-lab.js', '/style.css'], (req, res, next) => {
+app.get(['/script.js', '/prompt-rules.js', '/prompt-catalog.js', '/lighting-lab.js', '/style.css', '/app-view.js', '/app-view.css'], (req, res, next) => {
     res.set('Cache-Control', 'no-cache');
     res.sendFile(path.join(__dirname, path.basename(req.path)), { etag: false, lastModified: false }, error => {
         if (error) next(error);

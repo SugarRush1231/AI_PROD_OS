@@ -92,6 +92,17 @@ MEDIA_S3_SECRET_ACCESS_KEY=<R2_SECRET_ACCESS_KEY>
 
 Seedream은 진행 중 요청을 PostgreSQL에 저장합니다. 접수된 작업은 화면으로 돌아오면 기존 작업 ID로 결과 조회를 이어갑니다. 접수 여부가 불명확하거나 직접 조회를 중단한 요청은 생성 버튼으로 확인할 수 있습니다. 접수 여부가 불명확한 상태로 20시간이 지나면 SpicyAPI 콘솔에서 확인해야 합니다.
 
+### Android 앱 미리보기
+
+- 로컬 서버의 `/app`에서 앱 전용 제작 화면을 열 수 있습니다. APK는 `https://ai-prod.live/app`을 열며, 로그인과 생성·보관 API는 웹과 공유합니다.
+- 재빌드에는 JDK 17과 Android SDK 36이 필요합니다. PowerShell에서 `./android/gradlew.bat -p android assembleDebug`를 실행하면 `android/build/outputs/apk/debug/`에 미리보기 APK가 생성됩니다.
+- 미리보기 서명 키는 `android/.signing/preview.keystore`에 로컬 보관합니다. 새 작업 복사본에서만 아래 명령으로 키를 만들고, 실제 APK의 공개 SHA-256 인증서 지문을 `android/assetlinks.json`과 맞추세요. 서버는 이 파일을 `/.well-known/assetlinks.json`에서 제공합니다.
+
+```powershell
+New-Item -ItemType Directory -Path android/.signing -Force | Out-Null
+keytool -genkeypair -storetype JKS -keystore android/.signing/preview.keystore -storepass android -keypass android -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 3650 -dname 'CN=AI_PROD_OS Preview'
+```
+
 ## 로컬 실행
 
 ```bash

@@ -1,0 +1,41 @@
+plugins {
+    id 'com.android.application' version '8.10.1'
+}
+
+def iconResources = layout.buildDirectory.dir('generated/launcher-icon')
+def prepareLauncherIcon = tasks.register('prepareLauncherIcon', Copy) {
+    from('../ico/AI_productivity.png')
+    into(iconResources.map { it.dir('drawable-nodpi') })
+    rename { 'app_icon.png' }
+}
+
+android {
+    namespace 'live.aiprod.studio'
+    compileSdk 36
+
+    defaultConfig {
+        applicationId 'live.aiprod.studio'
+        minSdk 24
+        targetSdk 35
+        versionCode 1
+        versionName '1.0-preview'
+    }
+
+    signingConfigs {
+        debug {
+            // This local key is for the installable preview APK.
+            storeFile file('.signing/preview.keystore')
+            storePassword 'android'
+            keyAlias 'androiddebugkey'
+            keyPassword 'android'
+        }
+    }
+
+    sourceSets.main.res.srcDir(iconResources)
+}
+
+tasks.named('preBuild').configure { dependsOn prepareLauncherIcon }
+
+dependencies {
+    implementation 'com.google.androidbrowserhelper:androidbrowserhelper:2.8.0'
+}

@@ -1,0 +1,14 @@
+{
+  "id": "/app",
+  "name": "AI_PROD_OS",
+  "short_name": "AI_PROD_OS",
+  "lang": "ko",
+  "start_url": "/app",
+  "scope": "/",
+  "display": "standalone",
+  "theme_color": "#101528",
+  "background_color": "#101528",
+  "icons": [
+    { "src": "/ico/AI_productivity.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}

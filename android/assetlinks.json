@@ -1,0 +1,14 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "live.aiprod.studio",
+      "sha256_cert_fingerprints": [
+        "F1:DF:5B:89:FF:93:97:A5:31:B1:11:1E:20:50:DD:12:28:9F:FD:B8:72:24:A9:36:71:C7:F3:E8:EE:F7:81:E0"
+      ]
+    }
+  }
+]

@@ -1,6 +1,18 @@
 const promptCatalog = globalThis.PromptCatalog;
 const promptRules = globalThis.PromptRules;
 promptCatalog.mount(document, promptRules.opticsFields);
+const isAppView = document.body.classList.contains('app-view');
+const googleSignInUrl = isAppView ? '/auth/google?view=app' : '/auth/google';
+
+function focusStudio(id) {
+  if (isAppView && location.hash !== `#${id}`) {
+    location.hash = id;
+    return;
+  }
+  document.getElementById(id)?.scrollIntoView({
+    behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start'
+  });
+}
 
 let csrfHeaderToken;
 let currentAccountId;
@@ -611,7 +623,7 @@ const MyPresets = {
         'info'
       );
       if (confirmLogin) {
-        window.location.href = '/auth/google';
+        window.location.href = googleSignInUrl;
       }
       return;
     }
@@ -2365,7 +2377,7 @@ if (UI.btnSourceText && UI.btnSourceAudio) {
         'info'
       );
       if (confirmLogin) {
-        window.location.href = '/auth/google';
+        window.location.href = googleSignInUrl;
       }
       return;
     }
@@ -2494,7 +2506,7 @@ async function checkAuthStatus() {
   if (loginBtn) {
     loginBtn.onclick = () => {
       addLog('>> [AUTH] Redirecting to Google Login...', 'primary');
-      window.location.href = '/auth/google';
+      window.location.href = googleSignInUrl;
     };
   }
 
@@ -2605,7 +2617,7 @@ document.getElementById('logout-btn')?.addEventListener('click', async () => {
     if (!response.ok) throw new Error('로그아웃 실패');
     clearMediaView();
     csrfHeaderToken = undefined;
-    location.assign('/');
+    location.assign(isAppView ? '/app' : '/');
   } catch {
     alert('로그아웃 요청을 완료하지 못했습니다. 페이지를 새로고침해 주세요.');
   }
@@ -3488,7 +3500,7 @@ async function requestStudioImage(body, onStatus, signal) {
 async function generateImage(recoveryTaskId) {
   if (!USER_LOGGED_IN) {
     const confirmLogin = await showSystemConfirm('🔒 권한 확인', '이미지 생성 서비스는 로그인이 필요합니다. 로그인 페이지로 이동할까요?', 'info');
-    if (confirmLogin) window.location.href = '/auth/google';
+    if (confirmLogin) window.location.href = googleSignInUrl;
     return;
   }
 
@@ -3703,7 +3715,7 @@ async function generateImage(recoveryTaskId) {
         
         // 영상 만들기 선택 시
         btnVideo.onclick = () => {
-          document.getElementById('video-studio').scrollIntoView({ behavior: (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) ? 'auto' : 'smooth' });
+          focusStudio('video-studio');
           setVideoImageRef(finalImageUrl);
           choicePanel.style.display = "none"; // 이동 후 숨김
         };
@@ -3966,8 +3978,7 @@ if (sendToStudioBtn) {
     // 비율 자동: 세로형 기본 (숏폼)
     const ratioSel = document.getElementById('imageRatioInput');
     if (ratioSel && [...ratioSel.options].some(o => o.value === '9:16') && ratioSel.value === '1:1') ratioSel.value = '9:16';
-    const studio = document.getElementById('image-studio');
-    if (studio) studio.scrollIntoView({ behavior: (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) ? 'auto' : 'smooth', block: 'start' });
+    focusStudio('image-studio');
     input.style.transition = 'box-shadow 0.3s';
     input.style.boxShadow = '0 0 0 3px var(--skills-cyan)';
     setTimeout(() => { input.style.boxShadow = ''; }, 1500);

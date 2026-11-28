@@ -99,6 +99,39 @@ test('PostgreSQL-backed HTTP access, OAuth state, video ownership and logout', {
     });
     assert.equal(badCallback.headers.get('location'), '/');
 
+    const webPage = await (await fetch(base + '/')).text();
+    const appPage = await (await fetch(base + '/app')).text();
+    assert.doesNotMatch(webPage, /<body class="dark app-view">/);
+    assert.match(appPage, /<body class="dark app-view">/);
+    assert.match(appPage, /rel="manifest" href="\/app.webmanifest"/);
+    assert.match(appPage, /src="\/app-view\.js\?v=/);
+    assert.equal((await fetch(base + '/app/', { redirect: 'manual' })).headers.get('location'), '/app');
+    const manifest = await (await fetch(base + '/app.webmanifest')).json();
+    assert.equal(manifest.start_url, '/app');
+    assert.equal(manifest.display, 'standalone');
+    for (const path of ['/app-view.js', '/app-view.css']) assert.equal((await fetch(base + path)).status, 200);
+    const assetLinksResponse = await fetch(base + '/.well-known/assetlinks.json', { redirect: 'manual' });
+    assert.equal(assetLinksResponse.status, 200);
+    assert.match(assetLinksResponse.headers.get('content-type'), /application\/json/);
+    const [appAssociation] = await assetLinksResponse.json();
+    assert.equal(appAssociation.target.package_name, 'live.aiprod.studio');
+    assert.match(appAssociation.target.sha256_cert_fingerprints[0], /^(?:[0-9A-F]{2}:){31}[0-9A-F]{2}$/);
+    assert.equal((await fetch(base + '/android/.signing/preview.keystore')).status, 404);
+
+    const strategy = require('passport')._strategy('google');
+    strategy._oauth2.getOAuthAccessToken = (code, params, done) => done(null, 'mock-access', 'mock-refresh', {});
+    strategy.userProfile = (token, done) => done(null, { id: 'app-user', displayName: 'App User' });
+    const appLogin = await fetch(base + '/auth/google?view=app', { redirect: 'manual' });
+    const appState = new URL(appLogin.headers.get('location')).searchParams.get('state');
+    const appCookie = appLogin.headers.getSetCookie()[0].split(';')[0];
+    const appCallback = await fetch(`${base}/auth/google/callback?state=${encodeURIComponent(appState)}&code=mock`, {
+        redirect: 'manual', headers: { Cookie: appCookie }
+    });
+    assert.equal(appCallback.headers.get('location'), '/app');
+    const loggedInCookie = appCallback.headers.getSetCookie()[0].split(';')[0];
+    const appProfile = await (await fetch(base + '/api/me', { headers: { Cookie: loggedInCookie } })).json();
+    assert.equal(appProfile.user.id, 'app-user');
+
     async function signedIn(id, email) {
         const sid = `session-${id}`;
         await db.query('INSERT INTO app_sessions (id,data,expires_at) VALUES ($1,$2,NOW() + INTERVAL \'1 day\')',

@@ -172,6 +172,8 @@ nav {
   opacity: 0.98;
 }
 
+.app-navigation[hidden] { display: none; }
+
 body {
   background: var(--bg);
 }

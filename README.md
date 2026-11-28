@@ -94,7 +94,8 @@ Seedream은 진행 중 요청을 PostgreSQL에 저장합니다. 접수된 작업
 
 ### Android 앱 미리보기
 
-- 로컬 서버의 `/app`에서 앱 전용 제작 화면을 열 수 있습니다. APK는 `https://ai-prod.live/app`을 열며, 로그인과 생성·보관 API는 웹과 공유합니다.
+- 로컬 서버의 `/app`에서 앱 전용 제작 화면을 열 수 있습니다. APK는 Koyeb 기본 주소 `https://inherent-abby-kimbs-b8271ab9.koyeb.app/app`을 열며, 로그인과 생성·보관 API는 웹과 공유합니다.
+- Google OAuth 클라이언트의 승인된 리디렉션 URI에 `https://inherent-abby-kimbs-b8271ab9.koyeb.app/auth/google/callback`을 포함하세요. 웹의 커스텀 도메인은 기존 `CALLBACK_URL`을 사용합니다.
 - 재빌드에는 JDK 17과 Android SDK 36이 필요합니다. PowerShell에서 `./android/gradlew.bat -p android assembleDebug`를 실행하면 `android/build/outputs/apk/debug/`에 미리보기 APK가 생성됩니다.
 - 미리보기 서명 키는 `android/.signing/preview.keystore`에 로컬 보관합니다. 새 작업 복사본에서만 아래 명령으로 키를 만들고, 실제 APK의 공개 SHA-256 인증서 지문을 `android/assetlinks.json`과 맞추세요. 서버는 이 파일을 `/.well-known/assetlinks.json`에서 제공합니다.
 

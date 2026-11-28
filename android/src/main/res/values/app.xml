@@ -1,5 +1,5 @@
 <resources>
-    <string name="asset_statements" translatable="false">[{"relation":["delegate_permission/common.handle_all_urls"],"target":{"namespace":"web","site":"https://ai-prod.live"}}]</string>
+    <string name="asset_statements" translatable="false">[{\"relation\":[\"delegate_permission/common.handle_all_urls\"],\"target\":{\"namespace\":\"web\",\"site\":\"https://inherent-abby-kimbs-b8271ab9.koyeb.app\"}}]</string>
     <style name="AppTheme" parent="android:style/Theme.Material.NoActionBar">
         <item name="android:windowBackground">#101528</item>
         <item name="android:colorAccent">#7775FF</item>

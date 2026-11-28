@@ -77,6 +77,13 @@ passport.deserializeUser((obj, done) => done(null, obj));
 
 // ✅ 배포 환경에서는 CALLBACK_URL 환경변수 사용, 로컬에서는 상대경로 사용
 const callbackURL = process.env.CALLBACK_URL || '/auth/google/callback';
+const koyebAppHostname = 'inherent-abby-kimbs-b8271ab9.koyeb.app';
+
+function googleCallbackFor(req) {
+    return req.hostname === koyebAppHostname
+        ? `https://${koyebAppHostname}/auth/google/callback`
+        : callbackURL;
+}
 
 passport.use(new GoogleStrategy({
     clientID: process.env.GOOGLE_CLIENT_ID || 'NOT_SET',
@@ -125,13 +132,15 @@ app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 // --- [AUTH ROUTES] ---
 app.get('/auth/google', (req, res, next) => {
     req.session.appLogin = req.query.view === 'app';
-    passport.authenticate('google', { scope: ['profile', 'email'] })(req, res, next);
+    passport.authenticate('google', { scope: ['profile', 'email'], callbackURL: googleCallbackFor(req) })(req, res, next);
 });
 
 app.get('/auth/google/callback', (req, res, next) => {
     const entry = req.session.appLogin ? '/app' : '/';
     delete req.session.appLogin;
-    passport.authenticate('google', { successRedirect: entry, failureRedirect: entry })(req, res, next);
+    passport.authenticate('google', {
+        callbackURL: googleCallbackFor(req), successRedirect: entry, failureRedirect: entry
+    })(req, res, next);
 });
 
 app.post('/logout', ensureAuthenticated, requireCsrf, (req, res, next) => {

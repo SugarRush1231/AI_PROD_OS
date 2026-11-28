@@ -32,6 +32,8 @@ test('PostgreSQL-backed HTTP access, OAuth state, video ownership and logout', {
     process.env.SESSION_SECRET = 'test-secret-with-more-than-32-characters';
     process.env.GOOGLE_CLIENT_ID = 'test-google-client';
     process.env.GOOGLE_CLIENT_SECRET = 'test-google-secret';
+    process.env.CALLBACK_URL = 'https://ai-prod.live/auth/google/callback';
+    process.env.TRUST_PROXY_CIDRS = 'loopback';
     process.env.KIE_API_KEY = 'mock-key';
     process.env.SPICY_API_KEY = 'mock-spicy-key';
     process.env.SPICY_OWNER_GOOGLE_ID = 'owner';
@@ -90,7 +92,9 @@ test('PostgreSQL-backed HTTP access, OAuth state, video ownership and logout', {
     const base = `http://127.0.0.1:${server.address().port}`;
     const login = await fetch(base + '/auth/google', { redirect: 'manual' });
     assert.equal(login.status, 302);
-    assert.ok(new URL(login.headers.get('location')).searchParams.get('state'));
+    const webOAuth = new URL(login.headers.get('location')).searchParams;
+    assert.equal(webOAuth.get('redirect_uri'), process.env.CALLBACK_URL);
+    assert.ok(webOAuth.get('state'));
     const oauthCookie = login.headers.getSetCookie()[0].split(';')[0];
     const oauthRows = await db.query('SELECT data FROM app_sessions');
     assert.equal(oauthRows.rows.length, 1);
@@ -119,13 +123,20 @@ test('PostgreSQL-backed HTTP access, OAuth state, video ownership and logout', {
     assert.equal((await fetch(base + '/android/.signing/preview.keystore')).status, 404);
 
     const strategy = require('passport')._strategy('google');
-    strategy._oauth2.getOAuthAccessToken = (code, params, done) => done(null, 'mock-access', 'mock-refresh', {});
+    const appHost = 'inherent-abby-kimbs-b8271ab9.koyeb.app';
+    const appCallbackUrl = `https://${appHost}/auth/google/callback`;
+    const appProxyHeaders = { 'X-Forwarded-Host': appHost };
+    strategy._oauth2.getOAuthAccessToken = (code, params, done) => {
+        assert.equal(params.redirect_uri, appCallbackUrl);
+        done(null, 'mock-access', 'mock-refresh', {});
+    };
     strategy.userProfile = (token, done) => done(null, { id: 'app-user', displayName: 'App User' });
-    const appLogin = await fetch(base + '/auth/google?view=app', { redirect: 'manual' });
-    const appState = new URL(appLogin.headers.get('location')).searchParams.get('state');
+    const appLogin = await fetch(base + '/auth/google?view=app', { redirect: 'manual', headers: appProxyHeaders });
+    const appOAuth = new URL(appLogin.headers.get('location')).searchParams;
+    assert.equal(appOAuth.get('redirect_uri'), appCallbackUrl);
     const appCookie = appLogin.headers.getSetCookie()[0].split(';')[0];
-    const appCallback = await fetch(`${base}/auth/google/callback?state=${encodeURIComponent(appState)}&code=mock`, {
-        redirect: 'manual', headers: { Cookie: appCookie }
+    const appCallback = await fetch(`${base}/auth/google/callback?state=${encodeURIComponent(appOAuth.get('state'))}&code=mock`, {
+        redirect: 'manual', headers: { ...appProxyHeaders, Cookie: appCookie }
     });
     assert.equal(appCallback.headers.get('location'), '/app');
     const loggedInCookie = appCallback.headers.getSetCookie()[0].split(';')[0];

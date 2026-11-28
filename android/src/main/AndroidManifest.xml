@@ -9,7 +9,7 @@
         <activity android:name="com.google.androidbrowserhelper.trusted.LauncherActivity" android:exported="true">
             <meta-data
                 android:name="android.support.customtabs.trusted.DEFAULT_URL"
-                android:value="https://ai-prod.live/app" />
+                android:value="https://inherent-abby-kimbs-b8271ab9.koyeb.app/app" />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
